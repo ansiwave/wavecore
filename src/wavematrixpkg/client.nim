@@ -18,7 +18,7 @@ type
     txnId: int
 
 proc initClient*(config: Config): Client =
-  return Client(config: config)
+  Client(config: config)
 
 proc initUrl(client: Client; endpoint: string; params: seq[(string, string)]): string =
   let url = &"{client.config.address}/_matrix/client/r0/{endpoint}"
