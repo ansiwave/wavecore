@@ -13,46 +13,39 @@ type
     reqMethod: httpcore.HttpMethod
     headers: httpcore.HttpHeaders
 
+const timeout = 2000
+
 proc initServer*(port: int): Server =
   Server(port: port)
 
 proc handle(client: Socket) =
   try:
-    var
-      request = Request(headers: httpcore.newHttpHeaders())
-      lineNum = 0
+    var request = Request(headers: httpcore.newHttpHeaders())
+    var firstLine = ""
+    client.readLine(firstLine, timeout)
+    let parts = strutils.split(firstLine, ' ')
+    assert parts.len == 3
+    # request method
+    case parts[0]
+    of "GET": request.reqMethod = httpcore.HttpGet
+    of "POST": request.reqMethod = httpcore.HttpPost
+    of "HEAD": request.reqMethod = httpcore.HttpHead
+    of "PUT": request.reqMethod = httpcore.HttpPut
+    of "DELETE": request.reqMethod = httpcore.HttpDelete
+    of "PATCH": request.reqMethod = httpcore.HttpPatch
+    of "OPTIONS": request.reqMethod = httpcore.HttpOptions
+    of "CONNECT": request.reqMethod = httpcore.HttpConnect
+    of "TRACE": request.reqMethod = httpcore.HttpTrace
+    # uri
+    request.uri = uri.parseUri(parts[1])
+    # headers
     while true:
-      var buf = TaintedString""
-      client.readLine(buf, timeout = 2000)
-      if lineNum == 0:
-        var i = 0
-        for linePart in strutils.split(buf, ' '):
-          case i
-          of 0:
-            case linePart
-            of "GET": request.reqMethod = httpcore.HttpGet
-            of "POST": request.reqMethod = httpcore.HttpPost
-            of "HEAD": request.reqMethod = httpcore.HttpHead
-            of "PUT": request.reqMethod = httpcore.HttpPut
-            of "DELETE": request.reqMethod = httpcore.HttpDelete
-            of "PATCH": request.reqMethod = httpcore.HttpPatch
-            of "OPTIONS": request.reqMethod = httpcore.HttpOptions
-            of "CONNECT": request.reqMethod = httpcore.HttpConnect
-            of "TRACE": request.reqMethod = httpcore.HttpTrace
-          of 1:
-            request.uri = uri.parseUri(linePart)
-          of 2:
-            # protocol
-            discard
-          else:
-            discard
-          i.inc
-      else:
-        if buf == "\c\L":
-          break
-        let (key, value) = httpcore.parseHeader(buf)
-        request.headers[key] = value
-      lineNum.inc
+      var line = ""
+      client.readLine(line, timeout)
+      if line == "\c\L":
+        break
+      let (key, value) = httpcore.parseHeader(line)
+      request.headers[key] = value
     echo request
     echo request.headers[]
     const content = "{}"
