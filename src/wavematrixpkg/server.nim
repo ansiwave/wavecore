@@ -1,21 +1,62 @@
-import threadpool, net, os, selectors, strutils
+import threadpool, net, os, selectors, tables
+from uri import `$`
+from strutils import nil
+from httpcore import `[]`, `[]=`
 
 type
   Server* = ref object of RootObj
     port: int
     socket: Socket
     fromClient, fromServer: ptr Channel[bool]
+  Request = object
+    uri: uri.Uri
+    reqMethod: httpcore.HttpMethod
+    headers: httpcore.HttpHeaders
 
 proc initServer*(port: int): Server =
   Server(port: port)
 
-const content = "Hello, world!"
-const response = "HTTP/1.1 200 OK\r\LContent-Length: " & $content.len & "\r\L\r\L" & content
-
 proc handle(client: Socket) =
-  var buf = TaintedString""
   try:
-    client.readLine(buf, timeout = 20000)
+    var
+      request = Request(headers: httpcore.newHttpHeaders())
+      lineNum = 0
+    while true:
+      var buf = TaintedString""
+      client.readLine(buf, timeout = 2000)
+      if lineNum == 0:
+        var i = 0
+        for linePart in strutils.split(buf, ' '):
+          case i
+          of 0:
+            case linePart
+            of "GET": request.reqMethod = httpcore.HttpGet
+            of "POST": request.reqMethod = httpcore.HttpPost
+            of "HEAD": request.reqMethod = httpcore.HttpHead
+            of "PUT": request.reqMethod = httpcore.HttpPut
+            of "DELETE": request.reqMethod = httpcore.HttpDelete
+            of "PATCH": request.reqMethod = httpcore.HttpPatch
+            of "OPTIONS": request.reqMethod = httpcore.HttpOptions
+            of "CONNECT": request.reqMethod = httpcore.HttpConnect
+            of "TRACE": request.reqMethod = httpcore.HttpTrace
+          of 1:
+            request.uri = uri.parseUri(linePart)
+          of 2:
+            # protocol
+            discard
+          else:
+            discard
+          i.inc
+      else:
+        if buf == "\c\L":
+          break
+        let (key, value) = httpcore.parseHeader(buf)
+        request.headers[key] = value
+      lineNum.inc
+    echo request
+    echo request.headers[]
+    const content = "{}"
+    const response = "HTTP/1.1 200 OK\r\LContent-Length: " & $content.len & "\r\L\r\L" & content
     client.send(response)
   finally:
     client.close()
@@ -33,6 +74,7 @@ proc loop(server: Server) =
 proc listen(server: Server) =
   server.socket = newSocket()
   try:
+    server.socket.setSockOpt(OptReuseAddr, true)
     server.socket.bindAddr(port = Port(server.port))
     server.socket.listen()
     echo("Server listening on port " & $server.port)
