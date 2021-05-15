@@ -37,7 +37,7 @@ proc request(client: Client, endpoint: string, data: JsonNode, verb: string, par
   let headers = @[Header(key: "Content-Type", value: "application/json")]
   let response: Response = fetch(Request(url: parseUrl(url), headers: headers, verb: verb, body: if data != nil: $data else: ""))
   if response.code != 200:
-    raise newException(Exception, response.error)
+    raise newException(Exception, "Error code " & $response.code & ": " & response.body)
   return response.body.parseJson
 
 proc post(client: Client, endpoint: string, data: JsonNode, params: seq[(string, string)] = @[]): JsonNode =

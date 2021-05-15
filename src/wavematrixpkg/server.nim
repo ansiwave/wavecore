@@ -1,7 +1,8 @@
 import threadpool, net, os, selectors, tables
 from uri import `$`
 from strutils import nil
-from httpcore import `[]`, `[]=`, `$`
+from parseutils import nil
+import httpcore
 
 type
   Server* = ref object of RootObj
@@ -12,6 +13,9 @@ type
     uri: uri.Uri
     reqMethod: httpcore.HttpMethod
     headers: httpcore.HttpHeaders
+    body: string
+  BadRequestException = object of Exception
+  NotFoundException = object of Exception
 
 const timeout = 2000
 
@@ -47,18 +51,31 @@ proc handle(client: Socket) =
     request.uri = uri.parseUri(parts[1])
     # headers
     while true:
+      # TODO: max number of headers
       var line = ""
       client.readLine(line, timeout)
       if line == "\c\L":
         break
       let (key, value) = httpcore.parseHeader(line)
       request.headers[key] = value
+    # body
+    if httpcore.hasKey(request.headers, "Content-Length"):
+      var contentLength = 0
+      if parseutils.parseSaturatedNatural(request.headers["Content-Length"], contentLength) == 0:
+        raise newException(BadRequestException, "Bad Request. Invalid Content-Length.")
+      else:
+        # TODO: max content length
+        request.body = client.recv(contentLength)
+    # response
     let dispatch = (request.reqMethod, $request.uri)
     if dispatch == (httpcore.HttpPost, "/_matrix/client/r0/register"):
       register(client, request)
     else:
-      echo "Unhandled request: " & $dispatch
-      client.send("HTTP/1.1 400 Bad Request\r\L")
+      raise newException(NotFoundException, "Unhandled request: " & $dispatch)
+  except BadRequestException as ex:
+    client.send("HTTP/1.1 400 Bad Request\r\L\r\L" & ex.msg)
+  except NotFoundException as ex:
+    client.send("HTTP/1.1 404 Not Found\r\L\r\L" & ex.msg)
   finally:
     client.close()
 
