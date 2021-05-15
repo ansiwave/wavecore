@@ -1,7 +1,7 @@
 import threadpool, net, os, selectors, tables
 from uri import `$`
 from strutils import nil
-from httpcore import `[]`, `[]=`
+from httpcore import `[]`, `[]=`, `$`
 
 type
   Server* = ref object of RootObj
@@ -17,6 +17,13 @@ const timeout = 2000
 
 proc initServer*(port: int): Server =
   Server(port: port)
+
+proc response(content: string): string =
+  "HTTP/1.1 200 OK\r\LContent-Length: " & $content.len & "\r\L\r\L" & content
+
+proc register(client: Socket, request: Request) =
+  const content = "{}"
+  client.send(response(content))
 
 proc handle(client: Socket) =
   try:
@@ -46,11 +53,11 @@ proc handle(client: Socket) =
         break
       let (key, value) = httpcore.parseHeader(line)
       request.headers[key] = value
-    echo request
-    echo request.headers[]
-    const content = "{}"
-    const response = "HTTP/1.1 200 OK\r\LContent-Length: " & $content.len & "\r\L\r\L" & content
-    client.send(response)
+    case $request.uri:
+    of "/_matrix/client/r0/register":
+      register(client, request)
+    else:
+      echo "Unhandled request: " & $request
   finally:
     client.close()
 
