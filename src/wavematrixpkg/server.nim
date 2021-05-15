@@ -22,12 +22,8 @@ const timeout = 2000
 proc initServer*(port: int): Server =
   Server(port: port)
 
-proc success(content: string): string =
-  "HTTP/1.1 200 OK\r\LContent-Length: " & $content.len & "\r\L\r\L" & content
-
-proc register(client: Socket, request: Request) =
-  const content = "{}"
-  client.send(success(content))
+proc register(request: Request): string =
+  "{}"
 
 proc handle(client: Socket) =
   try:
@@ -68,10 +64,12 @@ proc handle(client: Socket) =
         request.body = client.recv(contentLength)
     # response
     let dispatch = (request.reqMethod, $request.uri)
-    if dispatch == (httpcore.HttpPost, "/_matrix/client/r0/register"):
-      register(client, request)
-    else:
-      raise newException(NotFoundException, "Unhandled request: " & $dispatch)
+    let response =
+      if dispatch == (httpcore.HttpPost, "/_matrix/client/r0/register"):
+        register(request)
+      else:
+        raise newException(NotFoundException, "Unhandled request: " & $dispatch)
+    client.send("HTTP/1.1 200 OK\r\LContent-Length: " & $response.len & "\r\L\r\L" & response)
   except BadRequestException as ex:
     client.send("HTTP/1.1 400 Bad Request\r\L\r\L" & ex.msg)
   except NotFoundException as ex:
