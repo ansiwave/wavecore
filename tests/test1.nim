@@ -2,7 +2,6 @@ import unittest
 import json
 from wavematrixpkg/client import nil
 from wavematrixpkg/server import nil
-from os import nil
 
 const
   port = 3000
@@ -19,7 +18,6 @@ test "Failed login":
   let thr = server.start(s)
   try:
     client.register(client.initClient(config))
-    os.sleep(1000) # TODO: find better way to wait for registration to complete
     var wrongConfig = config
     wrongConfig.password = "wrong password"
     var wrongClient = client.initClient(wrongConfig)
@@ -34,7 +32,6 @@ test "Full lifecycle":
   try:
     var c = client.initClient(config)
     client.register(c)
-    os.sleep(1000) # TODO: find better way to wait for registration to complete
     client.login(c)
     try:
       client.create(c)

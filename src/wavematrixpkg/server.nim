@@ -21,11 +21,12 @@ type
     of Register, Login:
       account: Account
       token: string
+    done: ptr Channel[bool]
   Server* = ref object
     hostname: string
     port: int
     socket: Socket
-    serverStopped, serverReady: ptr Channel[bool]
+    stopped, ready: ptr Channel[bool]
     stateAction: ptr Channel[StateAction]
     state: ptr State
   Request = object
@@ -54,8 +55,15 @@ proc register(server: Server, request: Request): string =
   of "m.login.dummy":
     if not body.hasKey("username") or not body.hasKey("password"):
       raise newException(BadRequestException, "username and password required")
-    let account = Account(username: body["username"].str, password: body["password"].str, token: initToken())
-    server.stateAction[].send(StateAction(kind: Register, account: account))
+    let
+      account = Account(username: body["username"].str, password: body["password"].str, token: initToken())
+      done = cast[ptr Channel[bool]](
+        allocShared0(sizeof(Channel[bool]))
+      )
+    done[].open()
+    server.stateAction[].send(StateAction(kind: Register, account: account, done: done))
+    discard done[].recv()
+    deallocShared(done)
     $ %*{"home_server": server.hostname, "user_id": "@" & account.username & ":" & server.hostname, "access_token": account.token}
   else:
     raise newException(BadRequestException, "Unrecognized auth type")
@@ -71,11 +79,17 @@ proc login(server: Server, request: Request): string =
     let
       user = body["user"].str
       password = body["password"].str
+      done = cast[ptr Channel[bool]](
+        allocShared0(sizeof(Channel[bool]))
+      )
+    done[].open()
     var account = server.state[].accounts.getOrDefault(user, Account(username: ""))
     if account.username == "" or account.password != password:
       raise newException(ForbiddenException, "user or password is invalid")
     account.token = initToken()
-    server.stateAction[].send(StateAction(kind: Login, account: account))
+    server.stateAction[].send(StateAction(kind: Login, account: account, done: done))
+    discard done[].recv()
+    deallocShared(done)
     $ %*{"home_server": server.hostname, "user_id": "@" & account.username & ":" & server.hostname, "access_token": account.token}
   else:
     raise newException(BadRequestException, "Unrecognized auth type")
@@ -151,12 +165,13 @@ proc updateState(server: Server, action: StateAction) =
     if server.state[].accounts.hasKey(action.account.username):
       server.state[].tokens.del(server.state[].accounts[action.account.username].token)
     server.state[].tokens[action.account.token] = action.account.username
+  action.done[].send(true)
 
 proc loop(server: Server) =
   var selector = newSelector[int]()
   selector.registerHandle(server.socket.getFD, {Event.Read}, 0)
-  server.serverReady[].send(true)
-  while not server.serverStopped[].tryRecv().dataAvailable:
+  server.ready[].send(true)
+  while not server.stopped[].tryRecv().dataAvailable:
     if selector.select(1000).len > 0:
       var client: Socket = Socket()
       accept(server.socket, client)
@@ -178,28 +193,28 @@ proc listen(server: Server) =
     server.socket.close()
 
 proc initShared(server: var Server) =
-  server.serverStopped = cast[ptr Channel[bool]](
+  server.stopped = cast[ptr Channel[bool]](
     allocShared0(sizeof(Channel[bool]))
   )
-  server.serverReady = cast[ptr Channel[bool]](
+  server.ready = cast[ptr Channel[bool]](
     allocShared0(sizeof(Channel[bool]))
   )
   server.stateAction = cast[ptr Channel[StateAction]](
     allocShared0(sizeof(Channel[StateAction]))
   )
-  server.serverStopped[].open()
-  server.serverReady[].open()
+  server.stopped[].open()
+  server.ready[].open()
   server.stateAction[].open()
   server.state = cast[ptr State](
     allocShared0(sizeof(State))
   )
 
 proc deinitShared(server: var Server) =
-  server.serverStopped[].close()
-  server.serverReady[].close()
+  server.stopped[].close()
+  server.ready[].close()
   server.stateAction[].close()
-  deallocShared(server.serverStopped)
-  deallocShared(server.serverReady)
+  deallocShared(server.stopped)
+  deallocShared(server.ready)
   deallocShared(server.stateAction)
   deallocShared(server.state)
 
@@ -208,9 +223,9 @@ proc start*(server: var Server): Thread[Server] =
   proc listenThread(server: Server) {.thread.} =
     server.listen()
   createThread(result, listenThread, server)
-  discard server.serverReady[].recv() # wait for server to be ready
+  discard server.ready[].recv() # wait for server to be ready
 
 proc stop*(server: var Server, thr: Thread[Server]) =
-  server.serverStopped[].send(true)
+  server.stopped[].send(true)
   thr.joinThread()
   deinitShared(server)
