@@ -4,26 +4,30 @@ from strutils import nil
 from parseutils import nil
 import httpcore
 import json
+from oids import nil
 
 type
   Account = object
     username: string
     password: string
-  State = ref object
-    accounts: Table[string, Account]
+    token: string
+  State = object
+    accounts: Table[string, Account] # username -> Account
+    tokens: Table[string, string] # access_token -> username
   StateActionKind = enum
-    Register,
+    Register, Login,
   StateAction = object
     case kind: StateActionKind
-    of Register:
+    of Register, Login:
       account: Account
+      token: string
   Server* = ref object
     hostname: string
     port: int
     socket: Socket
     serverStopped, serverReady: ptr Channel[bool]
     stateAction: ptr Channel[StateAction]
-    state: State
+    state: ptr State
   Request = object
     uri: uri.Uri
     reqMethod: httpcore.HttpMethod
@@ -31,12 +35,16 @@ type
     body: string
   BadRequestException = object of Exception
   NotFoundException = object of Exception
+  ForbiddenException = object of Exception
 
 const timeout = 2000
 
 proc initServer*(hostname: string, port: int): Server =
-  result = Server(hostname: hostname, port: port)
-  new result.state
+  Server(hostname: hostname, port: port)
+
+proc initToken(): string =
+  # TODO: come up with better way of generating tokens
+  $abs(oids.hash(oids.genOid()))
 
 proc register(server: Server, request: Request): string =
   let body = request.body.parseJson
@@ -46,10 +54,29 @@ proc register(server: Server, request: Request): string =
   of "m.login.dummy":
     if not body.hasKey("username") or not body.hasKey("password"):
       raise newException(BadRequestException, "username and password required")
-    let account = Account(username: body["username"].str, password: body["password"].str)
+    let account = Account(username: body["username"].str, password: body["password"].str, token: initToken())
     server.stateAction[].send(StateAction(kind: Register, account: account))
-    # TODO: return access_token
-    $ %*{"home_server": server.hostname, "user_id": "@" & account.username & ":" & server.hostname}
+    $ %*{"home_server": server.hostname, "user_id": "@" & account.username & ":" & server.hostname, "access_token": account.token}
+  else:
+    raise newException(BadRequestException, "Unrecognized auth type")
+
+proc login(server: Server, request: Request): string =
+  let body = request.body.parseJson
+  if not body.hasKey("type"):
+    raise newException(BadRequestException, "type required")
+  case body["type"].str:
+  of "m.login.password":
+    if not body.hasKey("user") or not body.hasKey("password"):
+      raise newException(BadRequestException, "user and password required")
+    let
+      user = body["user"].str
+      password = body["password"].str
+    var account = server.state[].accounts.getOrDefault(user, Account(username: ""))
+    if account.username == "" or account.password != password:
+      raise newException(ForbiddenException, "user or password is invalid")
+    account.token = initToken()
+    server.stateAction[].send(StateAction(kind: Login, account: account))
+    $ %*{"home_server": server.hostname, "user_id": "@" & account.username & ":" & server.hostname, "access_token": account.token}
   else:
     raise newException(BadRequestException, "Unrecognized auth type")
 
@@ -95,13 +122,19 @@ proc handle(server: Server, client: Socket) =
     let response =
       if dispatch == (httpcore.HttpPost, "/_matrix/client/r0/register"):
         register(server, request)
+      elif dispatch == (httpcore.HttpPost, "/_matrix/client/r0/login"):
+        login(server, request)
       else:
         raise newException(NotFoundException, "Unhandled request: " & $dispatch)
     client.send("HTTP/1.1 200 OK\r\LContent-Length: " & $response.len & "\r\L\r\L" & response)
   except BadRequestException as ex:
     client.send("HTTP/1.1 400 Bad Request\r\L\r\L" & ex.msg)
+  except ForbiddenException as ex:
+    client.send("HTTP/1.1 403 Forbidden\r\L\r\L" & ex.msg)
   except NotFoundException as ex:
     client.send("HTTP/1.1 404 Not Found\r\L\r\L" & ex.msg)
+  except Exception as ex:
+    client.send("HTTP/1.1 500 Internal Server Error\r\L\r\L" & ex.msg)
   finally:
     client.close()
 
@@ -111,6 +144,13 @@ proc updateState(server: Server, action: StateAction) =
     if not server.state[].accounts.hasKey(action.account.username):
       echo "Registering " & $action.account
       server.state[].accounts[action.account.username] = action.account
+      server.state[].tokens[action.account.token] = action.account.username
+  of Login:
+    echo "Logging in " & $action.account
+    # if already logged in, delete existing token
+    if server.state[].accounts.hasKey(action.account.username):
+      server.state[].tokens.del(server.state[].accounts[action.account.username].token)
+    server.state[].tokens[action.account.token] = action.account.username
 
 proc loop(server: Server) =
   var selector = newSelector[int]()
@@ -137,7 +177,7 @@ proc listen(server: Server) =
     echo("Server closing on port " & $server.port)
     server.socket.close()
 
-proc openChannels(server: var Server) =
+proc initShared(server: var Server) =
   server.serverStopped = cast[ptr Channel[bool]](
     allocShared0(sizeof(Channel[bool]))
   )
@@ -150,17 +190,21 @@ proc openChannels(server: var Server) =
   server.serverStopped[].open()
   server.serverReady[].open()
   server.stateAction[].open()
+  server.state = cast[ptr State](
+    allocShared0(sizeof(State))
+  )
 
-proc closeChannels(server: var Server) =
+proc deinitShared(server: var Server) =
   server.serverStopped[].close()
   server.serverReady[].close()
   server.stateAction[].close()
   deallocShared(server.serverStopped)
   deallocShared(server.serverReady)
   deallocShared(server.stateAction)
+  deallocShared(server.state)
 
 proc start*(server: var Server): Thread[Server] =
-  openChannels(server)
+  initShared(server)
   proc listenThread(server: Server) {.thread.} =
     server.listen()
   createThread(result, listenThread, server)
@@ -169,4 +213,4 @@ proc start*(server: var Server): Thread[Server] =
 proc stop*(server: var Server, thr: Thread[Server]) =
   server.serverStopped[].send(true)
   thr.joinThread()
-  closeChannels(server)
+  deinitShared(server)

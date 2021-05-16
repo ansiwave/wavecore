@@ -16,6 +16,7 @@ type
     userID: string
     roomID: string
     txnId: int
+  RequestException* = object of Exception
 
 proc initClient*(config: Config): Client =
   Client(config: config)
@@ -37,7 +38,7 @@ proc request(client: Client, endpoint: string, data: JsonNode, verb: string, par
   let headers = @[Header(key: "Content-Type", value: "application/json")]
   let response: Response = fetch(Request(url: parseUrl(url), headers: headers, verb: verb, body: if data != nil: $data else: ""))
   if response.code != 200:
-    raise newException(Exception, "Error code " & $response.code & ": " & response.body)
+    raise newException(RequestException, "Error code " & $response.code & ": " & response.body)
   return response.body.parseJson
 
 proc post(client: Client, endpoint: string, data: JsonNode, params: seq[(string, string)] = @[]): JsonNode =
@@ -49,7 +50,7 @@ proc get(client: Client, endpoint: string, params: seq[(string, string)] = @[]):
 proc put(client: Client, endpoint: string, data: JsonNode, params: seq[(string, string)] = @[]): JsonNode =
   request(client, endpoint, data, "put", params)
 
-proc register*(client: var Client) =
+proc register*(client: Client) =
   let
     data = %*{
       "username": client.config.username,
@@ -71,14 +72,14 @@ proc login*(client: var Client) =
     client.accessToken = response["access_token"].getStr
     client.userID = response["user_id"].getStr
 
-proc create*(client: var Client) =
+proc create*(client: Client) =
   discard client.post("createRoom", %*{"room_alias_name":client.config.room})
 
 proc join*(client: var Client) =
   let response: JsonNode = client.post("join/" & uri.encodeUrl("#" & client.config.room & ":" & client.config.server), %*{})
   client.roomID = response["room_id"].getStr
 
-proc sync*(client: var Client): JsonNode =
+proc sync*(client: Client): JsonNode =
   return client.get("sync")
 
 proc send*(client: var Client; message: string;
