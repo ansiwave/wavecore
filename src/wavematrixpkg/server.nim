@@ -38,7 +38,9 @@ type
   NotFoundException = object of Exception
   ForbiddenException = object of Exception
 
-const timeout = 2000
+const
+  selectTimeout = 100
+  recvTimeout = 2000
 
 proc initServer*(hostname: string, port: int): Server =
   Server(hostname: hostname, port: port)
@@ -96,7 +98,7 @@ proc handle(server: Server, client: Socket) =
   try:
     var request = Request(headers: httpcore.newHttpHeaders())
     var firstLine = ""
-    client.readLine(firstLine, timeout)
+    client.readLine(firstLine, recvTimeout)
     let parts = strutils.split(firstLine, ' ')
     assert parts.len == 3
     # request method
@@ -116,7 +118,7 @@ proc handle(server: Server, client: Socket) =
     while true:
       # TODO: max number of headers
       var line = ""
-      client.readLine(line, timeout)
+      client.readLine(line, recvTimeout)
       if line == "\c\L":
         break
       let (key, value) = httpcore.parseHeader(line)
@@ -171,7 +173,7 @@ proc loop(server: Server) =
   selector.registerHandle(server.socket.getFD, {Event.Read}, 0)
   server.ready[].send(true)
   while not server.stopped[].tryRecv().dataAvailable:
-    if selector.select(1000).len > 0:
+    if selector.select(selectTimeout).len > 0:
       var client: Socket = Socket()
       accept(server.socket, client)
       spawn handle(server, client)
