@@ -47,6 +47,17 @@ proc initToken(): string =
   # TODO: come up with better way of generating tokens
   $abs(oids.hash(oids.genOid()))
 
+proc sendStateAction(server: Server, action: StateAction) =
+  let done = cast[ptr Channel[bool]](
+    allocShared0(sizeof(Channel[bool]))
+  )
+  done[].open()
+  var newAction = action
+  newAction.done = done
+  server.stateAction[].send(newAction)
+  discard done[].recv()
+  deallocShared(done)
+
 proc register(server: Server, request: Request): string =
   let body = request.body.parseJson
   if not body.hasKey("auth") or not body["auth"].hasKey("type"):
@@ -55,15 +66,8 @@ proc register(server: Server, request: Request): string =
   of "m.login.dummy":
     if not body.hasKey("username") or not body.hasKey("password"):
       raise newException(BadRequestException, "username and password required")
-    let
-      account = Account(username: body["username"].str, password: body["password"].str, token: initToken())
-      done = cast[ptr Channel[bool]](
-        allocShared0(sizeof(Channel[bool]))
-      )
-    done[].open()
-    server.stateAction[].send(StateAction(kind: Register, account: account, done: done))
-    discard done[].recv()
-    deallocShared(done)
+    let account = Account(username: body["username"].str, password: body["password"].str, token: initToken())
+    sendStateAction(server, StateAction(kind: Register, account: account))
     $ %*{"home_server": server.hostname, "user_id": "@" & account.username & ":" & server.hostname, "access_token": account.token}
   else:
     raise newException(BadRequestException, "Unrecognized auth type")
@@ -79,17 +83,11 @@ proc login(server: Server, request: Request): string =
     let
       user = body["user"].str
       password = body["password"].str
-      done = cast[ptr Channel[bool]](
-        allocShared0(sizeof(Channel[bool]))
-      )
-    done[].open()
     var account = server.state[].accounts.getOrDefault(user, Account(username: ""))
     if account.username == "" or account.password != password:
       raise newException(ForbiddenException, "user or password is invalid")
     account.token = initToken()
-    server.stateAction[].send(StateAction(kind: Login, account: account, done: done))
-    discard done[].recv()
-    deallocShared(done)
+    sendStateAction(server, StateAction(kind: Login, account: account))
     $ %*{"home_server": server.hostname, "user_id": "@" & account.username & ":" & server.hostname, "access_token": account.token}
   else:
     raise newException(BadRequestException, "Unrecognized auth type")
