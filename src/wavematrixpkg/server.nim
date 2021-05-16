@@ -26,7 +26,8 @@ type
     hostname: string
     port: int
     socket: Socket
-    stopped, ready: ptr Channel[bool]
+    listenThread: Thread[Server]
+    listenStopped, listenReady: ptr Channel[bool]
     stateAction: ptr Channel[StateAction]
     state: ptr State
   Request = object
@@ -171,8 +172,8 @@ proc updateState(server: Server, action: StateAction) =
 proc loop(server: Server) =
   var selector = newSelector[int]()
   selector.registerHandle(server.socket.getFD, {Event.Read}, 0)
-  server.ready[].send(true)
-  while not server.stopped[].tryRecv().dataAvailable:
+  server.listenReady[].send(true)
+  while not server.listenStopped[].tryRecv().dataAvailable:
     if selector.select(selectTimeout).len > 0:
       var client: Socket = Socket()
       accept(server.socket, client)
@@ -194,39 +195,39 @@ proc listen(server: Server) =
     server.socket.close()
 
 proc initShared(server: var Server) =
-  server.stopped = cast[ptr Channel[bool]](
+  server.listenStopped = cast[ptr Channel[bool]](
     allocShared0(sizeof(Channel[bool]))
   )
-  server.ready = cast[ptr Channel[bool]](
+  server.listenReady = cast[ptr Channel[bool]](
     allocShared0(sizeof(Channel[bool]))
   )
   server.stateAction = cast[ptr Channel[StateAction]](
     allocShared0(sizeof(Channel[StateAction]))
   )
-  server.stopped[].open()
-  server.ready[].open()
+  server.listenStopped[].open()
+  server.listenReady[].open()
   server.stateAction[].open()
   server.state = cast[ptr State](
     allocShared0(sizeof(State))
   )
 
 proc deinitShared(server: var Server) =
-  server.stopped[].close()
-  server.ready[].close()
+  server.listenStopped[].close()
+  server.listenReady[].close()
   server.stateAction[].close()
-  deallocShared(server.stopped)
-  deallocShared(server.ready)
+  deallocShared(server.listenStopped)
+  deallocShared(server.listenReady)
   deallocShared(server.stateAction)
   deallocShared(server.state)
 
-proc start*(server: var Server): Thread[Server] =
+proc start*(server: var Server) =
   initShared(server)
-  proc listenThread(server: Server) {.thread.} =
+  proc listenProc(server: Server) {.thread.} =
     server.listen()
-  createThread(result, listenThread, server)
-  discard server.ready[].recv() # wait for server to be ready
+  createThread(server.listenThread, listenProc, server)
+  discard server.listenReady[].recv() # wait for server to be listenReady
 
-proc stop*(server: var Server, thr: Thread[Server]) =
-  server.stopped[].send(true)
-  thr.joinThread()
+proc stop*(server: var Server) =
+  server.listenStopped[].send(true)
+  server.listenThread.joinThread()
   deinitShared(server)

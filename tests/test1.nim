@@ -15,7 +15,7 @@ const
 
 test "Failed login":
   var s = server.initServer("localhost", port)
-  let thr = server.start(s)
+  server.start(s)
   try:
     client.register(client.initClient(config))
     var wrongConfig = config
@@ -24,11 +24,11 @@ test "Failed login":
     expect client.RequestException:
       client.login(wrongClient)
   finally:
-    server.stop(s, thr)
+    server.stop(s)
 
 test "Full lifecycle":
   var s = server.initServer("localhost", port)
-  let thr = server.start(s)
+  server.start(s)
   try:
     var c = client.initClient(config)
     client.register(c)
@@ -41,4 +41,4 @@ test "Full lifecycle":
     client.send(c, "Hello, world!")
     echo client.getMessages(c, client.sync(c))
   finally:
-    server.stop(s, thr)
+    server.stop(s)
