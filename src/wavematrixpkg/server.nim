@@ -35,9 +35,9 @@ type
     reqMethod: httpcore.HttpMethod
     headers: httpcore.HttpHeaders
     body: string
-  BadRequestException = object of Exception
-  NotFoundException = object of Exception
-  ForbiddenException = object of Exception
+  BadRequestException = object of CatchableError
+  NotFoundException = object of CatchableError
+  ForbiddenException = object of CatchableError
 
 const
   selectTimeout = 100

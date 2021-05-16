@@ -16,7 +16,7 @@ type
     userID: string
     roomID: string
     txnId: int
-  RequestException* = object of Exception
+  RequestException* = object of CatchableError
 
 proc initClient*(config: Config): Client =
   Client(config: config)
