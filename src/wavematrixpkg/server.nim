@@ -161,10 +161,11 @@ proc updateState(server: Server, action: StateAction) =
       server.state[].tokens[action.account.token] = action.account.username
   of Login:
     echo "Logging in " & $action.account
+    server.state[].accounts[action.account.username] = action.account
+    server.state[].tokens[action.account.token] = action.account.username
     # if already logged in, delete existing token
     if server.state[].accounts.hasKey(action.account.username):
       server.state[].tokens.del(server.state[].accounts[action.account.username].token)
-    server.state[].tokens[action.account.token] = action.account.username
   action.done[].send(true)
 
 proc loop(server: Server) =
