@@ -4,7 +4,7 @@ from wavematrixpkg/client import nil
 from wavematrixpkg/server import nil
 
 const
-  port = 8008
+  port = 3000
   config = client.Config(
     username: "user",
     password: "password",
@@ -14,7 +14,7 @@ const
   )
 
 test "Basic functionality":
-  var s = server.initServer(port)
+  var s = server.initServer("localhost", port)
   let thr = server.start(s)
   try:
     var c = client.initClient(config)
