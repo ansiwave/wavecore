@@ -15,9 +15,11 @@ type
     accounts: Table[string, Account] # username -> Account
     tokens: Table[string, string] # access_token -> username
   StateActionKind = enum
-    Register, Login,
+    Stop, Register, Login,
   StateAction = object
     case kind: StateActionKind
+    of Stop:
+      discard
     of Register, Login:
       account: Account
       token: string
@@ -26,8 +28,8 @@ type
     hostname: string
     port: int
     socket: Socket
-    listenThread: Thread[Server]
-    listenStopped, listenReady: ptr Channel[bool]
+    listenThread, stateThread: Thread[Server]
+    listenStopped, listenReady, stateReady: ptr Channel[bool]
     stateAction: ptr Channel[StateAction]
     state: ptr State
   Request = object
@@ -40,7 +42,12 @@ type
   ForbiddenException = object of CatchableError
 
 const
-  selectTimeout = 100
+  selectTimeout =
+    when defined(release):
+      1000
+    # shorter timeout so tests run faster
+    else:
+      100
   recvTimeout = 2000
 
 proc initServer*(hostname: string, port: int): Server =
@@ -153,22 +160,6 @@ proc handle(server: Server, client: Socket) =
   finally:
     client.close()
 
-proc updateState(server: Server, action: StateAction) =
-  case action.kind:
-  of Register:
-    if not server.state[].accounts.hasKey(action.account.username):
-      echo "Registering " & $action.account
-      server.state[].accounts[action.account.username] = action.account
-      server.state[].tokens[action.account.token] = action.account.username
-  of Login:
-    echo "Logging in " & $action.account
-    server.state[].accounts[action.account.username] = action.account
-    server.state[].tokens[action.account.token] = action.account.username
-    # if already logged in, delete existing token
-    if server.state[].accounts.hasKey(action.account.username):
-      server.state[].tokens.del(server.state[].accounts[action.account.username].token)
-  action.done[].send(true)
-
 proc loop(server: Server) =
   var selector = newSelector[int]()
   selector.registerHandle(server.socket.getFD, {Event.Read}, 0)
@@ -178,11 +169,8 @@ proc loop(server: Server) =
       var client: Socket = Socket()
       accept(server.socket, client)
       spawn handle(server, client)
-    let res = server.stateAction[].tryRecv()
-    if res.dataAvailable:
-      updateState(server, res.msg)
 
-proc listen(server: Server) =
+proc listen(server: Server) {.thread.} =
   server.socket = newSocket()
   try:
     server.socket.setSockOpt(OptReuseAddr, true)
@@ -194,6 +182,27 @@ proc listen(server: Server) =
     echo("Server closing on port " & $server.port)
     server.socket.close()
 
+proc recvStateAction(server: Server) {.thread.} =
+  server.stateReady[].send(true)
+  while true:
+    let action = server.stateAction[].recv()
+    case action.kind:
+    of Stop:
+      break
+    of Register:
+      if not server.state[].accounts.hasKey(action.account.username):
+        echo "Registering " & $action.account
+        server.state[].accounts[action.account.username] = action.account
+        server.state[].tokens[action.account.token] = action.account.username
+    of Login:
+      echo "Logging in " & $action.account
+      server.state[].accounts[action.account.username] = action.account
+      server.state[].tokens[action.account.token] = action.account.username
+      # if already logged in, delete existing token
+      if server.state[].accounts.hasKey(action.account.username):
+        server.state[].tokens.del(server.state[].accounts[action.account.username].token)
+    action.done[].send(true)
+
 proc initShared(server: var Server) =
   server.listenStopped = cast[ptr Channel[bool]](
     allocShared0(sizeof(Channel[bool]))
@@ -201,11 +210,15 @@ proc initShared(server: var Server) =
   server.listenReady = cast[ptr Channel[bool]](
     allocShared0(sizeof(Channel[bool]))
   )
+  server.stateReady = cast[ptr Channel[bool]](
+    allocShared0(sizeof(Channel[bool]))
+  )
   server.stateAction = cast[ptr Channel[StateAction]](
     allocShared0(sizeof(Channel[StateAction]))
   )
   server.listenStopped[].open()
   server.listenReady[].open()
+  server.stateReady[].open()
   server.stateAction[].open()
   server.state = cast[ptr State](
     allocShared0(sizeof(State))
@@ -214,20 +227,30 @@ proc initShared(server: var Server) =
 proc deinitShared(server: var Server) =
   server.listenStopped[].close()
   server.listenReady[].close()
+  server.stateReady[].close()
   server.stateAction[].close()
   deallocShared(server.listenStopped)
   deallocShared(server.listenReady)
+  deallocShared(server.stateReady)
   deallocShared(server.stateAction)
   deallocShared(server.state)
 
+proc initThreads(server: var Server) =
+  createThread(server.listenThread, listen, server)
+  createThread(server.stateThread, recvStateAction, server)
+  discard server.listenReady[].recv()
+  discard server.stateReady[].recv()
+
+proc deinitThreads(server: var Server) =
+  server.listenStopped[].send(true)
+  server.stateAction[].send(StateAction(kind: Stop))
+  server.listenThread.joinThread()
+  server.stateThread.joinThread()
+
 proc start*(server: var Server) =
   initShared(server)
-  proc listenProc(server: Server) {.thread.} =
-    server.listen()
-  createThread(server.listenThread, listenProc, server)
-  discard server.listenReady[].recv() # wait for server to be listenReady
+  initThreads(server)
 
 proc stop*(server: var Server) =
-  server.listenStopped[].send(true)
-  server.listenThread.joinThread()
+  deinitThreads(server)
   deinitShared(server)
