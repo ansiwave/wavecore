@@ -5,15 +5,18 @@ from parseutils import nil
 import httpcore
 import json
 from oids import nil
+from times import nil
 
 type
   Account = object
     username: string
     password: string
-    token: string
+  AccountPointer = object
+    username: string
+    timestamp: float
   State = object
-    accounts: Table[string, Account] # username -> Account
-    tokens: Table[string, string] # access_token -> username
+    accounts: Table[string, Account] # keys are usernames
+    tokens: OrderedTable[string, AccountPointer] # keys are tokens
   StateActionKind = enum
     Stop, Register, Login,
   StateAction = object
@@ -76,9 +79,17 @@ proc register(server: Server, request: Request): string =
   of "m.login.dummy":
     if not body.hasKey("username") or not body.hasKey("password"):
       raise newException(BadRequestException, "username and password required")
-    let account = Account(username: body["username"].str, password: body["password"].str, token: initToken())
-    sendStateAction(server, StateAction(kind: Register, account: account))
-    $ %*{"home_server": server.hostname, "user_id": "@" & account.username & ":" & server.hostname, "access_token": account.token}
+    let
+      username = body["username"].str
+      password = body["password"].str
+      account = Account(username: username, password: password)
+      action = StateAction(kind: Register, account: account, token: initToken())
+      existingAccount = server.state[].accounts.getOrDefault(username, Account(username: ""))
+    if existingAccount.username == "" or password == existingAccount.password:
+      sendStateAction(server, action)
+      $ %*{"home_server": server.hostname, "user_id": "@" & account.username & ":" & server.hostname, "access_token": action.token}
+    else:
+      raise newException(ForbiddenException, "username or password is invalid")
   else:
     raise newException(BadRequestException, "Unrecognized auth type")
 
@@ -93,12 +104,13 @@ proc login(server: Server, request: Request): string =
     let
       user = body["user"].str
       password = body["password"].str
-    var account = server.state[].accounts.getOrDefault(user, Account(username: ""))
+    let
+      account = server.state[].accounts.getOrDefault(user, Account(username: ""))
+      action = StateAction(kind: Login, account: account, token: initToken())
     if account.username == "" or account.password != password:
       raise newException(ForbiddenException, "user or password is invalid")
-    account.token = initToken()
-    sendStateAction(server, StateAction(kind: Login, account: account))
-    $ %*{"home_server": server.hostname, "user_id": "@" & account.username & ":" & server.hostname, "access_token": account.token}
+    sendStateAction(server, action)
+    $ %*{"home_server": server.hostname, "user_id": "@" & account.username & ":" & server.hostname, "access_token": action.token}
   else:
     raise newException(BadRequestException, "Unrecognized auth type")
 
@@ -189,18 +201,10 @@ proc recvStateAction(server: Server) {.thread.} =
     case action.kind:
     of Stop:
       break
-    of Register:
-      if not server.state[].accounts.hasKey(action.account.username):
-        echo "Registering " & $action.account
-        server.state[].accounts[action.account.username] = action.account
-        server.state[].tokens[action.account.token] = action.account.username
-    of Login:
-      echo "Logging in " & $action.account
+    of Register, Login:
+      echo $action.kind & " " & $action.account
       server.state[].accounts[action.account.username] = action.account
-      server.state[].tokens[action.account.token] = action.account.username
-      # if already logged in, delete existing token
-      if server.state[].accounts.hasKey(action.account.username):
-        server.state[].tokens.del(server.state[].accounts[action.account.username].token)
+      server.state[].tokens[action.token] = AccountPointer(username: action.account.username, timestamp: times.epochTime())
     action.done[].send(true)
 
 proc initShared(server: var Server) =

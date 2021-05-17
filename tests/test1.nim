@@ -13,7 +13,7 @@ const
     room: "stuff",
   )
 
-test "Failed login":
+test "Failed login/register":
   var s = server.initServer("localhost", port)
   server.start(s)
   try:
@@ -23,6 +23,8 @@ test "Failed login":
     var wrongClient = client.initClient(wrongConfig)
     expect client.RequestException:
       client.login(wrongClient)
+    expect client.RequestException:
+      client.register(wrongClient)
   finally:
     server.stop(s)
 
