@@ -21,9 +21,9 @@ test "Failed login/register":
     var wrongConfig = config
     wrongConfig.password = "wrong password"
     var wrongClient = client.initClient(wrongConfig)
-    expect client.RequestException:
+    expect client.ClientException:
       client.login(wrongClient)
-    expect client.RequestException:
+    expect client.ClientException:
       client.register(wrongClient)
   finally:
     server.stop(s)

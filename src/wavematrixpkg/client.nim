@@ -16,7 +16,7 @@ type
     userID: string
     roomID: string
     txnId: int
-  RequestException* = object of CatchableError
+  ClientException* = object of CatchableError
 
 proc initClient*(config: Config): Client =
   Client(config: config)
@@ -38,7 +38,7 @@ proc request(client: Client, endpoint: string, data: JsonNode, verb: string, par
   let headers = @[Header(key: "Content-Type", value: "application/json")]
   let response: Response = fetch(Request(url: parseUrl(url), headers: headers, verb: verb, body: if data != nil: $data else: ""))
   if response.code != 200:
-    raise newException(RequestException, "Error code " & $response.code & ": " & response.body)
+    raise newException(ClientException, "Error code " & $response.code & ": " & response.body)
   return response.body.parseJson
 
 proc post(client: Client, endpoint: string, data: JsonNode, params: seq[(string, string)] = @[]): JsonNode =
