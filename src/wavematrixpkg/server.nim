@@ -16,7 +16,7 @@ type
     timestamp: float
   State = object
     accounts: Table[string, Account] # keys are usernames
-    tokens: OrderedTable[string, AccountPointer] # keys are tokens
+    tokens: Table[string, AccountPointer] # keys are tokens
   StateActionKind = enum
     Stop, Register, Login,
   StateAction = object
