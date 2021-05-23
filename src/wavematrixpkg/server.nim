@@ -89,9 +89,7 @@ proc register(server: Server, request: Request): string =
       password = body["password"].str
       account = Account(username: username, password: password)
       action = StateAction(kind: Register, account: account, token: initToken())
-      existingAccount = server.state[].accounts.getOrDefault(username, Account())
-    if existingAccount.username == "" or password == existingAccount.password:
-      discard sendStateAction(server, action)
+    if sendStateAction(server, action):
       $ %*{"home_server": server.hostname, "user_id": "@" & account.username & ":" & server.hostname, "access_token": action.token}
     else:
       raise newException(ForbiddenException, "username or password is invalid")
@@ -107,15 +105,14 @@ proc login(server: Server, request: Request): string =
     if not body.hasKey("user") or not body.hasKey("password"):
       raise newException(BadRequestException, "user and password required")
     let
-      user = body["user"].str
+      user = body["user"].str # why is this `user` instead of `username`?
       password = body["password"].str
-    let
-      account = server.state[].accounts.getOrDefault(user, Account())
+      account = Account(username: user, password: password)
       action = StateAction(kind: Login, account: account, token: initToken())
-    if account.username == "" or account.password != password:
+    if sendStateAction(server, action):
+      $ %*{"home_server": server.hostname, "user_id": "@" & account.username & ":" & server.hostname, "access_token": action.token}
+    else:
       raise newException(ForbiddenException, "user or password is invalid")
-    discard sendStateAction(server, action)
-    $ %*{"home_server": server.hostname, "user_id": "@" & account.username & ":" & server.hostname, "access_token": action.token}
   else:
     raise newException(BadRequestException, "Unrecognized auth type")
 
@@ -257,10 +254,20 @@ proc recvStateAction(server: Server) {.thread.} =
     of Stop:
       break
     of Register, Login:
-      echo $action.kind & " " & $action.account
-      server.state[].accounts[action.account.username] = action.account
-      server.state[].tokens[action.token] = AccountPointer(username: action.account.username, timestamp: times.epochTime())
-      action.done[].send(true)
+      if server.state[].accounts.hasKey(action.account.username):
+        let account = server.state[].accounts[action.account.username]
+        if account.password == action.account.password:
+          server.state[].tokens[action.token] = AccountPointer(username: action.account.username, timestamp: times.epochTime())
+          action.done[].send(true)
+        else:
+          action.done[].send(false)
+      else:
+        if action.kind == Register:
+          server.state[].accounts[action.account.username] = action.account
+          server.state[].tokens[action.token] = AccountPointer(username: action.account.username, timestamp: times.epochTime())
+          action.done[].send(true)
+        else:
+          action.done[].send(false)
     of CreateRoom:
       if server.state[].rooms.hasKey(action.roomAlias):
         action.done[].send(false)
