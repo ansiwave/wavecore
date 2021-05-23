@@ -14,11 +14,14 @@ type
   AccountPointer = object
     username: string
     timestamp: float
+  Room = object
+    id: string
   State = object
     accounts: Table[string, Account] # keys are usernames
     tokens: Table[string, AccountPointer] # keys are tokens
+    rooms: Table[string, Room] # keys are room aliases
   StateActionKind = enum
-    Stop, Register, Login,
+    Stop, Register, Login, CreateRoom,
   StateAction = object
     case kind: StateActionKind
     of Stop:
@@ -26,6 +29,8 @@ type
     of Register, Login:
       account: Account
       token: string
+    of CreateRoom:
+      roomAlias: string
     done: ptr Channel[bool]
   Server* = ref object
     hostname: string
@@ -60,7 +65,7 @@ proc initToken(): string =
   # TODO: come up with better way of generating tokens
   $abs(oids.hash(oids.genOid()))
 
-proc sendStateAction(server: Server, action: StateAction) =
+proc sendStateAction(server: Server, action: StateAction): bool =
   let done = cast[ptr Channel[bool]](
     allocShared0(sizeof(Channel[bool]))
   )
@@ -68,7 +73,7 @@ proc sendStateAction(server: Server, action: StateAction) =
   var newAction = action
   newAction.done = done
   server.stateAction[].send(newAction)
-  discard done[].recv()
+  result = done[].recv()
   deallocShared(done)
 
 proc register(server: Server, request: Request): string =
@@ -84,9 +89,9 @@ proc register(server: Server, request: Request): string =
       password = body["password"].str
       account = Account(username: username, password: password)
       action = StateAction(kind: Register, account: account, token: initToken())
-      existingAccount = server.state[].accounts.getOrDefault(username, Account(username: ""))
+      existingAccount = server.state[].accounts.getOrDefault(username, Account())
     if existingAccount.username == "" or password == existingAccount.password:
-      sendStateAction(server, action)
+      discard sendStateAction(server, action)
       $ %*{"home_server": server.hostname, "user_id": "@" & account.username & ":" & server.hostname, "access_token": action.token}
     else:
       raise newException(ForbiddenException, "username or password is invalid")
@@ -105,14 +110,60 @@ proc login(server: Server, request: Request): string =
       user = body["user"].str
       password = body["password"].str
     let
-      account = server.state[].accounts.getOrDefault(user, Account(username: ""))
+      account = server.state[].accounts.getOrDefault(user, Account())
       action = StateAction(kind: Login, account: account, token: initToken())
     if account.username == "" or account.password != password:
       raise newException(ForbiddenException, "user or password is invalid")
-    sendStateAction(server, action)
+    discard sendStateAction(server, action)
     $ %*{"home_server": server.hostname, "user_id": "@" & account.username & ":" & server.hostname, "access_token": action.token}
   else:
     raise newException(BadRequestException, "Unrecognized auth type")
+
+proc parseQuery(query: string): Table[string, string] =
+  # TODO: use uri.decodeQuery when it is available
+  for pair in strutils.split(query, '&'):
+    let keyval = strutils.split(pair, '=')
+    if keyval.len == 2:
+      result[keyval[0]] = keyval[1]
+
+proc createRoom(server: Server, request: Request): string =
+  let params = parseQuery(request.uri.query)
+  if not params.hasKey("access_token"):
+    raise newException(BadRequestException, "access_token required")
+  let body = request.body.parseJson
+  if not body.hasKey("room_alias_name"):
+    raise newException(BadRequestException, "room_alias_name required")
+  let action = StateAction(kind: CreateRoom, roomAlias: body["room_alias_name"].str)
+  if sendStateAction(server, action):
+    let room = server.state[].rooms.getOrDefault(action.roomAlias, Room())
+    if room.id != "":
+      $ %*{"room_alias": "#" & action.roomAlias & ":" & server.hostname,
+           "room_id": "!" & room.id & ":" & server.hostname}
+    else:
+      raise newException(NotFoundException, "room not found")
+  else:
+    raise newException(BadRequestException, "alias already exists")
+
+proc join(server: Server, request: Request): string =
+  let params = parseQuery(request.uri.query)
+  if not params.hasKey("access_token"):
+    raise newException(BadRequestException, "access_token required")
+  let
+    accountPtr = server.state[].tokens.getOrDefault(params["access_token"], AccountPointer())
+    account = server.state[].accounts.getOrDefault(accountPtr.username, Account())
+  if account.username == "":
+    raise newException(ForbiddenException, "access_token is invalid")
+  let
+    pathParts = strutils.split(request.uri.path, '/')
+    roomAlias = uri.decodeUrl(pathParts[pathParts.len-1])
+    nameWithHash = strutils.split(roomAlias, ':')[0]
+    name = nameWithHash[1 ..< nameWithHash.len]
+  let room = server.state[].rooms.getOrDefault(name, Room())
+  if room.id != "":
+    $ %*{"room_alias": roomAlias,
+         "room_id": "!" & room.id & ":" & server.hostname}
+  else:
+    raise newException(NotFoundException, "room not found")
 
 proc handle(server: Server, client: Socket) =
   try:
@@ -152,23 +203,27 @@ proc handle(server: Server, client: Socket) =
         # TODO: max content length
         request.body = client.recv(contentLength)
     # response
-    let dispatch = (request.reqMethod, $request.uri)
+    let dispatch = (reqMethod: request.reqMethod, path: request.uri.path)
     let response =
       if dispatch == (httpcore.HttpPost, "/_matrix/client/r0/register"):
         register(server, request)
       elif dispatch == (httpcore.HttpPost, "/_matrix/client/r0/login"):
         login(server, request)
+      elif dispatch == (httpcore.HttpPost, "/_matrix/client/r0/createRoom"):
+        createRoom(server, request)
+      elif dispatch.reqMethod == httpcore.HttpPost and strutils.startsWith(dispatch.path, "/_matrix/client/r0/join"):
+        join(server, request)
       else:
         raise newException(NotFoundException, "Unhandled request: " & $dispatch)
     client.send("HTTP/1.1 200 OK\r\LContent-Length: " & $response.len & "\r\L\r\L" & response)
   except BadRequestException as ex:
-    client.send("HTTP/1.1 400 Bad Request\r\L\r\L" & ex.msg)
+    client.send("HTTP/1.1 400 Bad Request\r\L\r\L" & $ %*{"message": ex.msg})
   except ForbiddenException as ex:
-    client.send("HTTP/1.1 403 Forbidden\r\L\r\L" & ex.msg)
+    client.send("HTTP/1.1 403 Forbidden\r\L\r\L" & $ %*{"message": ex.msg})
   except NotFoundException as ex:
-    client.send("HTTP/1.1 404 Not Found\r\L\r\L" & ex.msg)
+    client.send("HTTP/1.1 404 Not Found\r\L\r\L" & $ %*{"message": ex.msg})
   except Exception as ex:
-    client.send("HTTP/1.1 500 Internal Server Error\r\L\r\L" & ex.msg)
+    client.send("HTTP/1.1 500 Internal Server Error\r\L\r\L" & $ %*{"message": ex.msg})
   finally:
     client.close()
 
@@ -205,7 +260,13 @@ proc recvStateAction(server: Server) {.thread.} =
       echo $action.kind & " " & $action.account
       server.state[].accounts[action.account.username] = action.account
       server.state[].tokens[action.token] = AccountPointer(username: action.account.username, timestamp: times.epochTime())
-    action.done[].send(true)
+      action.done[].send(true)
+    of CreateRoom:
+      if server.state[].rooms.hasKey(action.roomAlias):
+        action.done[].send(false)
+      else:
+        server.state[].rooms[action.roomAlias] = Room(id: initToken())
+        action.done[].send(true)
 
 proc initShared(server: var Server) =
   server.listenStopped = cast[ptr Channel[bool]](

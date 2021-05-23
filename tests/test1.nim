@@ -28,6 +28,19 @@ test "Failed login/register":
   finally:
     server.stop(s)
 
+test "Room already exists":
+  var s = server.initServer("localhost", port)
+  server.start(s)
+  try:
+    var c = client.initClient(config)
+    client.register(c)
+    client.login(c)
+    client.create(c)
+    expect client.ClientException:
+      client.create(c)
+  finally:
+    server.stop(s)
+
 test "Full lifecycle":
   var s = server.initServer("localhost", port)
   server.start(s)
@@ -35,10 +48,7 @@ test "Full lifecycle":
     var c = client.initClient(config)
     client.register(c)
     client.login(c)
-    try:
-      client.create(c)
-    except Exception as e:
-      echo e.msg
+    client.create(c)
     client.join(c)
     client.send(c, "Hello, world!")
     echo client.getMessages(c, client.sync(c))
