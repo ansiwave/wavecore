@@ -17,8 +17,8 @@ type
     timestamp: float
     roomIds: HashSet[string]
   Message = object
-    msgtype: string
     body: string
+    username: string
   Room = object
     id: string
     alias: string
@@ -30,7 +30,7 @@ type
     rooms: Table[string, Room] # keys are room ids
     roomAliasToId: Table[string, string]
   StateActionKind = enum
-    Stop, Register, Login, CreateRoom, Join,
+    Stop, Register, Login, CreateRoom, Join, Send,
   StateAction = object
     case kind: StateActionKind
     of Stop:
@@ -41,6 +41,9 @@ type
       roomAlias: string
     of Join:
       roomId: string
+    of Send:
+      event: JsonNode
+      eventRoomId: string
     token: string
     done: ptr Channel[bool]
   Server* = ref object
@@ -152,30 +155,28 @@ proc createRoom(server: Server, request: Request): string =
   else:
     raise newException(BadRequestException, "alias already exists")
 
+proc getRoomId(server: Server, roomIdOrAlias: string): string =
+  let
+    fullName = strutils.split(roomIdOrAlias, ':')[0]
+    startChar = fullName[0]
+    name = fullName[1 ..< fullName.len]
+  case startChar:
+  of '#':
+    server.state[].roomAliasToId.getOrDefault(name, "")
+  of '!':
+    name
+  else:
+    ""
+
 proc join(server: Server, request: Request): string =
   let params = parseQuery(request.uri.query)
   if not params.hasKey("access_token"):
     raise newException(BadRequestException, "access_token required")
   let
     token = params["access_token"]
-    accountPtr = server.state[].tokens.getOrDefault(token, AccountPointer())
-    account = server.state[].accounts.getOrDefault(accountPtr.username, Account())
-  if account.username == "":
-    raise newException(ForbiddenException, "access_token is invalid")
-  let
     pathParts = strutils.split(request.uri.path, '/')
     roomIdOrAlias = uri.decodeUrl(pathParts[pathParts.len-1])
-    fullName = strutils.split(roomIdOrAlias, ':')[0]
-    startChar = fullName[0]
-    name = fullName[1 ..< fullName.len]
-    roomId =
-      case startChar:
-      of '#':
-        server.state[].roomAliasToId.getOrDefault(name, "")
-      of '!':
-        name
-      else:
-        ""
+    roomId = getRoomId(server, roomIdOrAlias)
     action = StateAction(kind: Join, roomId: roomId, token: token)
   if sendStateAction(server, action):
     let room = server.state[].rooms.getOrDefault(roomId, Room())
@@ -186,6 +187,21 @@ proc join(server: Server, request: Request): string =
       raise newException(NotFoundException, "room not found")
   else:
     raise newException(BadRequestException, "failed to join room")
+
+proc send(server: Server, request: Request): string =
+  let params = parseQuery(request.uri.query)
+  if not params.hasKey("access_token"):
+    raise newException(BadRequestException, "access_token required")
+  let
+    token = params["access_token"]
+    pathParts = strutils.split(request.uri.path, '/')
+    roomIdOrAlias = uri.decodeUrl(pathParts[pathParts.len-4])
+    roomId = getRoomId(server, roomIdOrAlias)
+    action = StateAction(kind: Send, event: request.body.parseJson, eventRoomId: roomId, token: token)
+  if sendStateAction(server, action):
+    $ %*{"event_id": initToken()}
+  else:
+    raise newException(BadRequestException, "failed to send event")
 
 proc handle(server: Server, client: Socket) =
   try:
@@ -233,8 +249,13 @@ proc handle(server: Server, client: Socket) =
         login(server, request)
       elif dispatch == (httpcore.HttpPost, "/_matrix/client/r0/createRoom"):
         createRoom(server, request)
-      elif dispatch.reqMethod == httpcore.HttpPost and strutils.startsWith(dispatch.path, "/_matrix/client/r0/join"):
+      elif dispatch.reqMethod == httpcore.HttpPost and
+          strutils.startsWith(dispatch.path, "/_matrix/client/r0/join/"):
         join(server, request)
+      elif dispatch.reqMethod == httpcore.HttpPut and
+          strutils.startsWith(dispatch.path, "/_matrix/client/r0/rooms/") and
+          strutils.endsWith(dispatch.path, "/send/m.room.message/0"):
+        send(server, request)
       else:
         raise newException(NotFoundException, "Unhandled request: " & $dispatch)
     client.send("HTTP/1.1 200 OK\r\LContent-Length: " & $response.len & "\r\L\r\L" & response)
@@ -309,6 +330,26 @@ proc recvStateAction(server: Server) {.thread.} =
         server.state[].rooms[action.roomId].tokens.incl(action.token)
         server.state[].tokens[action.token].roomIds.incl(action.roomId)
         action.done[].send(true)
+      else:
+        action.done[].send(false)
+    of Send:
+      if action.eventRoomId != "" and
+          action.event.hasKey("msgtype") and
+          action.event["msgtype"].kind == JString and
+          server.state[].tokens.hasKey(action.token):
+        let accountPtr = server.state[].tokens[action.token]
+        case action.event["msgtype"].str:
+        of "m.text":
+          if server.state[].rooms.hasKey(action.eventRoomId) and
+              action.event.hasKey("body") and
+              action.event["body"].kind == JString:
+            let message = Message(body: action.event["body"].str, username: accountPtr.username)
+            server.state[].rooms[action.eventRoomId].messages.add(message)
+            action.done[].send(true)
+          else:
+            action.done[].send(false)
+        else:
+          action.done[].send(false)
       else:
         action.done[].send(false)
 
