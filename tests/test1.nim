@@ -2,6 +2,7 @@ import unittest
 import json
 from wavematrixpkg/client import nil
 from wavematrixpkg/server import nil
+from sugar import nil
 
 const
   port = 3000
@@ -50,7 +51,12 @@ test "Full lifecycle":
     client.login(c)
     client.create(c)
     client.join(c)
-    client.send(c, "Hello, world!")
-    echo client.getMessages(c, client.sync(c))
+    let sentMessages = @["Hello, world!", "What's up?"]
+    for msg in sentMessages:
+      client.send(c, msg)
+    let recvMessages = sugar.collect(newSeq):
+      for msg in client.getMessages(c, client.sync(c)):
+        msg.body
+    check sentMessages == recvMessages
   finally:
     server.stop(s)

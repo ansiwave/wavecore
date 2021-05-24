@@ -7,6 +7,7 @@ import httpcore
 import json
 from oids import nil
 from times import nil
+from sugar import nil
 
 type
   Account = object
@@ -17,8 +18,10 @@ type
     timestamp: float
     roomIds: HashSet[string]
   Message = object
-    body: string
+    content: JsonNode
     username: string
+    timestamp: float
+    eventId: string
   Room = object
     id: string
     alias: string
@@ -43,6 +46,7 @@ type
       roomId: string
     of Send:
       event: JsonNode
+      eventId: string
       eventRoomId: string
     token: string
     done: ptr Channel[bool]
@@ -148,7 +152,7 @@ proc createRoom(server: Server, request: Request): string =
   if sendStateAction(server, action):
     let roomId = server.state[].roomAliasToId[action.roomAlias]
     $ %*{"room_alias": "#" & action.roomAlias & ":" & server.hostname,
-         "room_id": "!" & roomId & ":" & server.hostname}
+         "room_id": roomId}
   else:
     raise newException(BadRequestException, "alias already exists")
 
@@ -161,7 +165,7 @@ proc getRoomId(server: Server, roomIdOrAlias: string): string =
   of '#':
     server.state[].roomAliasToId.getOrDefault(name, "")
   of '!':
-    name
+    roomIdOrAlias
   else:
     ""
 
@@ -178,24 +182,52 @@ proc join(server: Server, request: Request): string =
   if sendStateAction(server, action):
     let room = server.state[].rooms[roomId]
     $ %*{"room_alias": room.alias,
-         "room_id": "!" & roomId & ":" & server.hostname}
+         "room_id": roomId}
   else:
     raise newException(BadRequestException, "failed to join room")
 
-proc send(server: Server, request: Request): string =
+proc rooms(server: Server, request: Request): string =
   let params = parseQuery(request.uri.query)
   if not params.hasKey("access_token"):
     raise newException(BadRequestException, "access_token required")
   let
     token = params["access_token"]
     pathParts = strutils.split(request.uri.path, '/')
-    roomIdOrAlias = uri.decodeUrl(pathParts[pathParts.len-4])
-    roomId = getRoomId(server, roomIdOrAlias)
-    action = StateAction(kind: Send, event: request.body.parseJson, eventRoomId: roomId, token: token)
-  if sendStateAction(server, action):
-    $ %*{"event_id": initToken()}
+    roomIdOrAlias = uri.decodeUrl(pathParts[5])
+    command = pathParts[6]
+  if command == "send":
+    let
+      roomId = getRoomId(server, roomIdOrAlias)
+      action = StateAction(kind: Send, event: request.body.parseJson, eventId: initToken(), eventRoomId: roomId, token: token)
+    if sendStateAction(server, action):
+      $ %*{"event_id": action.eventId}
+    else:
+      raise newException(BadRequestException, "failed to send event")
   else:
-    raise newException(BadRequestException, "failed to send event")
+    raise newException(NotFoundException, command & " not expected")
+
+proc sync(server: Server, request: Request): string =
+  let params = parseQuery(request.uri.query)
+  if not params.hasKey("access_token"):
+    raise newException(BadRequestException, "access_token required")
+  let
+    token = params["access_token"]
+    accountPtr = server.state[].tokens[token]
+    rooms = sugar.collect(newSeq):
+      for roomId in accountPtr.roomIds:
+        server.state[].rooms[roomId]
+  var joinedRooms = %*{}
+  for room in rooms:
+    var events = %*[]
+    for msg in room.messages:
+      events.elems.add(%*{"content": msg.content,
+                          "type": "m.room.message",
+                          "event_id": msg.eventId,
+                          "room_id": room.id,
+                          "sender": "@" & msg.username & ":" & server.hostname,
+                          "origin_server_ts": int(msg.timestamp * 1000)})
+    joinedRooms.fields[room.id] = %*{"timeline": {"events": events}}
+  $ %*{"rooms": {"join": joinedRooms}}
 
 proc handle(server: Server, client: Socket) =
   try:
@@ -247,9 +279,10 @@ proc handle(server: Server, client: Socket) =
           strutils.startsWith(dispatch.path, "/_matrix/client/r0/join/"):
         join(server, request)
       elif dispatch.reqMethod == httpcore.HttpPut and
-          strutils.startsWith(dispatch.path, "/_matrix/client/r0/rooms/") and
-          strutils.endsWith(dispatch.path, "/send/m.room.message/0"):
-        send(server, request)
+          strutils.startsWith(dispatch.path, "/_matrix/client/r0/rooms/"):
+        rooms(server, request)
+      elif dispatch == (httpcore.HttpGet, "/_matrix/client/r0/sync"):
+        sync(server, request)
       else:
         raise newException(NotFoundException, "Unhandled request: " & $dispatch)
     client.send("HTTP/1.1 200 OK\r\LContent-Length: " & $response.len & "\r\L\r\L" & response)
@@ -311,7 +344,7 @@ proc recvStateAction(server: Server) {.thread.} =
     of CreateRoom:
       if action.roomAlias != "" and
           not server.state[].roomAliasToId.hasKey(action.roomAlias):
-        let roomId = initToken()
+        let roomId = "!" & initToken() & ":" & server.hostname
         server.state[].rooms[roomId] = Room(id: roomId, alias: action.roomAlias)
         server.state[].roomAliasToId[action.roomAlias] = roomId
         action.done[].send(true)
@@ -337,7 +370,7 @@ proc recvStateAction(server: Server) {.thread.} =
           if server.state[].rooms.hasKey(action.eventRoomId) and
               action.event.hasKey("body") and
               action.event["body"].kind == JString:
-            let message = Message(body: action.event["body"].str, username: accountPtr.username)
+            let message = Message(content: action.event, username: accountPtr.username, timestamp: times.epochTime(), eventId: action.eventId)
             server.state[].rooms[action.eventRoomId].messages.add(message)
             action.done[].send(true)
           else:
