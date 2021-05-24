@@ -1,4 +1,5 @@
-import threadpool, net, os, selectors, tables
+import threadpool, net, os, selectors
+import tables, sets
 from uri import `$`
 from strutils import nil
 from parseutils import nil
@@ -14,23 +15,33 @@ type
   AccountPointer = object
     username: string
     timestamp: float
+    roomIds: HashSet[string]
+  Message = object
+    msgtype: string
+    body: string
   Room = object
     id: string
+    alias: string
+    tokens: HashSet[string]
+    messages: seq[Message]
   State = object
     accounts: Table[string, Account] # keys are usernames
     tokens: Table[string, AccountPointer] # keys are tokens
-    rooms: Table[string, Room] # keys are room aliases
+    rooms: Table[string, Room] # keys are room ids
+    roomAliasToId: Table[string, string]
   StateActionKind = enum
-    Stop, Register, Login, CreateRoom,
+    Stop, Register, Login, CreateRoom, Join,
   StateAction = object
     case kind: StateActionKind
     of Stop:
       discard
     of Register, Login:
       account: Account
-      token: string
     of CreateRoom:
       roomAlias: string
+    of Join:
+      roomId: string
+    token: string
     done: ptr Channel[bool]
   Server* = ref object
     hostname: string
@@ -132,10 +143,10 @@ proc createRoom(server: Server, request: Request): string =
     raise newException(BadRequestException, "room_alias_name required")
   let action = StateAction(kind: CreateRoom, roomAlias: body["room_alias_name"].str)
   if sendStateAction(server, action):
-    let room = server.state[].rooms.getOrDefault(action.roomAlias, Room())
-    if room.id != "":
+    let roomId = server.state[].roomAliasToId.getOrDefault(action.roomAlias, "")
+    if roomId != "":
       $ %*{"room_alias": "#" & action.roomAlias & ":" & server.hostname,
-           "room_id": "!" & room.id & ":" & server.hostname}
+           "room_id": "!" & roomId & ":" & server.hostname}
     else:
       raise newException(NotFoundException, "room not found")
   else:
@@ -146,21 +157,35 @@ proc join(server: Server, request: Request): string =
   if not params.hasKey("access_token"):
     raise newException(BadRequestException, "access_token required")
   let
-    accountPtr = server.state[].tokens.getOrDefault(params["access_token"], AccountPointer())
+    token = params["access_token"]
+    accountPtr = server.state[].tokens.getOrDefault(token, AccountPointer())
     account = server.state[].accounts.getOrDefault(accountPtr.username, Account())
   if account.username == "":
     raise newException(ForbiddenException, "access_token is invalid")
   let
     pathParts = strutils.split(request.uri.path, '/')
-    roomAlias = uri.decodeUrl(pathParts[pathParts.len-1])
-    nameWithHash = strutils.split(roomAlias, ':')[0]
-    name = nameWithHash[1 ..< nameWithHash.len]
-  let room = server.state[].rooms.getOrDefault(name, Room())
-  if room.id != "":
-    $ %*{"room_alias": roomAlias,
-         "room_id": "!" & room.id & ":" & server.hostname}
+    roomIdOrAlias = uri.decodeUrl(pathParts[pathParts.len-1])
+    fullName = strutils.split(roomIdOrAlias, ':')[0]
+    startChar = fullName[0]
+    name = fullName[1 ..< fullName.len]
+    roomId =
+      case startChar:
+      of '#':
+        server.state[].roomAliasToId.getOrDefault(name, "")
+      of '!':
+        name
+      else:
+        ""
+    action = StateAction(kind: Join, roomId: roomId, token: token)
+  if sendStateAction(server, action):
+    let room = server.state[].rooms.getOrDefault(roomId, Room())
+    if room.id != "":
+      $ %*{"room_alias": room.alias,
+           "room_id": "!" & roomId & ":" & server.hostname}
+    else:
+      raise newException(NotFoundException, "room not found")
   else:
-    raise newException(NotFoundException, "room not found")
+    raise newException(BadRequestException, "failed to join room")
 
 proc handle(server: Server, client: Socket) =
   try:
@@ -269,11 +294,23 @@ proc recvStateAction(server: Server) {.thread.} =
         else:
           action.done[].send(false)
     of CreateRoom:
-      if server.state[].rooms.hasKey(action.roomAlias):
-        action.done[].send(false)
-      else:
-        server.state[].rooms[action.roomAlias] = Room(id: initToken())
+      if action.roomAlias != "" and
+          not server.state[].roomAliasToId.hasKey(action.roomAlias):
+        let roomId = initToken()
+        server.state[].rooms[roomId] = Room(id: roomId, alias: action.roomAlias)
+        server.state[].roomAliasToId[action.roomAlias] = roomId
         action.done[].send(true)
+      else:
+        action.done[].send(false)
+    of Join:
+      if action.roomId != "" and
+          server.state[].rooms.hasKey(action.roomId) and
+          server.state[].tokens.hasKey(action.token):
+        server.state[].rooms[action.roomId].tokens.incl(action.token)
+        server.state[].tokens[action.token].roomIds.incl(action.roomId)
+        action.done[].send(true)
+      else:
+        action.done[].send(false)
 
 proc initShared(server: var Server) =
   server.listenStopped = cast[ptr Channel[bool]](
