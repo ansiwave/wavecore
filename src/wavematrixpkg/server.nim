@@ -146,12 +146,9 @@ proc createRoom(server: Server, request: Request): string =
     raise newException(BadRequestException, "room_alias_name required")
   let action = StateAction(kind: CreateRoom, roomAlias: body["room_alias_name"].str)
   if sendStateAction(server, action):
-    let roomId = server.state[].roomAliasToId.getOrDefault(action.roomAlias, "")
-    if roomId != "":
-      $ %*{"room_alias": "#" & action.roomAlias & ":" & server.hostname,
-           "room_id": "!" & roomId & ":" & server.hostname}
-    else:
-      raise newException(NotFoundException, "room not found")
+    let roomId = server.state[].roomAliasToId[action.roomAlias]
+    $ %*{"room_alias": "#" & action.roomAlias & ":" & server.hostname,
+         "room_id": "!" & roomId & ":" & server.hostname}
   else:
     raise newException(BadRequestException, "alias already exists")
 
@@ -179,12 +176,9 @@ proc join(server: Server, request: Request): string =
     roomId = getRoomId(server, roomIdOrAlias)
     action = StateAction(kind: Join, roomId: roomId, token: token)
   if sendStateAction(server, action):
-    let room = server.state[].rooms.getOrDefault(roomId, Room())
-    if room.id != "":
-      $ %*{"room_alias": room.alias,
-           "room_id": "!" & roomId & ":" & server.hostname}
-    else:
-      raise newException(NotFoundException, "room not found")
+    let room = server.state[].rooms[roomId]
+    $ %*{"room_alias": room.alias,
+         "room_id": "!" & roomId & ":" & server.hostname}
   else:
     raise newException(BadRequestException, "failed to join room")
 
