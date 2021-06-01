@@ -60,3 +60,14 @@ test "Full lifecycle":
     check sentMessages == recvMessages
   finally:
     server.stop(s)
+
+from db_sqlite import `sql`
+from wavematrixpkg/db import nil
+
+test "db stuff":
+  let conn = db_sqlite.open(":memory:", "", "", "")
+  db.initTables(conn)
+  for x in db_sqlite.fastRows(conn, sql"SELECT * FROM entity"):
+    echo x
+  db_sqlite.close(conn)
+
