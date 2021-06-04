@@ -17,8 +17,7 @@ proc initTables*(conn: DbConn) =
   conn.exec sql"""
   CREATE TABLE entity_value (
     id                 INTEGER NOT NULL PRIMARY KEY,
-    int_value          INTEGER,
-    text_value         TEXT,
+    value              TEXT NOT NULL,
     created_ts         TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     entity_id          INTEGER NOT NULL,
     entity_attr_id     INTEGER NOT NULL,
