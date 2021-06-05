@@ -10,18 +10,6 @@ type
     id: int64
     attr: string
     created_ts: string
-  ValueKind* = enum
-    name, age,
-  Value* = object
-    case kind*: ValueKind
-    of name:
-      name*: string
-    of age:
-      age*: int64
-  EAV* = object
-    id: int64
-    attr: string
-    value: Value
   # compound types
   Person* = object
     id: int64
@@ -64,18 +52,6 @@ proc setObject[T](stmt: PStmt, e: var T) =
         e.attr = $column_text(stmt, col)
       of "created_ts":
         e.created_ts = $column_text(stmt, col)
-    elif T is EAV:
-      case colName:
-      of "id":
-        e.id = column_int64(stmt, col)
-      of "attr":
-        e.attr = $column_text(stmt, col)
-      of "value":
-        case e.attr:
-        of "name":
-          e.value = Value(kind: name, name: $column_text(stmt, col))
-        of "age":
-          e.value = Value(kind: age, age: column_int64(stmt, col))
     elif T is Person:
       case colName:
       of "id":

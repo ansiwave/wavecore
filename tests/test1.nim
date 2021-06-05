@@ -70,14 +70,6 @@ test "db stuff":
   db.init(conn)
   discard db.insertEntity(conn, {"name": "Alice", "age": $20}.toTable)
   discard db.insertEntity(conn, {"name": "Bob", "age": $30}.toTable)
-  # get individual eav tuples
-  for x in db.select[EAV](conn, sql"""
-      SELECT entity.id, entity_attr.attr, entity_value.value FROM entity
-      INNER JOIN entity_value ON entity_value.entity_id = entity.id
-      INNER JOIN entity_attr ON entity_attr.id = entity_value.entity_attr_id
-    """):
-    echo x
-  # get person objects
   for x in db.select[Person](conn, sql"""
       SELECT entity.id, value1.value AS name, value2.value AS age FROM entity
       INNER JOIN entity_value as value1 ON value1.entity_id = entity.id
