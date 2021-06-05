@@ -71,7 +71,7 @@ proc init*(conn: PSqlite3) =
   db_sqlite.exec conn, sql"""
   CREATE TABLE attribute (
     id           INTEGER NOT NULL PRIMARY KEY,
-    attribute    TEXT NOT NULL,
+    attribute    TEXT NOT NULL UNIQUE,
     created_ts   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
   )"""
 
