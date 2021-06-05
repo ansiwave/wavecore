@@ -73,10 +73,8 @@ test "db stuff":
   for x in db.select[Person](conn, sql"""
       SELECT entity.id, value1.value AS name, value2.value AS age FROM entity
       INNER JOIN value as value1 ON value1.entity_id = entity.id
-      INNER JOIN attribute as attr1 ON attr1.id = value1.attribute_id
       INNER JOIN value as value2 ON value2.entity_id = entity.id
-      INNER JOIN attribute as attr2 ON attr2.id = value2.attribute_id
-      WHERE attr1.attribute = 'name' AND attr2.attribute = 'age'
+      WHERE value1.attribute = 'name' AND value2.attribute = 'age'
     """):
     echo x
   db_sqlite.close(conn)
