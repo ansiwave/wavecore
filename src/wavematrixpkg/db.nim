@@ -5,7 +5,7 @@ import tables
 type
   Attr = object
     id: int64
-    attr: string
+    attribute: string
     created_ts: string
   Person* = object
     id*: int64
@@ -38,8 +38,8 @@ proc setObject[T](stmt: PStmt, e: var T) =
       case colName:
       of "id":
         e.id = column_int64(stmt, col)
-      of "attr":
-        e.attr = $column_text(stmt, col)
+      of "attribute":
+        e.attribute = $column_text(stmt, col)
       of "created_ts":
         e.created_ts = $column_text(stmt, col)
     elif T is Person:
@@ -69,27 +69,27 @@ proc init*(conn: PSqlite3) =
   )"""
 
   db_sqlite.exec conn, sql"""
-  CREATE TABLE entity_attr (
+  CREATE TABLE attribute (
     id           INTEGER NOT NULL PRIMARY KEY,
-    attr         TEXT NOT NULL,
+    attribute    TEXT NOT NULL,
     created_ts   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
   )"""
 
   db_sqlite.exec conn, sql"""
-  CREATE TABLE entity_value (
+  CREATE TABLE value (
     id                 INTEGER NOT NULL PRIMARY KEY,
     value              TEXT NOT NULL,
     created_ts         TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     entity_id          INTEGER NOT NULL,
-    entity_attr_id     INTEGER NOT NULL,
+    attribute_id       INTEGER NOT NULL,
     FOREIGN KEY(entity_id) REFERENCES entity(id),
-    FOREIGN KEY(entity_attr_id) REFERENCES entity_attr(id)
+    FOREIGN KEY(attribute_id) REFERENCES attribute(id)
   )"""
 
-  db_sqlite.exec(conn, sql"INSERT INTO entity_attr (attr) VALUES (?)", "name")
-  db_sqlite.exec(conn, sql"INSERT INTO entity_attr (attr) VALUES (?)", "age")
-  for attr in select[Attr](conn, sql"SELECT * from entity_attr"):
-    attrs[attr.attr] = attr
+  db_sqlite.exec(conn, sql"INSERT INTO attribute (attribute) VALUES (?)", "name")
+  db_sqlite.exec(conn, sql"INSERT INTO attribute (attribute) VALUES (?)", "age")
+  for attr in select[Attr](conn, sql"SELECT * from attribute"):
+    attrs[attr.attribute] = attr
 
 proc insert*(conn: PSqlite3, values: Table[string, string]): int64 =
   db_sqlite.exec(conn, sql"BEGIN TRANSACTION")
@@ -100,5 +100,5 @@ proc insert*(conn: PSqlite3, values: Table[string, string]): int64 =
     args.add(v)
     args.add($result)
     args.add($attrs[k].id)
-    db_sqlite.exec(conn, sql"INSERT INTO entity_value (value, entity_id, entity_attr_id) VALUES (?, ?, ?)", args)
+    db_sqlite.exec(conn, sql"INSERT INTO value (value, entity_id, attribute_id) VALUES (?, ?, ?)", args)
   db_sqlite.exec(conn, sql"COMMIT")
