@@ -67,7 +67,8 @@ from wavematrixpkg/db import nil
 test "db stuff":
   let conn = db_sqlite.open(":memory:", "", "", "")
   db.initTables(conn)
-  for x in db_sqlite.fastRows(conn, sql"SELECT * FROM entity"):
+  echo db.insertEntity(conn)
+  for x in db.selectEntities(conn, sql"SELECT * FROM entity"):
     echo x
   db_sqlite.close(conn)
 
