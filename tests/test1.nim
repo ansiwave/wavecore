@@ -68,8 +68,8 @@ import tables
 test "db stuff":
   let conn = db_sqlite.open(":memory:", "", "", "")
   db.init(conn)
-  discard db.insertEntity(conn, {"name": "Alice", "age": $20}.toTable)
-  discard db.insertEntity(conn, {"name": "Bob", "age": $30}.toTable)
+  discard db.insert(conn, {"name": "Alice", "age": $20}.toTable)
+  discard db.insert(conn, {"name": "Bob", "age": $30}.toTable)
   for x in db.select[Person](conn, sql"""
       SELECT entity.id, value1.value AS name, value2.value AS age FROM entity
       INNER JOIN entity_value as value1 ON value1.entity_id = entity.id

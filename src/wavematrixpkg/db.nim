@@ -3,18 +3,14 @@ from db_sqlite import sql, SqlQuery
 import tables
 
 type
-  Entity* = object
-    id: int64
-    created_ts: string
   Attr = object
     id: int64
     attr: string
     created_ts: string
-  # compound types
   Person* = object
-    id: int64
-    name: string
-    age: int64
+    id*: int64
+    name*: string
+    age*: int64
 
 var attrs: Table[string, Attr]
 
@@ -38,13 +34,7 @@ proc setObject[T](stmt: PStmt, e: var T) =
   var cols = column_count(stmt)
   for col in 0 .. cols-1:
     let colName = $column_name(stmt, col)
-    when T is Entity:
-      case colName:
-      of "id":
-        e.id = column_int64(stmt, col)
-      of "created_ts":
-        e.created_ts = $column_text(stmt, col)
-    elif T is Attr:
+    when T is Attr:
       case colName:
       of "id":
         e.id = column_int64(stmt, col)
@@ -101,7 +91,7 @@ proc init*(conn: PSqlite3) =
   for attr in select[Attr](conn, sql"SELECT * from entity_attr"):
     attrs[attr.attr] = attr
 
-proc insertEntity*(conn: PSqlite3, values: Table[string, string]): int64 =
+proc insert*(conn: PSqlite3, values: Table[string, string]): int64 =
   db_sqlite.exec(conn, sql"BEGIN TRANSACTION")
   db_sqlite.exec(conn, sql"INSERT INTO entity DEFAULT VALUES")
   result = sqlite3.last_insert_rowid(conn)
