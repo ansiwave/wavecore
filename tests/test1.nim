@@ -62,13 +62,30 @@ test "Full lifecycle":
     server.stop(s)
 
 from db_sqlite import `sql`
-from wavematrixpkg/db import nil
+import wavematrixpkg/db
+import tables
 
 test "db stuff":
   let conn = db_sqlite.open(":memory:", "", "", "")
-  db.initTables(conn)
-  echo db.insertEntity(conn)
-  for x in db.selectEntities(conn, sql"SELECT * FROM entity"):
+  db.init(conn)
+  discard db.insertEntity(conn, {"name": "Alice", "age": $20}.toTable)
+  discard db.insertEntity(conn, {"name": "Bob", "age": $30}.toTable)
+  # get individual eav tuples
+  for x in db.select[EAV](conn, sql"""
+      SELECT entity.id, entity_attr.attr, entity_value.value FROM entity
+      INNER JOIN entity_value ON entity_value.entity_id = entity.id
+      INNER JOIN entity_attr ON entity_attr.id = entity_value.entity_attr_id
+    """):
+    echo x
+  # get person objects
+  for x in db.select[Person](conn, sql"""
+      SELECT entity.id, value1.value AS name, value2.value AS age FROM entity
+      INNER JOIN entity_value as value1 ON value1.entity_id = entity.id
+      INNER JOIN entity_attr as attr1 ON attr1.id = value1.entity_attr_id
+      INNER JOIN entity_value as value2 ON value2.entity_id = entity.id
+      INNER JOIN entity_attr as attr2 ON attr2.id = value2.entity_attr_id
+      WHERE attr1.attr = 'name' AND attr2.attr = 'age'
+    """):
     echo x
   db_sqlite.close(conn)
 
