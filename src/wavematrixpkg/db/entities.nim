@@ -1,8 +1,7 @@
 import sqlite3
-from db_sqlite import sql, SqlQuery
+from db_sqlite import sql
 from wavematrixpkg/server import nil
 from wavematrixpkg/db import nil
-from sequtils import toSeq
 
 proc initAccount(account: var server.Account, stmt: PStmt, col: int32) =
   let colName = $sqlite3.column_name(stmt, col)
@@ -12,12 +11,17 @@ proc initAccount(account: var server.Account, stmt: PStmt, col: int32) =
   of "password":
     account.password = $sqlite3.column_text(stmt, col)
 
-proc selectAccounts*(conn: PSqlite3): seq[server.Account] =
-  db.select[server.Account](conn, initAccount,
-    sql"""
-      SELECT entity.id, value1.value AS username, value2.value AS password FROM entity
-      INNER JOIN value as value1 ON value1.entity_id = entity.id
-      INNER JOIN value as value2 ON value2.entity_id = entity.id
-      WHERE value1.attribute = 'username' AND value2.attribute = 'password'
-    """
-  ).toSeq()
+proc selectAccount*(conn: PSqlite3, username: string): server.Account =
+  for x in db.select[server.Account](conn, initAccount,
+      sql"""
+        SELECT entity.id, value1.value AS username, value2.value AS password FROM entity
+        INNER JOIN value as value1 ON value1.entity_id = entity.id
+        INNER JOIN value as value2 ON value2.entity_id = entity.id
+        WHERE value1.attribute = 'username' AND
+              value1.value = ? AND
+              value2.attribute = 'password'
+        LIMIT 1
+      """,
+      username
+    ):
+    return x

@@ -70,7 +70,7 @@ test "db stuff":
   db.init(conn)
   discard db.insert(conn, server.Account(username: "Alice", password: "stuff"))
   discard db.insert(conn, server.Account(username: "Bob", password: "asdf"))
-  for x in entities.selectAccounts(conn):
-    echo x
+  echo entities.selectAccount(conn, "Alice")
+  echo entities.selectAccount(conn, "Bob")
   db_sqlite.close(conn)
 
