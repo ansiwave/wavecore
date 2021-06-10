@@ -1,4 +1,4 @@
-from wavematrixpkg/server import nil
+from wavenetpkg/server import nil
 
 when isMainModule:
   var s = server.initServer("localhost", 3000)

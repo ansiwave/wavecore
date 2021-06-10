@@ -1,7 +1,7 @@
 import unittest
 import json
-from wavematrixpkg/client import nil
-from wavematrixpkg/server import nil
+from wavenetpkg/client import nil
+from wavenetpkg/server import nil
 from sugar import nil
 
 const
@@ -61,8 +61,8 @@ test "Full lifecycle":
   finally:
     server.stop(s)
 
-import wavematrixpkg/db
-import wavematrixpkg/db/entities
+import wavenetpkg/db
+import wavenetpkg/db/entities
 from db_sqlite import nil
 
 test "db stuff":

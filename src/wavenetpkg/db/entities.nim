@@ -1,7 +1,7 @@
 import sqlite3
 from db_sqlite import sql
-from wavematrixpkg/server import nil
-from wavematrixpkg/db import nil
+from wavenetpkg/server import nil
+from wavenetpkg/db import nil
 
 type
   Account* = object
