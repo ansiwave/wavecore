@@ -6,6 +6,8 @@ from wavematrixpkg/db import nil
 proc initAccount(account: var server.Account, stmt: PStmt, col: int32) =
   let colName = $sqlite3.column_name(stmt, col)
   case colName:
+  of "id":
+    account.id = sqlite3.column_int(stmt, col)
   of "username":
     account.username = $sqlite3.column_text(stmt, col)
   of "password":

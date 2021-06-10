@@ -11,6 +11,7 @@ from sugar import nil
 
 type
   Account* = object
+    id*: int32
     username*: string
     password*: string
   AccountPointer = object
