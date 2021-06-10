@@ -10,9 +10,9 @@ from times import nil
 from sugar import nil
 
 type
-  Account = object
-    username: string
-    password: string
+  Account* = object
+    username*: string
+    password*: string
   AccountPointer = object
     username: string
     timestamp: float

@@ -61,21 +61,16 @@ test "Full lifecycle":
   finally:
     server.stop(s)
 
-from db_sqlite import `sql`
 import wavematrixpkg/db
-import tables
+import wavematrixpkg/db/entities
+from db_sqlite import nil
 
 test "db stuff":
   let conn = db_sqlite.open(":memory:", "", "", "")
   db.init(conn)
-  discard db.insert(conn, {"name": "Alice", "age": $20}.toTable)
-  discard db.insert(conn, {"name": "Bob", "age": $30}.toTable)
-  for x in db.select[Person](conn, sql"""
-      SELECT entity.id, value1.value AS name, value2.value AS age FROM entity
-      INNER JOIN value as value1 ON value1.entity_id = entity.id
-      INNER JOIN value as value2 ON value2.entity_id = entity.id
-      WHERE value1.attribute = 'name' AND value2.attribute = 'age'
-    """):
+  discard db.insert(conn, server.Account(username: "Alice", password: "stuff"))
+  discard db.insert(conn, server.Account(username: "Bob", password: "asdf"))
+  for x in entities.selectAccounts(conn):
     echo x
   db_sqlite.close(conn)
 

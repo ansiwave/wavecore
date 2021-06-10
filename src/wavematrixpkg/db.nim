@@ -1,12 +1,5 @@
 import sqlite3
 from db_sqlite import sql, SqlQuery
-import tables
-
-type
-  Person* = object
-    id*: int64
-    name*: string
-    age*: int64
 
 proc init*(conn: PSqlite3) =
   db_sqlite.exec conn, sql"""
@@ -41,33 +34,23 @@ proc setupQuery(db: PSqlite3, query: SqlQuery,
   var q = dbFormat(query, args)
   if prepare_v2(db, q, q.len.cint, result, nil) != SQLITE_OK: db_sqlite.dbError(db)
 
-proc setObject[T](stmt: PStmt, e: var T) =
-  var cols = column_count(stmt)
-  for col in 0 .. cols-1:
-    let colName = $column_name(stmt, col)
-    when T is Person:
-      case colName:
-      of "id":
-        e.id = column_int64(stmt, col)
-      of "name":
-        e.name = $column_text(stmt, col)
-      of "age":
-        e.age = column_int64(stmt, col)
-
-iterator select*[T](db: PSqlite3, query: SqlQuery, args: varargs[string, `$`]): T =
+iterator select*[T](db: PSqlite3, ctor: proc (x: var T, stmt: PStmt, col: int32), query: SqlQuery, args: varargs[string, `$`]): T =
   var stmt = setupQuery(db, query, args)
   var obj: T
   try:
     while step(stmt) == SQLITE_ROW:
-      setObject(stmt, obj)
+      var cols = column_count(stmt)
+      for col in 0 .. cols-1:
+        ctor(obj, stmt, col)
       yield obj
   finally:
     if finalize(stmt) != SQLITE_OK: db_sqlite.dbError(db)
 
-proc insert*(conn: PSqlite3, values: Table[string, string]): int64 =
+proc insert*[T](conn: PSqlite3, values: T): int64 =
   db_sqlite.exec(conn, sql"BEGIN TRANSACTION")
   db_sqlite.exec(conn, sql"INSERT INTO entity DEFAULT VALUES")
   result = sqlite3.last_insert_rowid(conn)
-  for k, v in values.pairs:
-    db_sqlite.exec(conn, sql"INSERT INTO value (attribute, value, entity_id) VALUES (?, ?, ?)", k, v, result)
+  for k, v in values.fieldPairs:
+    when k != "id":
+      db_sqlite.exec(conn, sql"INSERT INTO value (attribute, value, entity_id) VALUES (?, ?, ?)", k, v, result)
   db_sqlite.exec(conn, sql"COMMIT")
