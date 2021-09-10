@@ -1,6 +1,5 @@
 import sqlite3
 from db_sqlite import sql
-from wavenetpkg/server import nil
 from wavenetpkg/db import nil
 
 type
