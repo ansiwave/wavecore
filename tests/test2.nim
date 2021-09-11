@@ -8,7 +8,7 @@ from puppy import nil
 
 test "create accounts":
   let conn = db_sqlite.open(":memory:", "", "", "")
-  db.init(conn)
+  db.init(conn, enableWal = false)
   var
     alice = Account(username: "Alice", public_key: "stuff")
     bob = Account(username: "Bob", public_key: "asdf")
@@ -24,7 +24,7 @@ test "retrieve sqlite db via http":
     port = "8000"
   try:
     let conn = db_sqlite.open(filename, "", "", "")
-    db.init(conn)
+    db.init(conn, enableWal = false)
     var
       alice = Account(username: "Alice", public_key: "stuff")
       bob = Account(username: "Bob", public_key: "asdf")
@@ -43,6 +43,4 @@ test "retrieve sqlite db via http":
     osproc.kill(process)
   finally:
     os.removeFile(filename)
-    os.removeFile(filename & "-shm")
-    os.removeFile(filename & "-wal")
 

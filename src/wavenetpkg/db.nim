@@ -1,13 +1,14 @@
 import sqlite3
 from db_sqlite import sql, SqlQuery
 
-proc init*(conn: PSqlite3) =
+proc init*(conn: PSqlite3, enableWal: bool = true) =
   # recommended by https://litestream.io/tips/
-  db_sqlite.exec conn, sql"""
-  PRAGMA journal_mode = WAL;
-  PRAGMA busy_timeout = 5000;
-  PRAGMA synchronous = NORMAL;
-  """
+  if enableWal:
+    db_sqlite.exec conn, sql"""
+    PRAGMA journal_mode = WAL;
+    PRAGMA busy_timeout = 5000;
+    PRAGMA synchronous = NORMAL;
+    """
 
   db_sqlite.exec conn, sql"""
   CREATE TABLE entity (
