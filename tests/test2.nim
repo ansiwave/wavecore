@@ -43,4 +43,6 @@ test "retrieve sqlite db via http":
     osproc.kill(process)
   finally:
     os.removeFile(filename)
+    os.removeFile(filename & "-shm")
+    os.removeFile(filename & "-wal")
 
