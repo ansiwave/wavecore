@@ -4,7 +4,7 @@ from wavenetpkg/db import nil
 
 type
   Account* = object
-    id*: int32
+    id*: int64
     username*: string
     public_key*: string
 
