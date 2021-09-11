@@ -25,6 +25,10 @@ proc init*(conn: PSqlite3) =
     FOREIGN KEY(entity_id) REFERENCES entity(id)
   )"""
 
+  db_sqlite.exec conn, sql"""
+  CREATE INDEX attribute_index ON value (attribute);
+  """
+
 proc dbFormat(formatstr: SqlQuery, args: varargs[string]): string =
   result = ""
   var a = 0
