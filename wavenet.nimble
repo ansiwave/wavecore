@@ -5,7 +5,7 @@ author        = "oakes"
 description   = "A new awesome nimble package"
 license       = "Public Domain"
 srcDir        = "src"
-installExt    = @["nim"]
+installExt    = @["nim", "c"]
 bin           = @["wavenet"]
 
 task dev, "Run dev version":
