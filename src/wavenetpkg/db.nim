@@ -1,5 +1,6 @@
 import sqlite3
 from db_sqlite import sql, SqlQuery
+from puppy import nil
 
 type
   sqlite3_vfs* {.bycopy.} = object
@@ -64,13 +65,26 @@ type
     pMethods*: ptr sqlite3_io_methods ##  Methods for an open file
 
 var origMethods: ptr sqlite3_io_methods
+var readUrl*: string
 
 let customMethods = sqlite3_io_methods(
   iVersion: 3,
   xClose: proc (a1: ptr sqlite3_file): cint {.cdecl.} = origMethods.xClose(a1),
   xRead: proc (a1: ptr sqlite3_file; a2: pointer; iAmt: cint; iOfst: int64): cint {.cdecl.} =
-    # put custom read code here
-    origMethods.xRead(a1, a2, iAmt, iOfst)
+    if readUrl == "":
+      origMethods.xRead(a1, a2, iAmt, iOfst)
+    else:
+      let res = puppy.fetch(puppy.Request(
+        url: puppy.parseUrl(readUrl),
+        verb: "get",
+        headers: @[puppy.Header(key: "Range", value: "bytes=" & $iOfst & "-" & $(iOfst+iAmt-1))]
+      ))
+      if res.code == 206:
+        assert res.body.len == iAmt
+        copyMem(a2, res.body[0].addr, res.body.len)
+        SQLITE_OK
+      else:
+        SQLITE_ERROR
   ,
   xWrite: proc (a1: ptr sqlite3_file; a2: pointer; iAmt: cint; iOfst: int64): cint {.cdecl.} = origMethods.xWrite(a1, a2, iAmt, iOfst),
   xTruncate: proc (a1: ptr sqlite3_file; size: int64): cint {.cdecl.} = origMethods.xTruncate(a1, size),

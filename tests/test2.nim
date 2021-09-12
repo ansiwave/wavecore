@@ -4,7 +4,6 @@ import wavenetpkg/db/entities
 from db_sqlite import nil
 from os import nil
 from osproc import nil
-from puppy import nil
 
 test "create accounts":
   let conn = db_sqlite.open(":memory:", "", "", "")
@@ -22,8 +21,13 @@ test "retrieve sqlite db via http":
   const
     filename = "test.db"
     port = "8000"
+  var process: osproc.Process = nil
   try:
-    let conn = db_sqlite.open(filename, "", "", "")
+    # start web server
+    process = osproc.startProcess("ruby", args=["-run", "-ehttpd", ".", "-p" & port], options={osproc.poUsePath, osproc.poStdErrToStdOut})
+    os.sleep(1000)
+    # create test db
+    var conn = db_sqlite.open(filename, "", "", "")
     db.init(conn, enableWal = false)
     var
       alice = Account(username: "Alice", public_key: "stuff")
@@ -31,16 +35,19 @@ test "retrieve sqlite db via http":
     discard db.insert(conn, alice)
     discard db.insert(conn, bob)
     db_sqlite.close(conn)
-    let process = osproc.startProcess("ruby", args=["-run", "-ehttpd", ".", "-p" & port], options={osproc.poUsePath, osproc.poStdErrToStdOut})
-    os.sleep(1000)
-    let res = puppy.fetch(puppy.Request(
-      url: puppy.parseUrl("http://localhost:" & port & "/" & filename),
-      verb: "get",
-      headers: @[puppy.Header(key: "Range", value: "bytes=0-255")]
-    ))
-    check 206 == res.code
-    check 256 == res.body.len
-    osproc.kill(process)
+    # re-open db, but this time all reads happen over http
+    db.readUrl = "http://localhost:" & port & "/" & filename
+    conn = db_sqlite.open(filename, "", "", "")
+    let
+      alice2 = entities.selectAccount(conn, "Alice")
+      bob2 = entities.selectAccount(conn, "Bob")
+    alice.id = alice2.id
+    bob.id = bob2.id
+    check alice == alice2
+    check bob == bob2
+    db_sqlite.close(conn)
   finally:
+    osproc.kill(process)
     os.removeFile(filename)
+    db.readUrl = ""
 
