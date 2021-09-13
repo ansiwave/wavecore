@@ -36,18 +36,17 @@ test "retrieve sqlite db via http":
     discard db.insert(conn, bob)
     db_sqlite.close(conn)
     # re-open db, but this time all reads happen over http
-    db.readUrl = "http://localhost:" & port & "/" & filename
-    conn = db_sqlite.open(filename, "", "", "")
-    let
-      alice2 = entities.selectAccount(conn, "Alice")
-      bob2 = entities.selectAccount(conn, "Bob")
-    alice.id = alice2.id
-    bob.id = bob2.id
-    check alice == alice2
-    check bob == bob2
-    db_sqlite.close(conn)
+    db.withHttp("http://localhost:" & port & "/" & filename):
+      conn = db_sqlite.open(filename, "", "", "")
+      let
+        alice2 = entities.selectAccount(conn, "Alice")
+        bob2 = entities.selectAccount(conn, "Bob")
+      alice.id = alice2.id
+      bob.id = bob2.id
+      check alice == alice2
+      check bob == bob2
+      db_sqlite.close(conn)
   finally:
     osproc.kill(process)
     os.removeFile(filename)
-    db.readUrl = ""
 

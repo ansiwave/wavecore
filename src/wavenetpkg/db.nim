@@ -65,7 +65,14 @@ type
     pMethods*: ptr sqlite3_io_methods ##  Methods for an open file
 
 var origMethods: ptr sqlite3_io_methods
-var readUrl*: string
+var readUrl: string
+
+template withHttp*(url: string, body: untyped): untyped =
+  readUrl = url
+  try:
+    body
+  finally:
+    readUrl = ""
 
 let customMethods = sqlite3_io_methods(
   iVersion: 3,
