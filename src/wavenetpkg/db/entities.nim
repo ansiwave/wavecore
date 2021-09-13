@@ -19,28 +19,17 @@ proc initAccount(account: var Account, stmt: PStmt, col: int32) =
     account.public_key = $sqlite3.column_text(stmt, col)
 
 proc selectAccount*(conn: PSqlite3, username: string): Account =
-#[
-  for x in db_sqlite.fastRows(conn, sql"""
-        EXPLAIN QUERY PLAN SELECT entity.rowid, attr_value1.value_indexed AS username, attr_value2.value_indexed AS public_key FROM entity
-        INNER JOIN attr_value as attr_value1 ON attr_value1.entity_id = entity.rowid
-        INNER JOIN attr_value as attr_value2 ON attr_value2.entity_id = entity.rowid
-        WHERE attr_value1.attribute MATCH 'username' AND
-              attr_value1.value_indexed MATCH ? AND
-              attr_value2.attribute MATCH 'public_key'
-        LIMIT 1
-      """, username):
-    echo x
-]#
-  for x in db.select[Account](conn, initAccount,
-      sql"""
-        SELECT entity.rowid, attr_value1.value_indexed AS username, attr_value2.value_indexed AS public_key FROM entity
-        INNER JOIN attr_value as attr_value1 ON attr_value1.entity_id = entity.rowid
-        INNER JOIN attr_value as attr_value2 ON attr_value2.entity_id = entity.rowid
-        WHERE attr_value1.attribute MATCH 'username' AND
-              attr_value1.value_indexed MATCH ? AND
-              attr_value2.attribute MATCH 'public_key'
-        LIMIT 1
-      """,
-      username
-    ):
+  const query =
+    """
+      SELECT entity.rowid, attr_value1.value_indexed AS username, attr_value2.value_indexed AS public_key FROM entity
+      INNER JOIN attr_value as attr_value1 ON attr_value1.entity_id = entity.rowid
+      INNER JOIN attr_value as attr_value2 ON attr_value2.entity_id = entity.rowid
+      WHERE attr_value1.attribute MATCH 'username' AND
+            attr_value1.value_indexed MATCH ? AND
+            attr_value2.attribute MATCH 'public_key'
+      LIMIT 1
+    """
+  #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), username):
+  #  echo x
+  for x in db.select[Account](conn, initAccount, sql query, username):
     return x
