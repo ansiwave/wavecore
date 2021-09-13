@@ -1,3 +1,5 @@
+{.passC: "-DSQLITE_ENABLE_FTS5".}
+
 import sqlite3
 from db_sqlite import sql, SqlQuery
 from puppy import nil
@@ -136,23 +138,13 @@ proc init*(conn: PSqlite3, enableWal: bool = true) =
 
   db_sqlite.exec conn, sql"""
   CREATE TABLE entity (
-    id           INTEGER NOT NULL PRIMARY KEY,
     created_ts   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
   )"""
 
-  db_sqlite.exec conn, sql"""
-  CREATE TABLE value (
-    id           INTEGER NOT NULL PRIMARY KEY,
-    attribute    TEXT NOT NULL,
-    value        TEXT NOT NULL,
-    created_ts   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    entity_id    INTEGER NOT NULL,
-    FOREIGN KEY(entity_id) REFERENCES entity(id)
-  )"""
-
-  db_sqlite.exec conn, sql"""
-  CREATE INDEX attribute_index ON value (attribute);
-  """
+  # stores an attribute+value pair for the given entity.
+  # the value_indexed column contains only human-readable text that must be searchable.
+  # the value_unindexed column contains data that should be excluded from the fts index.
+  db_sqlite.exec conn, sql"CREATE VIRTUAL TABLE attr_value USING fts5 (entity_id, attribute, value_indexed, value_unindexed UNINDEXED)"
 
 proc dbFormat(formatstr: SqlQuery, args: varargs[string]): string =
   result = ""
@@ -188,5 +180,5 @@ proc insert*[T](conn: PSqlite3, values: T): int64 =
   result = sqlite3.last_insert_rowid(conn)
   for k, v in values.fieldPairs:
     when k != "id":
-      db_sqlite.exec(conn, sql"INSERT INTO value (attribute, value, entity_id) VALUES (?, ?, ?)", k, v, result)
+      db_sqlite.exec(conn, sql"INSERT INTO attr_value (entity_id, attribute, value_indexed) VALUES (?, ?, ?)", result, k, v)
   db_sqlite.exec(conn, sql"COMMIT")

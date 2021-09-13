@@ -11,7 +11,7 @@ type
 proc initAccount(account: var Account, stmt: PStmt, col: int32) =
   let colName = $sqlite3.column_name(stmt, col)
   case colName:
-  of "id":
+  of "rowid":
     account.id = sqlite3.column_int(stmt, col)
   of "username":
     account.username = $sqlite3.column_text(stmt, col)
@@ -21,24 +21,24 @@ proc initAccount(account: var Account, stmt: PStmt, col: int32) =
 proc selectAccount*(conn: PSqlite3, username: string): Account =
 #[
   for x in db_sqlite.fastRows(conn, sql"""
-        EXPLAIN QUERY PLAN SELECT entity.id, value1.value AS username, value2.value AS public_key FROM entity
-        INNER JOIN value as value1 ON value1.entity_id = entity.id
-        INNER JOIN value as value2 ON value2.entity_id = entity.id
-        WHERE value1.attribute = 'username' AND
-              value1.value = ? AND
-              value2.attribute = 'public_key'
+        EXPLAIN QUERY PLAN SELECT entity.rowid, attr_value1.value_indexed AS username, attr_value2.value_indexed AS public_key FROM entity
+        INNER JOIN attr_value as attr_value1 ON attr_value1.entity_id = entity.rowid
+        INNER JOIN attr_value as attr_value2 ON attr_value2.entity_id = entity.rowid
+        WHERE attr_value1.attribute MATCH 'username' AND
+              attr_value1.value_indexed MATCH ? AND
+              attr_value2.attribute MATCH 'public_key'
         LIMIT 1
       """, username):
     echo x
 ]#
   for x in db.select[Account](conn, initAccount,
       sql"""
-        SELECT entity.id, value1.value AS username, value2.value AS public_key FROM entity
-        INNER JOIN value as value1 ON value1.entity_id = entity.id
-        INNER JOIN value as value2 ON value2.entity_id = entity.id
-        WHERE value1.attribute = 'username' AND
-              value1.value = ? AND
-              value2.attribute = 'public_key'
+        SELECT entity.rowid, attr_value1.value_indexed AS username, attr_value2.value_indexed AS public_key FROM entity
+        INNER JOIN attr_value as attr_value1 ON attr_value1.entity_id = entity.rowid
+        INNER JOIN attr_value as attr_value2 ON attr_value2.entity_id = entity.rowid
+        WHERE attr_value1.attribute MATCH 'username' AND
+              attr_value1.value_indexed MATCH ? AND
+              attr_value2.attribute MATCH 'public_key'
         LIMIT 1
       """,
       username
