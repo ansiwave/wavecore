@@ -133,10 +133,10 @@ proc init*(conn: PSqlite3) =
     created_ts   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
   )"""
 
-  # stores an attribute+value pair for the given entity.
-  # the value_indexed column contains only human-readable text that must be searchable.
-  # the value_unindexed column contains data that should be excluded from the fts index.
-  db_sqlite.exec conn, sql"CREATE VIRTUAL TABLE attr_value USING fts5 (entity_id, attribute, value_indexed, value_unindexed UNINDEXED)"
+  # the value_indexed column contains only human-readable text that must be searchable
+  # the value_unindexed column contains data that should be excluded from the fts index
+  db_sqlite.exec conn, sql"CREATE VIRTUAL TABLE user USING fts5 (entity_id, attribute, value_indexed, value_unindexed UNINDEXED)"
+  db_sqlite.exec conn, sql"CREATE VIRTUAL TABLE post USING fts5 (entity_id, attribute, value_indexed, value_unindexed UNINDEXED)"
 
 proc dbFormat(formatstr: SqlQuery, args: varargs[string]): string =
   result = ""
@@ -166,11 +166,11 @@ iterator select*[T](db: PSqlite3, ctor: proc (x: var T, stmt: PStmt, col: int32)
   finally:
     if finalize(stmt) != SQLITE_OK: db_sqlite.dbError(db)
 
-proc insert*[T](conn: PSqlite3, values: T): int64 =
+proc insert*[T](conn: PSqlite3, table: string, values: T): int64 =
   db_sqlite.exec(conn, sql"BEGIN TRANSACTION")
   db_sqlite.exec(conn, sql"INSERT INTO entity DEFAULT VALUES")
   result = sqlite3.last_insert_rowid(conn)
   for k, v in values.fieldPairs:
     when k != "id":
-      db_sqlite.exec(conn, sql"INSERT INTO attr_value (entity_id, attribute, value_indexed) VALUES (?, ?, ?)", result, k, v)
+      db_sqlite.exec(conn, sql("INSERT INTO " & table & " (entity_id, attribute, value_indexed) VALUES (?, ?, ?)"), result, k, v)
   db_sqlite.exec(conn, sql"COMMIT")

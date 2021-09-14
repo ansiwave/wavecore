@@ -3,12 +3,12 @@ from db_sqlite import sql
 from wavenetpkg/db import nil
 
 type
-  Account* = object
+  User* = object
     id*: int64
     username*: string
     public_key*: string
 
-proc initAccount(account: var Account, stmt: PStmt, col: int32) =
+proc initUser(account: var User, stmt: PStmt, col: int32) =
   let colName = $sqlite3.column_name(stmt, col)
   case colName:
   of "entity_id":
@@ -18,17 +18,21 @@ proc initAccount(account: var Account, stmt: PStmt, col: int32) =
   of "public_key":
     account.public_key = $sqlite3.column_text(stmt, col)
 
-proc selectAccount*(conn: PSqlite3, username: string): Account =
+proc selectUser*(conn: PSqlite3, username: string): User =
   const query =
     """
-      SELECT attr_value.entity_id, attr_value.value_indexed AS username, attr_value2.value_indexed AS public_key FROM attr_value
-      INNER JOIN attr_value as attr_value2 ON attr_value2.entity_id = attr_value.entity_id
-      WHERE attr_value.attribute MATCH 'username' AND
-            attr_value.value_indexed MATCH ? AND
-            attr_value2.attribute MATCH 'public_key'
+      SELECT user.entity_id, user.value_indexed AS username, user2.value_indexed AS public_key FROM user
+      INNER JOIN user as user2 ON user2.entity_id = user.entity_id
+      WHERE user.attribute MATCH 'username' AND
+            user.value_indexed MATCH ? AND
+            user2.attribute MATCH 'public_key'
       LIMIT 1
     """
   #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), username):
   #  echo x
-  for x in db.select[Account](conn, initAccount, sql query, username):
+  for x in db.select[User](conn, initUser, sql query, username):
     return x
+
+proc insertUser*(conn: PSqlite3, values: User): int64 =
+  db.insert(conn, "user", values)
+
