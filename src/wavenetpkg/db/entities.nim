@@ -11,7 +11,7 @@ type
 proc initAccount(account: var Account, stmt: PStmt, col: int32) =
   let colName = $sqlite3.column_name(stmt, col)
   case colName:
-  of "rowid":
+  of "entity_id":
     account.id = sqlite3.column_int(stmt, col)
   of "username":
     account.username = $sqlite3.column_text(stmt, col)
@@ -21,11 +21,10 @@ proc initAccount(account: var Account, stmt: PStmt, col: int32) =
 proc selectAccount*(conn: PSqlite3, username: string): Account =
   const query =
     """
-      SELECT entity.rowid, attr_value1.value_indexed AS username, attr_value2.value_indexed AS public_key FROM entity
-      INNER JOIN attr_value as attr_value1 ON attr_value1.entity_id = entity.rowid
-      INNER JOIN attr_value as attr_value2 ON attr_value2.entity_id = entity.rowid
-      WHERE attr_value1.attribute MATCH 'username' AND
-            attr_value1.value_indexed MATCH ? AND
+      SELECT attr_value.entity_id, attr_value.value_indexed AS username, attr_value2.value_indexed AS public_key FROM attr_value
+      INNER JOIN attr_value as attr_value2 ON attr_value2.entity_id = attr_value.entity_id
+      WHERE attr_value.attribute MATCH 'username' AND
+            attr_value.value_indexed MATCH ? AND
             attr_value2.attribute MATCH 'public_key'
       LIMIT 1
     """
