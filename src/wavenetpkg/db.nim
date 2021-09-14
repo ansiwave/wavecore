@@ -127,15 +127,7 @@ assert vfs != nil
 origOpen = vfs.xOpen
 vfs.xOpen = customOpen
 
-proc init*(conn: PSqlite3, enableWal: bool = true) =
-  # recommended by https://litestream.io/tips/
-  if enableWal:
-    db_sqlite.exec conn, sql"""
-    PRAGMA journal_mode = WAL;
-    PRAGMA busy_timeout = 5000;
-    PRAGMA synchronous = NORMAL;
-    """
-
+proc init*(conn: PSqlite3) =
   db_sqlite.exec conn, sql"""
   CREATE TABLE entity (
     created_ts   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP

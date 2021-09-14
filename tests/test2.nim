@@ -7,7 +7,7 @@ from osproc import nil
 
 test "create accounts":
   let conn = db_sqlite.open(":memory:", "", "", "")
-  db.init(conn, enableWal = false)
+  db.init(conn)
   var
     alice = Account(username: "Alice", public_key: "stuff")
     bob = Account(username: "Bob", public_key: "asdf")
@@ -28,7 +28,7 @@ test "retrieve sqlite db via http":
     os.sleep(1000)
     # create test db
     var conn = db_sqlite.open(filename, "", "", "")
-    db.init(conn, enableWal = false)
+    db.init(conn)
     var
       alice = Account(username: "Alice", public_key: "stuff")
       bob = Account(username: "Bob", public_key: "asdf")
