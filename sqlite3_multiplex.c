@@ -51,7 +51,7 @@
 #include <string.h>
 #include <assert.h>
 #include <stdlib.h>
-#include "test_multiplex.h"
+#include "sqlite3_multiplex.h"
 
 #ifndef SQLITE_CORE
   #define SQLITE_CORE 1  /* Disable the API redefinition in sqlite3ext.h */
