@@ -538,6 +538,9 @@ static int multiplexOpen(
       }
     }
     pGroup->flags = (flags & ~SQLITE_OPEN_URI);
+    if (pGroup->flags & SQLITE_OPEN_READONLY){
+      pConn->pMethods = &gMultiplex.sIoMethodsV2;
+    }else{
     rc = multiplexSubFilename(pGroup, 1);
     if( rc==SQLITE_OK ){
       pSubOpen = multiplexSubOpen(pGroup, 0, &rc, pOutFlags, 0);
@@ -602,6 +605,7 @@ static int multiplexOpen(
     }else{
       multiplexFreeComponents(pGroup);
       sqlite3_free(pGroup);
+    }
     }
   }
   sqlite3_free(zToFree);
@@ -739,7 +743,7 @@ static int multiplexRead(
         int extra = ((int)(iOfst % pGroup->szChunk) + iAmt) - pGroup->szChunk;
         if( extra<0 ) extra = 0;
         iAmt -= extra;
-        rc = httpRead(pGroup->aReal[i].z, pBuf, iAmt, iOfst % pGroup->szChunk);
+        rc = httpRead(pGroup->zName, i, pBuf, iAmt, iOfst % pGroup->szChunk);
         if( rc!=SQLITE_OK ) break;
         pBuf = (char *)pBuf + iAmt;
         iOfst += iAmt;
@@ -768,6 +772,8 @@ static int multiplexRead(
 
   return rc;
 }
+
+static int multiplexFileSize(sqlite3_file *pConn, sqlite3_int64 *pSize);
 
 /* Pass xWrite requests thru to the original VFS after
 ** determining the correct chunk to operate on.
@@ -806,6 +812,10 @@ static int multiplexWrite(
       }
     }
   }
+  sqlite3_int64 pSize;
+  rc = multiplexFileSize(pConn, &pSize);
+  if (rc == SQLITE_OK)
+    writeFileSize(pGroup->zName, pSize);
   return rc;
 }
 
@@ -856,6 +866,9 @@ static int multiplexTruncate(sqlite3_file *pConn, sqlite3_int64 size){
 static int multiplexSync(sqlite3_file *pConn, int flags){
   multiplexConn *p = (multiplexConn*)pConn;
   multiplexGroup *pGroup = p->pGroup;
+  if (pGroup->flags & SQLITE_OPEN_READONLY){
+    return SQLITE_OK;
+  }
   int rc = SQLITE_OK;
   int i;
   for(i=0; i<pGroup->nReal; i++){
@@ -874,6 +887,9 @@ static int multiplexSync(sqlite3_file *pConn, int flags){
 static int multiplexFileSize(sqlite3_file *pConn, sqlite3_int64 *pSize){
   multiplexConn *p = (multiplexConn*)pConn;
   multiplexGroup *pGroup = p->pGroup;
+  if (pGroup->flags & SQLITE_OPEN_READONLY){
+    return readFileSize(pGroup->zName, pSize);
+  }
   int rc = SQLITE_OK;
   int i;
   if( !pGroup->bEnabled ){
@@ -898,6 +914,9 @@ static int multiplexFileSize(sqlite3_file *pConn, sqlite3_int64 *pSize){
 */
 static int multiplexLock(sqlite3_file *pConn, int lock){
   multiplexConn *p = (multiplexConn*)pConn;
+  if (p->pGroup->flags & SQLITE_OPEN_READONLY){
+    return SQLITE_OK;
+  }
   int rc;
   sqlite3_file *pSubOpen = multiplexSubOpen(p->pGroup, 0, &rc, NULL, 0);
   if( pSubOpen ){
@@ -910,6 +929,9 @@ static int multiplexLock(sqlite3_file *pConn, int lock){
 */
 static int multiplexUnlock(sqlite3_file *pConn, int lock){
   multiplexConn *p = (multiplexConn*)pConn;
+  if (p->pGroup->flags & SQLITE_OPEN_READONLY){
+    return SQLITE_OK;
+  }
   int rc;
   sqlite3_file *pSubOpen = multiplexSubOpen(p->pGroup, 0, &rc, NULL, 0);
   if( pSubOpen ){
@@ -922,6 +944,9 @@ static int multiplexUnlock(sqlite3_file *pConn, int lock){
 */
 static int multiplexCheckReservedLock(sqlite3_file *pConn, int *pResOut){
   multiplexConn *p = (multiplexConn*)pConn;
+  if (p->pGroup->flags & SQLITE_OPEN_READONLY){
+    return SQLITE_OK;
+  }
   int rc;
   sqlite3_file *pSubOpen = multiplexSubOpen(p->pGroup, 0, &rc, NULL, 0);
   if( pSubOpen ){
@@ -1020,6 +1045,9 @@ static int multiplexFileControl(sqlite3_file *pConn, int op, void *pArg){
 */
 static int multiplexSectorSize(sqlite3_file *pConn){
   multiplexConn *p = (multiplexConn*)pConn;
+  if (p->pGroup->flags & SQLITE_OPEN_READONLY){
+    return 0;
+  }
   int rc;
   sqlite3_file *pSubOpen = multiplexSubOpen(p->pGroup, 0, &rc, NULL, 0);
   if( pSubOpen && pSubOpen->pMethods->xSectorSize ){
@@ -1032,6 +1060,9 @@ static int multiplexSectorSize(sqlite3_file *pConn){
 */
 static int multiplexDeviceCharacteristics(sqlite3_file *pConn){
   multiplexConn *p = (multiplexConn*)pConn;
+  if (p->pGroup->flags & SQLITE_OPEN_READONLY){
+    return SQLITE_IOCAP_IMMUTABLE;
+  }
   int rc;
   sqlite3_file *pSubOpen = multiplexSubOpen(p->pGroup, 0, &rc, NULL, 0);
   if( pSubOpen ){

@@ -11,9 +11,11 @@ from os import nil
 
 var readUrl*: string
 
-proc httpRead(filename: cstring, buf: pointer; iAmt: cint; iOfst: int64): cint {.exportc: "httpRead".} =
+proc httpRead(filename: cstring, chunk: cint, buf: pointer; iAmt: cint; iOfst: int64): cint {.exportc: "httpRead".} =
   assert readUrl != ""
-  let url = readUrl & os.splitPath($filename).tail
+  var url = readUrl & os.splitPath($filename).tail
+  if chunk > 0:
+    url &= "00" & $chunk
   let res = puppy.fetch(puppy.Request(
     url: puppy.parseUrl(url),
     verb: "get",
@@ -22,6 +24,28 @@ proc httpRead(filename: cstring, buf: pointer; iAmt: cint; iOfst: int64): cint {
   if res.code == 206:
     assert res.body.len == iAmt
     copyMem(buf, res.body[0].addr, res.body.len)
+    SQLITE_OK
+  else:
+    SQLITE_ERROR
+
+proc writeFileSize(filename: cstring, size: int64) {.exportc: "writeFileSize".} =
+  var f: File
+  if open(f, $filename & ".size", fmWrite):
+    write(f, $size)
+    close(f)
+
+from parseutils import nil
+
+proc readFileSize(filename: cstring, size: ptr int64): cint {.exportc: "readFileSize".} =
+  assert readUrl != ""
+  let url = readUrl & os.splitPath($filename).tail & ".size"
+  let res = puppy.fetch(puppy.Request(
+    url: puppy.parseUrl(url),
+    verb: "get",
+  ))
+  var i: int
+  if res.code == 200 and parseutils.parseInt(res.body, i) > 0:
+    size[] = i
     SQLITE_OK
   else:
     SQLITE_ERROR
