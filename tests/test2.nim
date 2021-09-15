@@ -6,7 +6,7 @@ from os import nil
 from osproc import nil
 
 test "create users":
-  let conn = db.open(":memory:")
+  let conn = db_sqlite.open(":memory:", "", "", "")
   db.init(conn)
   var
     alice = User(username: "Alice", public_key: "stuff")
@@ -21,23 +21,31 @@ test "retrieve sqlite db via http":
   const
     filename = "test.db"
     port = "8000"
-  db.readUrl = "http://localhost:" & port & "/"
   var process: osproc.Process = nil
   try:
     # start web server
     process = osproc.startProcess("ruby", args=["-run", "-ehttpd", ".", "-p" & port], options={osproc.poUsePath, osproc.poStdErrToStdOut})
     os.sleep(1000)
     # create test db
-    var conn = db.open(filename)
+    var conn = db_sqlite.open(filename, "", "", "")
     db.init(conn)
-    for i in  0 .. 3000:
-      discard entities.insertUser(conn, User(username: "Alice" & $i, public_key: "stuff"))
-    check "Alice2000" == entities.selectUser(conn, "Alice2000").username
+    var
+      alice = User(username: "Alice", public_key: "stuff")
+      bob = User(username: "Bob", public_key: "asdf")
+    discard entities.insertUser(conn, alice)
+    discard entities.insertUser(conn, bob)
     db_sqlite.close(conn)
     # re-open db, but this time all reads happen over http
-    conn = db.open(filename, true)
-    check "Alice2000" == entities.selectUser(conn, "Alice2000").username
-    db_sqlite.close(conn)
+    db.withHttp("http://localhost:" & port & "/" & filename):
+      conn = db_sqlite.open(filename, "", "", "")
+      let
+        alice2 = entities.selectUser(conn, "Alice")
+        bob2 = entities.selectUser(conn, "Bob")
+      alice.id = alice2.id
+      bob.id = bob2.id
+      check alice == alice2
+      check bob == bob2
+      db_sqlite.close(conn)
   finally:
     osproc.kill(process)
     os.removeFile(filename)
