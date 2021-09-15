@@ -734,21 +734,34 @@ static int multiplexRead(
   }else{
     while( iAmt > 0 ){
       int i = (int)(iOfst / pGroup->szChunk);
-      sqlite3_file *pSubOpen;
-      pSubOpen = multiplexSubOpen(pGroup, i, &rc, NULL, 1);
-      if( pSubOpen ){
+      // if we're in read only mode, do all the reads over http
+      if (pGroup->flags & SQLITE_OPEN_READONLY){
         int extra = ((int)(iOfst % pGroup->szChunk) + iAmt) - pGroup->szChunk;
         if( extra<0 ) extra = 0;
         iAmt -= extra;
-        rc = pSubOpen->pMethods->xRead(pSubOpen, pBuf, iAmt,
-                                       iOfst % pGroup->szChunk);
+        rc = httpRead(pGroup->aReal[i].z, pBuf, iAmt, iOfst % pGroup->szChunk);
         if( rc!=SQLITE_OK ) break;
         pBuf = (char *)pBuf + iAmt;
         iOfst += iAmt;
         iAmt = extra;
-      }else{
-        rc = SQLITE_IOERR_READ;
-        break;
+      }
+      else {
+        sqlite3_file *pSubOpen;
+        pSubOpen = multiplexSubOpen(pGroup, i, &rc, NULL, 1);
+        if( pSubOpen ){
+          int extra = ((int)(iOfst % pGroup->szChunk) + iAmt) - pGroup->szChunk;
+          if( extra<0 ) extra = 0;
+          iAmt -= extra;
+          rc = pSubOpen->pMethods->xRead(pSubOpen, pBuf, iAmt,
+                                         iOfst % pGroup->szChunk);
+          if( rc!=SQLITE_OK ) break;
+          pBuf = (char *)pBuf + iAmt;
+          iOfst += iAmt;
+          iAmt = extra;
+        }else{
+          rc = SQLITE_IOERR_READ;
+          break;
+        }
       }
     }
   }
