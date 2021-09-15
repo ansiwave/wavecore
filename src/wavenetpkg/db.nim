@@ -1,8 +1,11 @@
 {.passC: "-DSQLITE_ENABLE_FTS5".}
 
 import sqlite3
+
 from db_sqlite import sql, SqlQuery
 from puppy import nil
+
+{.compile: "sqlite3_multiplex.c".}
 
 type
   sqlite3_vfs* {.bycopy.} = object
