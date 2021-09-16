@@ -129,7 +129,7 @@ let vfs = sqlite3_vfs(
   szOsFile: cint(sizeof(sqlite3_file)),            ##  Size of subclassed sqlite3_file
   mxPathname: 100,          ##  Maximum file pathname length
   pNext: nil,     ##  Next registered VFS
-  zName: "ansiwave",            ##  Name of this virtual file system
+  zName: "http",            ##  Name of this virtual file system
   pAppData: nil,         ##  Pointer to application-specific data
   xOpen: proc (a1: ptr sqlite3_vfs; zName: cstring; a3: ptr sqlite3_file; flags: cint;
               pOutFlags: ptr cint): cint {.cdecl.} =
@@ -169,7 +169,7 @@ import bitops
 
 proc open*(filename: string, readOnly: bool = false): db_sqlite.DbConn =
   var db: db_sqlite.DbConn
-  if sqlite3_open_v2(filename, db, if readOnly: SQLITE_OPEN_READONLY else: bitor(SQLITE_OPEN_READWRITE, SQLITE_OPEN_CREATE), if readOnly: "ansiwave".cstring else: nil) == SQLITE_OK:
+  if sqlite3_open_v2(filename, db, if readOnly: SQLITE_OPEN_READONLY else: bitor(SQLITE_OPEN_READWRITE, SQLITE_OPEN_CREATE), if readOnly: "http".cstring else: nil) == SQLITE_OK:
     result = db
   else:
     db_sqlite.dbError(db)
