@@ -127,6 +127,22 @@ assert vfs != nil
 origOpen = vfs.xOpen
 vfs.xOpen = customOpen
 
+proc sqlite3_open_v2(filename: cstring, ppDb: var PSqlite3, flags: cint, zVfs: cstring): cint {.cdecl, importc.}
+
+const
+  SQLITE_OPEN_READONLY = 1
+  SQLITE_OPEN_READWRITE = 2
+  SQLITE_OPEN_CREATE = 4
+
+import bitops
+
+proc open*(filename: string, readOnly: bool = false): db_sqlite.DbConn =
+  var db: db_sqlite.DbConn
+  if sqlite3_open_v2(filename, db, if readOnly: SQLITE_OPEN_READONLY else: bitor(SQLITE_OPEN_READWRITE, SQLITE_OPEN_CREATE), nil) == SQLITE_OK:
+    result = db
+  else:
+    db_sqlite.dbError(db)
+
 proc init*(conn: PSqlite3) =
   db_sqlite.exec conn, sql"""
   CREATE TABLE entity (

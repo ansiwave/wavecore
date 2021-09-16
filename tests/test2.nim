@@ -6,7 +6,7 @@ from os import nil
 from osproc import nil
 
 test "create users":
-  let conn = db_sqlite.open(":memory:", "", "", "")
+  let conn = db.open(":memory:")
   db.init(conn)
   var
     alice = User(username: "Alice", public_key: "stuff")
@@ -27,7 +27,7 @@ test "retrieve sqlite db via http":
     process = osproc.startProcess("ruby", args=["-run", "-ehttpd", ".", "-p" & port], options={osproc.poUsePath, osproc.poStdErrToStdOut})
     os.sleep(1000)
     # create test db
-    var conn = db_sqlite.open(filename, "", "", "")
+    var conn = db.open(filename)
     db.init(conn)
     var
       alice = User(username: "Alice", public_key: "stuff")
@@ -37,7 +37,7 @@ test "retrieve sqlite db via http":
     db_sqlite.close(conn)
     # re-open db, but this time all reads happen over http
     db.withHttp("http://localhost:" & port & "/" & filename):
-      conn = db_sqlite.open(filename, "", "", "")
+      conn = db.open(filename, true)
       let
         alice2 = entities.selectUser(conn, "Alice")
         bob2 = entities.selectUser(conn, "Bob")
