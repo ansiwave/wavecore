@@ -167,9 +167,9 @@ const
 
 import bitops
 
-proc open*(filename: string, readOnly: bool = false): db_sqlite.DbConn =
+proc open*(filename: string, http: bool = false): db_sqlite.DbConn =
   var db: db_sqlite.DbConn
-  if sqlite3_open_v2(filename, db, if readOnly: SQLITE_OPEN_READONLY else: bitor(SQLITE_OPEN_READWRITE, SQLITE_OPEN_CREATE), if readOnly: "http".cstring else: nil) == SQLITE_OK:
+  if sqlite3_open_v2(filename, db, if http: SQLITE_OPEN_READONLY else: bitor(SQLITE_OPEN_READWRITE, SQLITE_OPEN_CREATE), if http: "http".cstring else: nil) == SQLITE_OK:
     result = db
   else:
     db_sqlite.dbError(db)
