@@ -1,6 +1,6 @@
 import unittest
-from wavenetpkg/client import nil
-from wavenetpkg/server import nil
+from wavecorepkg/client import nil
+from wavecorepkg/server import nil
 from sugar import nil
 
 const

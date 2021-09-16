@@ -6,10 +6,10 @@ description   = "A new awesome nimble package"
 license       = "Public Domain"
 srcDir        = "src"
 installExt    = @["nim", "c"]
-bin           = @["wavenet"]
+bin           = @["wavecore"]
 
 task dev, "Run dev version":
-  exec "nimble run wavenet"
+  exec "nimble run wavecore"
 
 # Dependencies
 

@@ -1,6 +1,6 @@
 import sqlite3
 from db_sqlite import sql
-from wavenetpkg/db import nil
+from wavecorepkg/db import nil
 
 type
   User* = object

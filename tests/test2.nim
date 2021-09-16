@@ -1,6 +1,6 @@
 import unittest
-import wavenetpkg/db
-import wavenetpkg/db/entities
+import wavecorepkg/db
+import wavecorepkg/db/entities
 from db_sqlite import nil
 from os import nil
 from osproc import nil
