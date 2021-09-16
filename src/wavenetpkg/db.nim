@@ -3,6 +3,9 @@
 import sqlite3
 from db_sqlite import sql, SqlQuery
 from puppy import nil
+from strutils import nil
+from sequtils import nil
+from parseutils import nil
 
 type
   sqlite3_vfs* {.bycopy.} = object
@@ -87,7 +90,23 @@ let customMethods = sqlite3_io_methods(
   xWrite: proc (a1: ptr sqlite3_file; a2: pointer; iAmt: cint; iOfst: int64): cint {.cdecl.} = SQLITE_OK,
   xTruncate: proc (a1: ptr sqlite3_file; size: int64): cint {.cdecl.} = SQLITE_OK,
   xSync: proc (a1: ptr sqlite3_file; flags: cint): cint {.cdecl.} = SQLITE_OK,
-  xFileSize: proc (a1: ptr sqlite3_file; pSize: ptr int64): cint {.cdecl.} = SQLITE_OK,
+  xFileSize: proc (a1: ptr sqlite3_file; pSize: ptr int64): cint {.cdecl.} =
+    let res = puppy.fetch(puppy.Request(
+      url: puppy.parseUrl(readUrl),
+      verb: "get",
+      headers: @[puppy.Header(key: "Range", value: "bytes=0-0")]
+    ))
+    if res.code == 206:
+      for header in res.headers:
+        if header.key == "Content-Range":
+          let vals = sequtils.toSeq(strutils.split(header.value, {' ', '/'}))
+          if vals.len == 3 and vals[0] == "bytes":
+            var size = 0
+            if parseutils.parseInt(vals[2], size) > 0:
+              pSize[] = size
+              return SQLITE_OK
+    SQLITE_ERROR
+  ,
   xLock: proc (a1: ptr sqlite3_file; a2: cint): cint {.cdecl.} = SQLITE_OK,
   xUnlock: proc (a1: ptr sqlite3_file; a2: cint): cint {.cdecl.} = SQLITE_OK,
   xCheckReservedLock: proc (a1: ptr sqlite3_file; pResOut: ptr cint): cint {.cdecl.} = SQLITE_OK,
