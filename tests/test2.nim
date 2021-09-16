@@ -21,6 +21,7 @@ test "retrieve sqlite db via http":
   const
     filename = "test.db"
     port = "8000"
+  db.readUrl = "http://localhost:" & port & "/" & filename
   var process: osproc.Process = nil
   try:
     # start web server
@@ -36,16 +37,15 @@ test "retrieve sqlite db via http":
     discard entities.insertUser(conn, bob)
     db_sqlite.close(conn)
     # re-open db, but this time all reads happen over http
-    db.withHttp("http://localhost:" & port & "/" & filename):
-      conn = db.open(filename, true)
-      let
-        alice2 = entities.selectUser(conn, "Alice")
-        bob2 = entities.selectUser(conn, "Bob")
-      alice.id = alice2.id
-      bob.id = bob2.id
-      check alice == alice2
-      check bob == bob2
-      db_sqlite.close(conn)
+    conn = db.open(filename, true)
+    let
+      alice2 = entities.selectUser(conn, "Alice")
+      bob2 = entities.selectUser(conn, "Bob")
+    alice.id = alice2.id
+    bob.id = bob2.id
+    check alice == alice2
+    check bob == bob2
+    db_sqlite.close(conn)
   finally:
     osproc.kill(process)
     os.removeFile(filename)

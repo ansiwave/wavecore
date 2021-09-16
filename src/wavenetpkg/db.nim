@@ -66,68 +66,80 @@ type
   sqlite3_file* {.bycopy.} = object
     pMethods*: ptr sqlite3_io_methods ##  Methods for an open file
 
-var origMethods: ptr sqlite3_io_methods
-var readUrl: string
-
-template withHttp*(url: string, body: untyped): untyped =
-  readUrl = url
-  try:
-    body
-  finally:
-    readUrl = ""
+var readUrl*: string
 
 let customMethods = sqlite3_io_methods(
   iVersion: 3,
-  xClose: proc (a1: ptr sqlite3_file): cint {.cdecl.} = origMethods.xClose(a1),
+  xClose: proc (a1: ptr sqlite3_file): cint {.cdecl.} = SQLITE_OK,
   xRead: proc (a1: ptr sqlite3_file; a2: pointer; iAmt: cint; iOfst: int64): cint {.cdecl.} =
-    if readUrl == "":
-      origMethods.xRead(a1, a2, iAmt, iOfst)
+    let res = puppy.fetch(puppy.Request(
+      url: puppy.parseUrl(readUrl),
+      verb: "get",
+      headers: @[puppy.Header(key: "Range", value: "bytes=" & $iOfst & "-" & $(iOfst+iAmt-1))]
+    ))
+    if res.code == 206:
+      assert res.body.len == iAmt
+      copyMem(a2, res.body[0].addr, res.body.len)
+      SQLITE_OK
     else:
-      let res = puppy.fetch(puppy.Request(
-        url: puppy.parseUrl(readUrl),
-        verb: "get",
-        headers: @[puppy.Header(key: "Range", value: "bytes=" & $iOfst & "-" & $(iOfst+iAmt-1))]
-      ))
-      if res.code == 206:
-        assert res.body.len == iAmt
-        copyMem(a2, res.body[0].addr, res.body.len)
-        SQLITE_OK
-      else:
-        SQLITE_ERROR
+      SQLITE_ERROR
   ,
-  xWrite: proc (a1: ptr sqlite3_file; a2: pointer; iAmt: cint; iOfst: int64): cint {.cdecl.} = origMethods.xWrite(a1, a2, iAmt, iOfst),
-  xTruncate: proc (a1: ptr sqlite3_file; size: int64): cint {.cdecl.} = origMethods.xTruncate(a1, size),
-  xSync: proc (a1: ptr sqlite3_file; flags: cint): cint {.cdecl.} = origMethods.xSync(a1, flags),
-  xFileSize: proc (a1: ptr sqlite3_file; pSize: ptr int64): cint {.cdecl.} = origMethods.xFileSize(a1, pSize),
-  xLock: proc (a1: ptr sqlite3_file; a2: cint): cint {.cdecl.} = origMethods.xLock(a1, a2),
-  xUnlock: proc (a1: ptr sqlite3_file; a2: cint): cint {.cdecl.} = origMethods.xUnlock(a1, a2),
-  xCheckReservedLock: proc (a1: ptr sqlite3_file; pResOut: ptr cint): cint {.cdecl.} = origMethods.xCheckReservedLock(a1, pResOut),
-  xFileControl: proc (a1: ptr sqlite3_file; op: cint; pArg: pointer): cint {.cdecl.} = origMethods.xFileControl(a1, op, pArg),
-  xSectorSize: proc (a1: ptr sqlite3_file): cint {.cdecl.} = origMethods.xSectorSize(a1),
-  xDeviceCharacteristics: proc (a1: ptr sqlite3_file): cint {.cdecl.} = origMethods.xDeviceCharacteristics(a1),
-  xShmMap: proc (a1: ptr sqlite3_file; iPg: cint; pgsz: cint; a4: cint; a5: ptr pointer): cint {.cdecl.} = origMethods.xShmMap(a1, iPg, pgsz, a4, a5),
-  xShmLock: proc (a1: ptr sqlite3_file; offset: cint; n: cint; flags: cint): cint {.cdecl.} = origMethods.xShmLock(a1, offset, n, flags),
-  xShmBarrier: proc (a1: ptr sqlite3_file) {.cdecl.} = origMethods.xShmBarrier(a1),
-  xShmUnmap: proc (a1: ptr sqlite3_file; deleteFlag: cint): cint {.cdecl.} = origMethods.xShmUnmap(a1, deleteFlag),
-  xFetch: proc (a1: ptr sqlite3_file; iOfst: int64; iAmt: cint; pp: ptr pointer): cint {.cdecl.} = origMethods.xFetch(a1, iOfst, iAmt, pp),
-  xUnfetch: proc (a1: ptr sqlite3_file; iOfst: int64; p: pointer): cint {.cdecl.} = origMethods.xUnfetch(a1, iOfst, p),
+  xWrite: proc (a1: ptr sqlite3_file; a2: pointer; iAmt: cint; iOfst: int64): cint {.cdecl.} = SQLITE_OK,
+  xTruncate: proc (a1: ptr sqlite3_file; size: int64): cint {.cdecl.} = SQLITE_OK,
+  xSync: proc (a1: ptr sqlite3_file; flags: cint): cint {.cdecl.} = SQLITE_OK,
+  xFileSize: proc (a1: ptr sqlite3_file; pSize: ptr int64): cint {.cdecl.} = SQLITE_OK,
+  xLock: proc (a1: ptr sqlite3_file; a2: cint): cint {.cdecl.} = SQLITE_OK,
+  xUnlock: proc (a1: ptr sqlite3_file; a2: cint): cint {.cdecl.} = SQLITE_OK,
+  xCheckReservedLock: proc (a1: ptr sqlite3_file; pResOut: ptr cint): cint {.cdecl.} = SQLITE_OK,
+  xFileControl: proc (a1: ptr sqlite3_file; op: cint; pArg: pointer): cint {.cdecl.} = SQLITE_OK,
+  xSectorSize: proc (a1: ptr sqlite3_file): cint {.cdecl.} = 0,
+  xDeviceCharacteristics: proc (a1: ptr sqlite3_file): cint {.cdecl.} = SQLITE_OK,
+  xShmMap: nil,
+  xShmLock: nil,
+  xShmBarrier: nil,
+  xShmUnmap: nil,
+  xFetch: nil,
+  xUnfetch: nil,
 )
 
-proc sqlite3_vfs_find(vfsName: cstring): ptr sqlite3_vfs {.cdecl, importc.}
-
-var origOpen: proc (a1: ptr sqlite3_vfs; zName: cstring; a3: ptr sqlite3_file; flags: cint; pOutFlags: ptr cint): cint {.cdecl.}
-
-proc customOpen(a1: ptr sqlite3_vfs; zName: cstring; a3: ptr sqlite3_file; flags: cint; pOutFlags: ptr cint): cint {.cdecl.} =
-  result = origOpen(a1, zName, a3, flags, pOutFlags)
-  origMethods = a3.pMethods
-  a3.pMethods = customMethods.unsafeAddr
-
-var vfs = sqlite3_vfs_find(nil)
-assert vfs != nil
-origOpen = vfs.xOpen
-vfs.xOpen = customOpen
-
 proc sqlite3_open_v2(filename: cstring, ppDb: var PSqlite3, flags: cint, zVfs: cstring): cint {.cdecl, importc.}
+proc sqlite3_vfs_register(vfs: ptr sqlite3_vfs, makeDflt: cint): cint {.cdecl, importc.}
+
+let vfs = sqlite3_vfs(
+  iVersion: 3,            ##  Structure version number (currently 3)
+  szOsFile: cint(sizeof(sqlite3_file)),            ##  Size of subclassed sqlite3_file
+  mxPathname: 100,          ##  Maximum file pathname length
+  pNext: nil,     ##  Next registered VFS
+  zName: "ansiwave",            ##  Name of this virtual file system
+  pAppData: nil,         ##  Pointer to application-specific data
+  xOpen: proc (a1: ptr sqlite3_vfs; zName: cstring; a3: ptr sqlite3_file; flags: cint;
+              pOutFlags: ptr cint): cint {.cdecl.} =
+    a3.pMethods = customMethods.unsafeAddr
+    SQLITE_OK
+  ,
+  xDelete: proc (a1: ptr sqlite3_vfs; zName: cstring; syncDir: cint): cint {.cdecl.} =
+    SQLITE_OK
+  ,
+  xAccess: proc (a1: ptr sqlite3_vfs; zName: cstring; flags: cint; pResOut: ptr cint): cint {.cdecl.} =
+    SQLITE_OK
+  ,
+  xFullPathname: proc (a1: ptr sqlite3_vfs; zName: cstring; nOut: cint; zOut: cstring): cint {.cdecl.} =
+    SQLITE_OK
+  ,
+  xDlOpen: nil,
+  xDlError: nil,
+  xDlSym: nil,
+  xDlClose: nil,
+  xRandomness: nil,
+  xSleep: nil,
+  xCurrentTime: nil,
+  xGetLastError: nil,
+  xCurrentTimeInt64: nil,
+  xSetSystemCall: nil,
+  xGetSystemCall: nil,
+  xNextSystemCall: nil,
+)
+assert SQLITE_OK == sqlite3_vfs_register(vfs.unsafeAddr, 0)
 
 const
   SQLITE_OPEN_READONLY = 1
@@ -138,7 +150,7 @@ import bitops
 
 proc open*(filename: string, readOnly: bool = false): db_sqlite.DbConn =
   var db: db_sqlite.DbConn
-  if sqlite3_open_v2(filename, db, if readOnly: SQLITE_OPEN_READONLY else: bitor(SQLITE_OPEN_READWRITE, SQLITE_OPEN_CREATE), nil) == SQLITE_OK:
+  if sqlite3_open_v2(filename, db, if readOnly: SQLITE_OPEN_READONLY else: bitor(SQLITE_OPEN_READWRITE, SQLITE_OPEN_CREATE), if readOnly: "ansiwave".cstring else: nil) == SQLITE_OK:
     result = db
   else:
     db_sqlite.dbError(db)
