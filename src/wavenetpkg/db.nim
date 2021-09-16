@@ -71,6 +71,8 @@ type
 
 var readUrl*: string
 
+const SQLITE_IOCAP_IMMUTABLE = 0x00002000
+
 let customMethods = sqlite3_io_methods(
   iVersion: 3,
   xClose: proc (a1: ptr sqlite3_file): cint {.cdecl.} = SQLITE_OK,
@@ -112,7 +114,7 @@ let customMethods = sqlite3_io_methods(
   xCheckReservedLock: proc (a1: ptr sqlite3_file; pResOut: ptr cint): cint {.cdecl.} = SQLITE_OK,
   xFileControl: proc (a1: ptr sqlite3_file; op: cint; pArg: pointer): cint {.cdecl.} = SQLITE_OK,
   xSectorSize: proc (a1: ptr sqlite3_file): cint {.cdecl.} = 0,
-  xDeviceCharacteristics: proc (a1: ptr sqlite3_file): cint {.cdecl.} = SQLITE_OK,
+  xDeviceCharacteristics: proc (a1: ptr sqlite3_file): cint {.cdecl.} = SQLITE_IOCAP_IMMUTABLE,
   xShmMap: nil,
   xShmLock: nil,
   xShmBarrier: nil,
