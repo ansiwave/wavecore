@@ -22,7 +22,7 @@ proc selectUser*(conn: PSqlite3, username: string): User =
   const query =
     """
       SELECT user.entity_id, user.value_indexed AS username, user2.value_indexed AS public_key FROM user
-      INNER JOIN user as user2 ON user2.entity_id = user.entity_id
+      INNER JOIN user as user2 ON user2.entity_id MATCH user.entity_id
       WHERE user.attribute MATCH 'username' AND
             user.value_indexed MATCH ? AND
             user2.attribute MATCH 'public_key'
