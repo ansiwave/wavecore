@@ -215,11 +215,12 @@ iterator select*[T](db: PSqlite3, ctor: proc (x: var T, stmt: PStmt, col: int32)
   finally:
     if finalize(stmt) != SQLITE_OK: db_sqlite.dbError(db)
 
-proc insert*[T](conn: PSqlite3, table: string, values: T): int64 =
+proc insert*[T](conn: PSqlite3, table: static[string], values: T): int64 =
   db_sqlite.exec(conn, sql"BEGIN TRANSACTION")
   db_sqlite.exec(conn, sql"INSERT INTO entity DEFAULT VALUES")
   result = sqlite3.last_insert_rowid(conn)
+  const query = "INSERT INTO " & table & " (entity_id, attribute, value_indexed) VALUES (?, ?, ?)"
   for k, v in values.fieldPairs:
     when k != "id":
-      db_sqlite.exec(conn, sql("INSERT INTO " & table & " (entity_id, attribute, value_indexed) VALUES (?, ?, ?)"), result, k, v)
+      db_sqlite.exec(conn, sql query, result, k, v)
   db_sqlite.exec(conn, sql"COMMIT")
