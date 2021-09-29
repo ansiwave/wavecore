@@ -125,15 +125,23 @@ proc insertPost*(conn: PSqlite3, entity: Post): int64 =
       if x.parent_id > 0:
         # set the parent ids
         let parents = selectPostMetadata(conn, x.parent_id).parent_ids
-        x.parent_ids = parents & " " & $x.parent_id
+        x.parent_ids =
+          if parents.len == 0:
+            $x.parent_id
+          else:
+            parents & ", " & $x.parent_id
         # update the parents' child_ids
         let query =
           """
           UPDATE post
-          SET value_indexed = value_indexed || ?
+          SET value_indexed = CASE
+                              WHEN value_indexed = ''
+                              THEN ?
+                              ELSE value_indexed || ', ' || ?
+                              END
           WHERE attribute MATCH 'child_ids' AND
                 CAST(entity_id AS INT) IN ($1)
-          """.format(strutils.join(strutils.splitWhitespace(x.parent_ids), ", "))
-        db_sqlite.exec(conn, sql query, " " & $id)
+          """.format(x.parent_ids)
+        db_sqlite.exec(conn, sql query, id, id)
   )
 
