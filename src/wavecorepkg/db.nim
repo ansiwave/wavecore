@@ -215,12 +215,22 @@ iterator select*[T](db: PSqlite3, ctor: proc (x: var T, stmt: PStmt, col: int32)
   finally:
     if finalize(stmt) != SQLITE_OK: db_sqlite.dbError(db)
 
-proc insert*[T](conn: PSqlite3, table: static[string], values: T): int64 =
+type
+  CompressedValue*[T] = object
+    compressed*: T
+    uncompressed*: T
+
+proc insert*[T](conn: PSqlite3, table: static[string], entity: T): int64 =
   db_sqlite.exec(conn, sql"BEGIN TRANSACTION")
   db_sqlite.exec(conn, sql"INSERT INTO entity DEFAULT VALUES")
   result = sqlite3.last_insert_rowid(conn)
-  const query = "INSERT INTO " & table & " (entity_id, attribute, value_indexed) VALUES (?, ?, ?)"
-  for k, v in values.fieldPairs:
+  const
+    normalQuery = "INSERT INTO " & table & " (entity_id, attribute, value_indexed) VALUES (?, ?, ?)"
+    compressedQuery = "INSERT INTO " & table & " (entity_id, attribute, value_indexed, value_unindexed) VALUES (?, ?, ?, ?)"
+  for k, v in entity.fieldPairs:
     when k != "id":
-      db_sqlite.exec(conn, sql query, result, k, v)
+      when v is CompressedValue:
+        db_sqlite.exec(conn, sql compressedQuery, result, k, v.uncompressed, v.compressed)
+      else:
+        db_sqlite.exec(conn, sql normalQuery, result, k, v)
   db_sqlite.exec(conn, sql"COMMIT")

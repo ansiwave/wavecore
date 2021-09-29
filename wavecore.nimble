@@ -15,3 +15,4 @@ task dev, "Run dev version":
 
 requires "nim >= 1.2.6"
 requires "puppy >= 1.0.3"
+requires "zippy >= 0.5.5"

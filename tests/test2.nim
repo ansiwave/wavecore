@@ -17,6 +17,22 @@ test "create users":
   check bob == entities.selectUser(conn, "Bob")
   db_sqlite.close(conn)
 
+test "create posts":
+  let conn = db.open(":memory:")
+  db.init(conn)
+  var
+    alice = User(username: "Alice", public_key: "stuff")
+    bob = User(username: "Bob", public_key: "asdf")
+  alice.id = entities.insertUser(conn, alice)
+  bob.id = entities.insertUser(conn, bob)
+  var p1 = Post(parent_id: 0, user_id: alice.id, body: db.CompressedValue[string](uncompressed: "Hello, i'm alice"))
+  p1.id = entities.insertPost(conn, p1)
+  var p2 = Post(parent_id: p1.id, user_id: bob.id, body: db.CompressedValue[string](uncompressed: "Hello, i'm bob"))
+  p2.id = entities.insertPost(conn, p2)
+  check p1 == entities.selectPost(conn, p1.id)
+  check p2 == entities.selectPost(conn, p2.id)
+  db_sqlite.close(conn)
+
 test "retrieve sqlite db via http":
   const
     filename = "test.db"
