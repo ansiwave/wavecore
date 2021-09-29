@@ -6,6 +6,7 @@ from puppy import nil
 from strutils import nil
 from sequtils import nil
 from parseutils import nil
+import tables
 
 type
   sqlite3_vfs* {.bycopy.} = object
@@ -187,38 +188,30 @@ proc init*(conn: PSqlite3) =
   db_sqlite.exec conn, sql"CREATE VIRTUAL TABLE user USING fts5 (entity_id, attribute, value_indexed, value_unindexed UNINDEXED)"
   db_sqlite.exec conn, sql"CREATE VIRTUAL TABLE post USING fts5 (entity_id, attribute, value_indexed, value_unindexed UNINDEXED)"
 
-proc dbFormat(formatstr: SqlQuery, args: varargs[string]): string =
-  result = ""
-  var a = 0
-  for c in items(string(formatstr)):
-    if c == '?':
-      add(result, db_sqlite.dbQuote(args[a]))
-      inc(a)
-    else:
-      add(result, c)
+proc prepare*(db: PSqlite3; q: string): PStmt =
+  if prepare_v2(db, q, q.len.cint, result, nil) != SQLITE_OK:
+    discard finalize(result)
+    db_sqlite.dbError(db)
 
-proc setupQuery(db: PSqlite3, query: SqlQuery,
-                args: varargs[string]): PStmt =
-  assert(not db.isNil, "Database not connected.")
-  var q = dbFormat(query, args)
-  if prepare_v2(db, q, q.len.cint, result, nil) != SQLITE_OK: db_sqlite.dbError(db)
-
-iterator select*[T](db: PSqlite3, ctor: proc (x: var T, stmt: PStmt, col: int32), query: SqlQuery, args: varargs[string, `$`]): T =
-  var stmt = setupQuery(db, query, args)
-  var obj: T
+proc select*[T](conn: PSqlite3, setAttr: proc (x: var T, stmt: PStmt, attr: string), query: string, args: varargs[string, `$`]): seq[T] =
+  var stmt = prepare(conn, query)
+  for i in 0 ..< args.len:
+    db_sqlite.bindParam(db_sqlite.SqlPrepared(stmt), i+1, args[i])
+  var t: OrderedTable[int64, T]
   try:
     while step(stmt) == SQLITE_ROW:
-      var cols = column_count(stmt)
-      for col in 0 .. cols-1:
-        ctor(obj, stmt, col)
-      yield obj
+      let id = sqlite3.column_int(stmt, 0)
+      if not t.hasKey(id):
+        t[id] = T(id: id)
+      setAttr(t[id], stmt, $sqlite3.column_text(stmt, 1))
   finally:
-    if finalize(stmt) != SQLITE_OK: db_sqlite.dbError(db)
+    if finalize(stmt) != SQLITE_OK: db_sqlite.dbError(conn)
+  sequtils.toSeq(t.values)
 
 type
-  CompressedValue*[T] = object
-    compressed*: T
-    uncompressed*: T
+  CompressedValue* = object
+    compressed*: seq[uint8]
+    uncompressed*: string
 
 proc insert*[T](conn: PSqlite3, table: static[string], entity: T, extraFn: proc (x: var T, id: int64) = nil): int64 =
   db_sqlite.exec(conn, sql"BEGIN TRANSACTION")
@@ -233,8 +226,14 @@ proc insert*[T](conn: PSqlite3, table: static[string], entity: T, extraFn: proc 
   for k, v in e.fieldPairs:
     when k != "id":
       when v is CompressedValue:
-        db_sqlite.exec(conn, sql compressedQuery, result, k, v.uncompressed, v.compressed)
+        var stmt = prepare(conn, compressedQuery)
+        db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), result, k, v.uncompressed, v.compressed)
+        discard step(stmt)
+        discard finalize(stmt)
       else:
-        db_sqlite.exec(conn, sql normalQuery, result, k, v)
+        var stmt = prepare(conn, normalQuery)
+        db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), result, k, v)
+        discard step(stmt)
+        discard finalize(stmt)
   db_sqlite.exec(conn, sql"COMMIT")
 

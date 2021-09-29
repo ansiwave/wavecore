@@ -2,7 +2,6 @@ import sqlite3
 from db_sqlite import sql
 from wavecorepkg/db import nil
 from zippy import nil
-from base64 import nil
 from sequtils import nil
 from strutils import format
 
@@ -12,28 +11,23 @@ type
     username*: string
     public_key*: string
 
-proc initUser(entity: var User, stmt: PStmt, col: int32) =
-  let colName = $sqlite3.column_name(stmt, col)
-  case colName:
-  of "entity_id":
-    entity.id = sqlite3.column_int(stmt, col)
+proc initUser(entity: var User, stmt: PStmt, attr: string) =
+  case attr:
   of "username":
-    entity.username = $sqlite3.column_text(stmt, col)
+    entity.username = $sqlite3.column_text(stmt, 2)
   of "public_key":
-    entity.public_key = $sqlite3.column_text(stmt, col)
+    entity.public_key = $sqlite3.column_text(stmt, 2)
 
 proc selectUser*(conn: PSqlite3, username: string): User =
   const query =
     """
-      SELECT DISTINCT user.entity_id, user.value_indexed AS username, user_public_key.value_indexed AS public_key FROM user
-      INNER JOIN user as user_public_key ON user_public_key.entity_id MATCH user.entity_id
-      WHERE user.attribute MATCH 'username' AND
-            user.value_indexed MATCH ? AND
-            user_public_key.attribute MATCH 'public_key'
+      SELECT * FROM user
+      WHERE entity_id MATCH (SELECT entity_id FROM user WHERE attribute MATCH 'username' AND value_indexed MATCH ?)
+            AND attribute IN ('username', 'public_key')
     """
   #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), username):
   #  echo x
-  for x in db.select[User](conn, initUser, sql query, username):
+  for x in db.select[User](conn, initUser, query, username):
     return x
 
 proc insertUser*(conn: PSqlite3, entity: User): int64 =
@@ -44,81 +38,66 @@ type
     id*: int64
     parent_id*: int64
     user_id*: int64
-    body*: db.CompressedValue[string]
+    body*: db.CompressedValue
     parent_ids*: string
     child_ids*: string
 
-proc initPost(entity: var Post, stmt: PStmt, col: int32) =
-  let colName = $sqlite3.column_name(stmt, col)
-  case colName:
-  of "entity_id":
-    entity.id = sqlite3.column_int(stmt, col)
+proc initPost(entity: var Post, stmt: PStmt, attr: string) =
+  case attr:
   of "parent_id":
-    entity.parent_id = sqlite3.column_int(stmt, col)
+    entity.parent_id = sqlite3.column_int(stmt, 2)
   of "user_id":
-    entity.user_id = sqlite3.column_int(stmt, col)
+    entity.user_id = sqlite3.column_int(stmt, 2)
   of "body":
-    let compressedBody = $sqlite3.column_text(stmt, col)
-    entity.body = db.CompressedValue[string](uncompressed: zippy.uncompress(base64.decode(compressedBody), dataFormat = zippy.dfZlib))
+    let
+      compressedBody = sqlite3.column_blob(stmt, 3)
+      compressedLen = sqlite3.column_bytes(stmt, 3)
+    var s = newSeq[uint8](compressedLen)
+    copyMem(s[0].addr, compressedBody, compressedLen)
+    entity.body = db.CompressedValue(uncompressed: zippy.uncompress(cast[string](s), dataFormat = zippy.dfZlib))
   of "parent_ids":
-    entity.parent_ids = $sqlite3.column_text(stmt, col)
+    entity.parent_ids = $sqlite3.column_text(stmt, 2)
   of "child_ids":
-    entity.child_ids = $sqlite3.column_text(stmt, col)
+    entity.child_ids = $sqlite3.column_text(stmt, 2)
 
 proc selectPost*(conn: PSqlite3, id: int64): Post =
   const query =
     """
-      SELECT DISTINCT post.entity_id, post_parent_id.value_indexed AS parent_id, post_user_id.value_indexed AS user_id, post_body.value_unindexed AS body FROM post
-      INNER JOIN post as post_parent_id ON post_parent_id.entity_id MATCH post.entity_id
-      INNER JOIN post as post_user_id ON post_user_id.entity_id MATCH post.entity_id
-      INNER JOIN post as post_body ON post_body.entity_id MATCH post.entity_id
-      WHERE post.entity_id MATCH ? AND
-            post_parent_id.attribute MATCH 'parent_id' AND
-            post_user_id.attribute MATCH 'user_id' AND
-            post_body.attribute MATCH 'body'
+      SELECT * FROM post
+      WHERE entity_id MATCH ?
+            AND attribute IN ('parent_id', 'user_id', 'body')
     """
   #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), id):
   #  echo x
-  for x in db.select[Post](conn, initPost, sql query, id):
-    return x
+  db.select[Post](conn, initPost, query, id)[0]
 
 proc selectPostMetadata*(conn: PSqlite3, id: int64): Post =
   const query =
     """
-      SELECT DISTINCT post.entity_id, post_parent_ids.value_indexed AS parent_ids, post_child_ids.value_indexed AS child_ids FROM post
-      INNER JOIN post as post_parent_ids ON post_parent_ids.entity_id MATCH post.entity_id
-      INNER JOIN post as post_child_ids ON post_child_ids.entity_id MATCH post.entity_id
-      WHERE post.entity_id MATCH ? AND
-            post_parent_ids.attribute MATCH 'parent_ids' AND
-            post_child_ids.attribute MATCH 'child_ids'
+      SELECT * FROM post
+      WHERE entity_id MATCH ?
+            AND attribute IN ('parent_ids', 'child_ids')
     """
   #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), id):
   #  echo x
-  for x in db.select[Post](conn, initPost, sql query, id):
-    return x
+  db.select[Post](conn, initPost, query, id)[0]
 
 proc selectPostChildren*(conn: PSqlite3, id: int64): seq[Post] =
   const query =
     """
-      SELECT DISTINCT child_post.entity_id, child_post_parent_id.value_indexed AS parent_id, child_post_user_id.value_indexed AS user_id, child_post_body.value_unindexed AS body FROM post
-      INNER JOIN post as post_child_ids ON post_child_ids.entity_id MATCH post.entity_id
-      INNER JOIN post as child_post ON post_child_ids.value_indexed MATCH child_post.entity_id
-      INNER JOIN post as child_post_parent_id ON child_post_parent_id.entity_id MATCH child_post.entity_id
-      INNER JOIN post as child_post_user_id ON child_post_user_id.entity_id MATCH child_post.entity_id
-      INNER JOIN post as child_post_body ON child_post_body.entity_id MATCH child_post.entity_id
-      WHERE post.entity_id MATCH ? AND
-            post_child_ids.attribute MATCH 'child_ids' AND
-            child_post_parent_id.attribute MATCH 'parent_id' AND
-            child_post_user_id.attribute MATCH 'user_id' AND
-            child_post_body.attribute MATCH 'body'
+      SELECT * FROM post
+      INNER JOIN post as parent_post ON parent_post.entity_id MATCH ?
+      WHERE parent_post.attribute MATCH 'child_ids'
+            AND parent_post.value_indexed MATCH post.entity_id
+            AND post.attribute IN ('parent_id', 'user_id', 'body')
     """
   #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), id):
   #  echo x
-  sequtils.toSeq(db.select[Post](conn, initPost, sql query, id))
+  sequtils.toSeq(db.select[Post](conn, initPost, query, id))
 
 proc insertPost*(conn: PSqlite3, entity: Post): int64 =
   var e = entity
-  e.body.compressed = base64.encode(zippy.compress(e.body.uncompressed, dataFormat = zippy.dfZlib), safe = true)
+  e.body.compressed = cast[seq[uint8]](sequtils.toSeq(zippy.compress(e.body.uncompressed, dataFormat = zippy.dfZlib)))
   # TODO: strip ANSI codes out of e.body.uncompressed since they don't need to be searchable
   db.insert(conn, "post", e,
     proc (x: var Post, id: int64) =
@@ -136,12 +115,12 @@ proc insertPost*(conn: PSqlite3, entity: Post): int64 =
           UPDATE post
           SET value_indexed = CASE
                               WHEN value_indexed = ''
-                              THEN ?
-                              ELSE value_indexed || ', ' || ?
+                              THEN $1
+                              ELSE value_indexed || ', ' || $1
                               END
           WHERE attribute MATCH 'child_ids' AND
-                CAST(entity_id AS INT) IN ($1)
-          """.format(x.parent_ids)
-        db_sqlite.exec(conn, sql query, id, id)
+                CAST(entity_id AS INT) IN ($2)
+          """.format(id, x.parent_ids)
+        db_sqlite.exec(conn, sql query)
   )
 
