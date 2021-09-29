@@ -29,8 +29,16 @@ test "create posts":
   p1.id = entities.insertPost(conn, p1)
   var p2 = Post(parent_id: p1.id, user_id: bob.id, body: db.CompressedValue[string](uncompressed: "Hello, i'm bob"))
   p2.id = entities.insertPost(conn, p2)
+  var p3 = Post(parent_id: p2.id, user_id: alice.id, body: db.CompressedValue[string](uncompressed: "What's up"))
+  p3.id = entities.insertPost(conn, p3)
   check p1 == entities.selectPost(conn, p1.id)
   check p2 == entities.selectPost(conn, p2.id)
+  check p3 == entities.selectPost(conn, p3.id)
+  check @[p2, p3] == entities.selectPostChildren(conn, p1.id)
+  check @[p3] == entities.selectPostChildren(conn, p2.id)
+  #echo entities.selectPostMetadata(conn, p1.id)
+  #echo entities.selectPostMetadata(conn, p2.id)
+  #echo entities.selectPostMetadata(conn, p3.id)
   db_sqlite.close(conn)
 
 test "retrieve sqlite db via http":

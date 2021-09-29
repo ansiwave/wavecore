@@ -220,17 +220,21 @@ type
     compressed*: T
     uncompressed*: T
 
-proc insert*[T](conn: PSqlite3, table: static[string], entity: T): int64 =
+proc insert*[T](conn: PSqlite3, table: static[string], entity: T, extraFn: proc (x: var T, id: int64) = nil): int64 =
   db_sqlite.exec(conn, sql"BEGIN TRANSACTION")
   db_sqlite.exec(conn, sql"INSERT INTO entity DEFAULT VALUES")
   result = sqlite3.last_insert_rowid(conn)
   const
     normalQuery = "INSERT INTO " & table & " (entity_id, attribute, value_indexed) VALUES (?, ?, ?)"
     compressedQuery = "INSERT INTO " & table & " (entity_id, attribute, value_indexed, value_unindexed) VALUES (?, ?, ?, ?)"
-  for k, v in entity.fieldPairs:
+  var e = entity
+  if extraFn != nil:
+    extraFn(e, result)
+  for k, v in e.fieldPairs:
     when k != "id":
       when v is CompressedValue:
         db_sqlite.exec(conn, sql compressedQuery, result, k, v.uncompressed, v.compressed)
       else:
         db_sqlite.exec(conn, sql normalQuery, result, k, v)
   db_sqlite.exec(conn, sql"COMMIT")
+
