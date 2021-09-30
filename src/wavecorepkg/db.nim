@@ -188,24 +188,26 @@ proc init*(conn: PSqlite3) =
   db_sqlite.exec conn, sql"CREATE VIRTUAL TABLE user USING fts5 (entity_id, attribute, value_indexed, value_unindexed UNINDEXED)"
   db_sqlite.exec conn, sql"CREATE VIRTUAL TABLE post USING fts5 (entity_id, attribute, value_indexed, value_unindexed UNINDEXED)"
 
-proc prepare*(db: PSqlite3; q: string): PStmt =
-  if prepare_v2(db, q, q.len.cint, result, nil) != SQLITE_OK:
-    discard finalize(result)
-    db_sqlite.dbError(db)
+template withStatement(conn: PSqlite3, query: string, stmt: PStmt, body: untyped) =
+  try:
+    if prepare_v2(conn, query, query.len.cint, stmt, nil) != SQLITE_OK:
+      db_sqlite.dbError(conn)
+    body
+  finally:
+    if finalize(stmt) != SQLITE_OK:
+      db_sqlite.dbError(conn)
 
 proc select*[T](conn: PSqlite3, setAttr: proc (x: var T, stmt: PStmt, attr: string), query: string, args: varargs[string, `$`]): seq[T] =
-  var stmt = prepare(conn, query)
-  for i in 0 ..< args.len:
-    db_sqlite.bindParam(db_sqlite.SqlPrepared(stmt), i+1, args[i])
+  var stmt: PStmt
   var t: OrderedTable[int64, T]
-  try:
+  withStatement(conn, query, stmt):
+    for i in 0 ..< args.len:
+      db_sqlite.bindParam(db_sqlite.SqlPrepared(stmt), i+1, args[i])
     while step(stmt) == SQLITE_ROW:
       let id = sqlite3.column_int(stmt, 0)
       if not t.hasKey(id):
         t[id] = T(id: id)
       setAttr(t[id], stmt, $sqlite3.column_text(stmt, 1))
-  finally:
-    if finalize(stmt) != SQLITE_OK: db_sqlite.dbError(conn)
   sequtils.toSeq(t.values)
 
 type
@@ -217,23 +219,23 @@ proc insert*[T](conn: PSqlite3, table: static[string], entity: T, extraFn: proc 
   db_sqlite.exec(conn, sql"BEGIN TRANSACTION")
   db_sqlite.exec(conn, sql"INSERT INTO entity DEFAULT VALUES")
   result = sqlite3.last_insert_rowid(conn)
-  const
-    normalQuery = "INSERT INTO " & table & " (entity_id, attribute, value_indexed) VALUES (?, ?, ?)"
-    compressedQuery = "INSERT INTO " & table & " (entity_id, attribute, value_indexed, value_unindexed) VALUES (?, ?, ?, ?)"
   var e = entity
   if extraFn != nil:
     extraFn(e, result)
   for k, v in e.fieldPairs:
     when k != "id":
+      var stmt: PStmt
       when v is CompressedValue:
-        var stmt = prepare(conn, compressedQuery)
-        db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), result, k, v.uncompressed, v.compressed)
-        discard step(stmt)
-        discard finalize(stmt)
+        const query = "INSERT INTO " & table & " (entity_id, attribute, value_indexed, value_unindexed) VALUES (?, ?, ?, ?)"
+        withStatement(conn, query, stmt):
+          db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), result, k, v.uncompressed, v.compressed)
+          if step(stmt) != SQLITE_DONE:
+            db_sqlite.dbError(conn)
       else:
-        var stmt = prepare(conn, normalQuery)
-        db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), result, k, v)
-        discard step(stmt)
-        discard finalize(stmt)
+        const query = "INSERT INTO " & table & " (entity_id, attribute, value_indexed) VALUES (?, ?, ?)"
+        withStatement(conn, query, stmt):
+          db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), result, k, v)
+          if step(stmt) != SQLITE_DONE:
+            db_sqlite.dbError(conn)
   db_sqlite.exec(conn, sql"COMMIT")
 
