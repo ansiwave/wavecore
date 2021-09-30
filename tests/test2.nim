@@ -1,6 +1,7 @@
 import unittest
 import wavecorepkg/db
 import wavecorepkg/db/entities
+import wavecorepkg/db/vfs
 from db_sqlite import nil
 from os import nil
 from osproc import nil
@@ -45,7 +46,7 @@ test "retrieve sqlite db via http":
   const
     filename = "test.db"
     port = "8000"
-  db.readUrl = "http://localhost:" & port & "/" & filename
+  vfs.readUrl = "http://localhost:" & port & "/" & filename
   var process: osproc.Process = nil
   try:
     # start web server
