@@ -6,6 +6,7 @@ from puppy import nil
 from strutils import nil
 from sequtils import nil
 from parseutils import nil
+from bitops import nil
 import tables
 
 type
@@ -127,7 +128,7 @@ let customMethods = sqlite3_io_methods(
 proc sqlite3_open_v2(filename: cstring, ppDb: var PSqlite3, flags: cint, zVfs: cstring): cint {.cdecl, importc.}
 proc sqlite3_vfs_register(vfs: ptr sqlite3_vfs, makeDflt: cint): cint {.cdecl, importc.}
 
-let vfs = sqlite3_vfs(
+let httpVfs = sqlite3_vfs(
   iVersion: 3,            ##  Structure version number (currently 3)
   szOsFile: cint(sizeof(sqlite3_file)),            ##  Size of subclassed sqlite3_file
   mxPathname: 100,          ##  Maximum file pathname length
@@ -161,21 +162,19 @@ let vfs = sqlite3_vfs(
   xGetSystemCall: nil,
   xNextSystemCall: nil,
 )
-assert SQLITE_OK == sqlite3_vfs_register(vfs.unsafeAddr, 0)
+assert SQLITE_OK == sqlite3_vfs_register(httpVfs.unsafeAddr, 0)
 
 const
   SQLITE_OPEN_READONLY = 1
   SQLITE_OPEN_READWRITE = 2
   SQLITE_OPEN_CREATE = 4
 
-import bitops
-
-proc open*(filename: string, http: bool = false): db_sqlite.DbConn =
-  var db: db_sqlite.DbConn
-  if sqlite3_open_v2(filename, db, if http: SQLITE_OPEN_READONLY else: bitor(SQLITE_OPEN_READWRITE, SQLITE_OPEN_CREATE), if http: "http".cstring else: nil) == SQLITE_OK:
-    result = db
-  else:
-    db_sqlite.dbError(db)
+proc open*(filename: string, http: bool = false): PSqlite3 =
+  let
+    flags: cint = if http: SQLITE_OPEN_READONLY else: bitops.bitor(SQLITE_OPEN_READWRITE, SQLITE_OPEN_CREATE)
+    vfs: cstring = if http: "http".cstring else: nil
+  if sqlite3_open_v2(filename, result, flags, vfs) != SQLITE_OK:
+    db_sqlite.dbError(result)
 
 proc init*(conn: PSqlite3) =
   db_sqlite.exec conn, sql"""
