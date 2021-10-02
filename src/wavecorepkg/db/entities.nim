@@ -1,7 +1,6 @@
 import sqlite3
 from db_sqlite import sql
 from wavecorepkg/db import nil
-from zippy import nil
 from sequtils import nil
 from strutils import format
 
@@ -38,7 +37,7 @@ type
     id*: int64
     parent_id*: int64
     user_id*: int64
-    body*: db.CompressedValue
+    body*: string
     parent_ids*: string
     child_ids*: string
 
@@ -49,12 +48,7 @@ proc initPost(entity: var Post, stmt: PStmt, attr: string) =
   of "user_id":
     entity.user_id = sqlite3.column_int(stmt, 2)
   of "body":
-    let
-      compressedBody = sqlite3.column_blob(stmt, 3)
-      compressedLen = sqlite3.column_bytes(stmt, 3)
-    var s = newSeq[uint8](compressedLen)
-    copyMem(s[0].addr, compressedBody, compressedLen)
-    entity.body = db.CompressedValue(uncompressed: zippy.uncompress(cast[string](s), dataFormat = zippy.dfZlib))
+    entity.body = $sqlite3.column_text(stmt, 2)
   of "parent_ids":
     entity.parent_ids = $sqlite3.column_text(stmt, 2)
   of "child_ids":
@@ -96,10 +90,8 @@ proc selectPostChildren*(conn: PSqlite3, id: int64): seq[Post] =
   sequtils.toSeq(db.select[Post](conn, initPost, query, id))
 
 proc insertPost*(conn: PSqlite3, entity: Post): int64 =
-  var e = entity
-  e.body.compressed = cast[seq[uint8]](sequtils.toSeq(zippy.compress(e.body.uncompressed, dataFormat = zippy.dfZlib)))
-  # TODO: strip ANSI codes out of e.body.uncompressed since they don't need to be searchable
-  db.insert(conn, "post", e,
+  # TODO: strip ANSI codes out of entity.body since they don't need to be searchable
+  db.insert(conn, "post", entity,
     proc (x: var Post, id: int64) =
       if x.parent_id > 0:
         # set the parent ids

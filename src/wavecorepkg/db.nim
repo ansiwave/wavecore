@@ -56,11 +56,6 @@ proc select*[T](conn: PSqlite3, setAttr: proc (x: var T, stmt: PStmt, attr: stri
       setAttr(t[id], stmt, $sqlite3.column_text(stmt, 1))
   sequtils.toSeq(t.values)
 
-type
-  CompressedValue* = object
-    compressed*: seq[uint8]
-    uncompressed*: string
-
 proc insert*[T](conn: PSqlite3, table: static[string], entity: T, extraFn: proc (x: var T, id: int64) = nil): int64 =
   db_sqlite.exec(conn, sql"BEGIN TRANSACTION")
   db_sqlite.exec(conn, sql"INSERT INTO entity DEFAULT VALUES")
@@ -71,17 +66,10 @@ proc insert*[T](conn: PSqlite3, table: static[string], entity: T, extraFn: proc 
   for k, v in e.fieldPairs:
     when k != "id":
       var stmt: PStmt
-      when v is CompressedValue:
-        const query = "INSERT INTO " & table & " (entity_id, attribute, value_indexed, value_unindexed) VALUES (?, ?, ?, ?)"
-        withStatement(conn, query, stmt):
-          db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), result, k, v.uncompressed, v.compressed)
-          if step(stmt) != SQLITE_DONE:
-            db_sqlite.dbError(conn)
-      else:
-        const query = "INSERT INTO " & table & " (entity_id, attribute, value_indexed) VALUES (?, ?, ?)"
-        withStatement(conn, query, stmt):
-          db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), result, k, v)
-          if step(stmt) != SQLITE_DONE:
-            db_sqlite.dbError(conn)
+      const query = "INSERT INTO " & table & " (entity_id, attribute, value_indexed) VALUES (?, ?, ?)"
+      withStatement(conn, query, stmt):
+        db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), result, k, v)
+        if step(stmt) != SQLITE_DONE:
+          db_sqlite.dbError(conn)
   db_sqlite.exec(conn, sql"COMMIT")
 
