@@ -1,8 +1,8 @@
 import threadpool, net, os, selectors
-import tables
 from uri import `$`
 from strutils import nil
 from parseutils import nil
+from os import nil
 import httpcore
 import json
 
@@ -21,6 +21,7 @@ type
     hostname: string
     port: int
     socket: Socket
+    staticFileDirs: seq[string]
     listenThread, stateThread: Thread[Server]
     listenStopped, listenReady, stateReady: ptr Channel[bool]
     stateAction: ptr Channel[StateAction]
@@ -43,8 +44,8 @@ const
       100
   recvTimeout = 2000
 
-proc initServer*(hostname: string, port: int): Server =
-  Server(hostname: hostname, port: port)
+proc initServer*(hostname: string, port: int, staticFileDirs: seq[string] = @[]): Server =
+  Server(hostname: hostname, port: port, staticFileDirs: staticFileDirs)
 
 proc sendStateAction(server: Server, action: StateAction): bool =
   let done = cast[ptr Channel[bool]](
@@ -103,14 +104,38 @@ proc handle(server: Server, client: Socket) =
       else:
         # TODO: max content length
         request.body = client.recv(contentLength)
-    # response
-    let dispatch = (reqMethod: request.reqMethod, path: request.uri.path)
-    let response =
-      if dispatch == (httpcore.HttpPost, "/test"):
-        test(server, request)
+    # static file requests
+    var filePath = ""
+    if request.reqMethod == httpcore.HttpGet:
+      for dir in server.staticFileDirs:
+        let path = os.joinPath(dir, request.uri.path)
+        if fileExists(path):
+          filePath = path
+          break
+    if filePath != "":
+      var response = readFile(filePath)
+      if request.headers.hasKey("Range"):
+        let range = strutils.split(strutils.split(request.headers["Range"], '=')[1], '-')
+        var first, last: int
+        discard parseutils.parseSaturatedNatural(range[0], first)
+        discard parseutils.parseSaturatedNatural(range[1], last)
+        if first <= last and last < response.len:
+          let contentRange = "bytes " & $range[0] & "-" & $range[1] & "/" & $response.len
+          response = response[first .. last]
+          client.send("HTTP/1.1 206 OK\r\LContent-Length: " & $response.len & "\r\LContent-Range: " & contentRange & "\r\L\r\L" & response)
+        else:
+          raise newException(BadRequestException, "Bad Request. Invalid Range.")
       else:
-        raise newException(NotFoundException, "Unhandled request: " & $dispatch)
-    client.send("HTTP/1.1 200 OK\r\LContent-Length: " & $response.len & "\r\L\r\L" & response)
+        client.send("HTTP/1.1 200 OK\r\LContent-Length: " & $response.len & "\r\L\r\L" & response)
+    # json response
+    else:
+      let dispatch = (reqMethod: request.reqMethod, path: request.uri.path)
+      let response =
+        if dispatch == (httpcore.HttpPost, "/test"):
+          test(server, request)
+        else:
+          raise newException(NotFoundException, "Unhandled request: " & $dispatch)
+      client.send("HTTP/1.1 200 OK\r\LContent-Length: " & $response.len & "\r\L\r\L" & response)
   except BadRequestException as ex:
     client.send("HTTP/1.1 400 Bad Request\r\L\r\L" & $ %*{"message": ex.msg})
   except ForbiddenException as ex:
