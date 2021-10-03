@@ -2,33 +2,52 @@ import unittest
 from wavecorepkg/client import nil
 from wavecorepkg/server import nil
 import json
+from puppy import nil
 
 const
   port = 3000
-  config = client.Config(
-    address: "http://localhost:" & $port,
-  )
+  address = "http://localhost:" & $port
 
 test "Full lifecycle":
   var s = server.initServer("localhost", port)
   server.start(s)
+  var c = client.initClient(address)
+  client.start(c)
   try:
-    var c = client.initClient(config)
     discard client.post(c, "test", %* {"success": true})
     expect client.ClientException:
       discard client.post(c, "test", nil)
   finally:
     server.stop(s)
+    client.stop(c)
 
-test "Serve static file":
+test "Request static file":
   var s = server.initServer("localhost", port, @["tests"])
   server.start(s)
+  var c = client.initClient(address)
+  client.start(c)
   try:
-    var c = client.initClient(config)
     discard client.get(c, "config.nims")
     discard client.get(c, "config.nims", (0, 10))
   finally:
     server.stop(s)
+    client.stop(c)
+
+test "Request static file asynchronously":
+  var s = server.initServer("localhost", port, @["tests"])
+  server.start(s)
+  var c = client.initClient(address)
+  client.start(c)
+  let response = cast[ptr Channel[puppy.Response]](
+    allocShared0(sizeof(Channel[puppy.Response]))
+  )
+  try:
+    client.get(c, "config.nims", response)
+    discard response[].recv()
+  finally:
+    deallocShared(response)
+    server.stop(s)
+    client.stop(c)
 
 import wavecorepkg/db
 import wavecorepkg/db/entities

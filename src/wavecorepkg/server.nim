@@ -8,10 +8,10 @@ import json
 
 type
   State = object
-  StateActionKind = enum
+  ActionKind = enum
     Stop, Test,
-  StateAction = object
-    case kind: StateActionKind
+  Action = object
+    case kind: ActionKind
     of Stop:
       discard
     of Test:
@@ -24,7 +24,7 @@ type
     staticFileDirs: seq[string]
     listenThread, stateThread: Thread[Server]
     listenStopped, listenReady, stateReady: ptr Channel[bool]
-    stateAction: ptr Channel[StateAction]
+    action: ptr Channel[Action]
     state: ptr State
   Request = object
     uri: uri.Uri
@@ -47,22 +47,22 @@ const
 proc initServer*(hostname: string, port: int, staticFileDirs: seq[string] = @[]): Server =
   Server(hostname: hostname, port: port, staticFileDirs: staticFileDirs)
 
-proc sendStateAction(server: Server, action: StateAction): bool =
+proc sendAction(server: Server, action: Action): bool =
   let done = cast[ptr Channel[bool]](
     allocShared0(sizeof(Channel[bool]))
   )
   done[].open()
   var newAction = action
   newAction.done = done
-  server.stateAction[].send(newAction)
+  server.action[].send(newAction)
   result = done[].recv()
   deallocShared(done)
 
 proc test(server: Server, request: Request): string =
   let
     body = request.body.parseJson
-    action = StateAction(kind: Test, success: body["success"].getBool)
-  if sendStateAction(server, action):
+    action = Action(kind: Test, success: body["success"].getBool)
+  if sendAction(server, action):
     $ %*{}
   else:
     raise newException(BadRequestException, "invalid request")
@@ -169,10 +169,10 @@ proc listen(server: Server) {.thread.} =
     echo("Server closing on port " & $server.port)
     server.socket.close()
 
-proc recvStateAction(server: Server) {.thread.} =
+proc recvAction(server: Server) {.thread.} =
   server.stateReady[].send(true)
   while true:
-    let action = server.stateAction[].recv()
+    let action = server.action[].recv()
     var resp = false
     case action.kind:
     of Stop:
@@ -192,13 +192,13 @@ proc initShared(server: var Server) =
   server.stateReady = cast[ptr Channel[bool]](
     allocShared0(sizeof(Channel[bool]))
   )
-  server.stateAction = cast[ptr Channel[StateAction]](
-    allocShared0(sizeof(Channel[StateAction]))
+  server.action = cast[ptr Channel[Action]](
+    allocShared0(sizeof(Channel[Action]))
   )
   server.listenStopped[].open()
   server.listenReady[].open()
   server.stateReady[].open()
-  server.stateAction[].open()
+  server.action[].open()
   server.state = cast[ptr State](
     allocShared0(sizeof(State))
   )
@@ -207,22 +207,22 @@ proc deinitShared(server: var Server) =
   server.listenStopped[].close()
   server.listenReady[].close()
   server.stateReady[].close()
-  server.stateAction[].close()
+  server.action[].close()
   deallocShared(server.listenStopped)
   deallocShared(server.listenReady)
   deallocShared(server.stateReady)
-  deallocShared(server.stateAction)
+  deallocShared(server.action)
   deallocShared(server.state)
 
 proc initThreads(server: var Server) =
   createThread(server.listenThread, listen, server)
-  createThread(server.stateThread, recvStateAction, server)
+  createThread(server.stateThread, recvAction, server)
   discard server.listenReady[].recv()
   discard server.stateReady[].recv()
 
 proc deinitThreads(server: var Server) =
   server.listenStopped[].send(true)
-  server.stateAction[].send(StateAction(kind: Stop))
+  server.action[].send(Action(kind: Stop))
   server.listenThread.joinThread()
   server.stateThread.joinThread()
 
