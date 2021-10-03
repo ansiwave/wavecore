@@ -1,4 +1,4 @@
-import sqlite3
+import wavecorepkg/db/sqlite3
 from puppy import nil
 from sequtils import nil
 from parseutils import nil

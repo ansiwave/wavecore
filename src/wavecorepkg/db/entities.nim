@@ -1,5 +1,5 @@
-import sqlite3
-from db_sqlite import sql
+import wavecorepkg/db/sqlite3
+from wavecorepkg/db/db_sqlite import sql
 from wavecorepkg/db import nil
 from sequtils import nil
 from strutils import format
