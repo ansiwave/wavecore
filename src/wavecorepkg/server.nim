@@ -1,54 +1,21 @@
 import threadpool, net, os, selectors
-import tables, sets
+import tables
 from uri import `$`
 from strutils import nil
 from parseutils import nil
 import httpcore
 import json
-from oids import nil
-from times import nil
-from sugar import nil
 
 type
-  Account = object
-    username: string
-    password: string
-  AccountPointer = object
-    username: string
-    timestamp: float
-    roomIds: HashSet[string]
-  Message = object
-    content: JsonNode
-    username: string
-    timestamp: float
-    eventId: string
-  Room = object
-    id: string
-    alias: string
-    tokens: HashSet[string]
-    messages: seq[Message]
   State = object
-    accounts: Table[string, Account] # keys are usernames
-    tokens: Table[string, AccountPointer] # keys are tokens
-    rooms: Table[string, Room] # keys are room ids
-    roomAliasToId: Table[string, string]
   StateActionKind = enum
-    Stop, Register, Login, CreateRoom, Join, Send,
+    Stop, Test,
   StateAction = object
     case kind: StateActionKind
     of Stop:
       discard
-    of Register, Login:
-      account: Account
-    of CreateRoom:
-      roomAlias: string
-    of Join:
-      roomId: string
-    of Send:
-      event: JsonNode
-      eventId: string
-      eventRoomId: string
-    token: string
+    of Test:
+      success: bool
     done: ptr Channel[bool]
   Server* = ref object
     hostname: string
@@ -79,10 +46,6 @@ const
 proc initServer*(hostname: string, port: int): Server =
   Server(hostname: hostname, port: port)
 
-proc initToken(): string =
-  # TODO: come up with better way of generating tokens
-  $abs(oids.hash(oids.genOid()))
-
 proc sendStateAction(server: Server, action: StateAction): bool =
   let done = cast[ptr Channel[bool]](
     allocShared0(sizeof(Channel[bool]))
@@ -94,140 +57,14 @@ proc sendStateAction(server: Server, action: StateAction): bool =
   result = done[].recv()
   deallocShared(done)
 
-proc register(server: Server, request: Request): string =
-  let body = request.body.parseJson
-  if not body.hasKey("auth") or not body["auth"].hasKey("type"):
-    raise newException(BadRequestException, "auth required")
-  case body["auth"]["type"].str:
-  of "m.login.dummy":
-    if not body.hasKey("username") or not body.hasKey("password"):
-      raise newException(BadRequestException, "username and password required")
-    let
-      username = body["username"].str
-      password = body["password"].str
-      account = Account(username: username, password: password)
-      action = StateAction(kind: Register, account: account, token: initToken())
-    if sendStateAction(server, action):
-      $ %*{"home_server": server.hostname, "user_id": "@" & account.username & ":" & server.hostname, "access_token": action.token}
-    else:
-      raise newException(ForbiddenException, "username or password is invalid")
-  else:
-    raise newException(BadRequestException, "Unrecognized auth type")
-
-proc login(server: Server, request: Request): string =
-  let body = request.body.parseJson
-  if not body.hasKey("type"):
-    raise newException(BadRequestException, "type required")
-  case body["type"].str:
-  of "m.login.password":
-    if not body.hasKey("user") or not body.hasKey("password"):
-      raise newException(BadRequestException, "user and password required")
-    let
-      user = body["user"].str # why is this `user` instead of `username`?
-      password = body["password"].str
-      account = Account(username: user, password: password)
-      action = StateAction(kind: Login, account: account, token: initToken())
-    if sendStateAction(server, action):
-      $ %*{"home_server": server.hostname, "user_id": "@" & account.username & ":" & server.hostname, "access_token": action.token}
-    else:
-      raise newException(ForbiddenException, "user or password is invalid")
-  else:
-    raise newException(BadRequestException, "Unrecognized auth type")
-
-proc parseQuery(query: string): Table[string, string] =
-  # TODO: use uri.decodeQuery when it is available
-  for pair in strutils.split(query, '&'):
-    let keyval = strutils.split(pair, '=')
-    if keyval.len == 2:
-      result[keyval[0]] = keyval[1]
-
-proc createRoom(server: Server, request: Request): string =
-  let params = parseQuery(request.uri.query)
-  if not params.hasKey("access_token"):
-    raise newException(BadRequestException, "access_token required")
-  let body = request.body.parseJson
-  if not body.hasKey("room_alias_name"):
-    raise newException(BadRequestException, "room_alias_name required")
-  let action = StateAction(kind: CreateRoom, roomAlias: body["room_alias_name"].str)
+proc test(server: Server, request: Request): string =
+  let
+    body = request.body.parseJson
+    action = StateAction(kind: Test, success: body["success"].getBool)
   if sendStateAction(server, action):
-    let roomId = server.state[].roomAliasToId[action.roomAlias]
-    $ %*{"room_alias": "#" & action.roomAlias & ":" & server.hostname,
-         "room_id": roomId}
+    $ %*{}
   else:
-    raise newException(BadRequestException, "alias already exists")
-
-proc getRoomId(server: Server, roomIdOrAlias: string): string =
-  let
-    fullName = strutils.split(roomIdOrAlias, ':')[0]
-    startChar = fullName[0]
-    name = fullName[1 ..< fullName.len]
-  case startChar:
-  of '#':
-    server.state[].roomAliasToId.getOrDefault(name, "")
-  of '!':
-    roomIdOrAlias
-  else:
-    ""
-
-proc join(server: Server, request: Request): string =
-  let params = parseQuery(request.uri.query)
-  if not params.hasKey("access_token"):
-    raise newException(BadRequestException, "access_token required")
-  let
-    token = params["access_token"]
-    pathParts = strutils.split(request.uri.path, '/')
-    roomIdOrAlias = uri.decodeUrl(pathParts[pathParts.len-1])
-    roomId = getRoomId(server, roomIdOrAlias)
-    action = StateAction(kind: Join, roomId: roomId, token: token)
-  if sendStateAction(server, action):
-    let room = server.state[].rooms[roomId]
-    $ %*{"room_alias": room.alias,
-         "room_id": roomId}
-  else:
-    raise newException(BadRequestException, "failed to join room")
-
-proc rooms(server: Server, request: Request): string =
-  let params = parseQuery(request.uri.query)
-  if not params.hasKey("access_token"):
-    raise newException(BadRequestException, "access_token required")
-  let
-    token = params["access_token"]
-    pathParts = strutils.split(request.uri.path, '/')
-    roomIdOrAlias = uri.decodeUrl(pathParts[5])
-    command = pathParts[6]
-  if command == "send":
-    let
-      roomId = getRoomId(server, roomIdOrAlias)
-      action = StateAction(kind: Send, event: request.body.parseJson, eventId: initToken(), eventRoomId: roomId, token: token)
-    if sendStateAction(server, action):
-      $ %*{"event_id": action.eventId}
-    else:
-      raise newException(BadRequestException, "failed to send event")
-  else:
-    raise newException(NotFoundException, command & " not expected")
-
-proc sync(server: Server, request: Request): string =
-  let params = parseQuery(request.uri.query)
-  if not params.hasKey("access_token"):
-    raise newException(BadRequestException, "access_token required")
-  let
-    token = params["access_token"]
-    accountPtr = server.state[].tokens[token]
-    rooms = sugar.collect(newSeq):
-      for roomId in accountPtr.roomIds:
-        server.state[].rooms[roomId]
-  var joinedRooms = %*{}
-  for room in rooms:
-    var events = %*[]
-    for msg in room.messages:
-      events.elems.add(%*{"content": msg.content,
-                          "type": "m.room.message",
-                          "event_id": msg.eventId,
-                          "room_id": room.id,
-                          "sender": "@" & msg.username & ":" & server.hostname,
-                          "origin_server_ts": int(msg.timestamp * 1000)})
-    joinedRooms.fields[room.id] = %*{"timeline": {"events": events}}
-  $ %*{"rooms": {"join": joinedRooms}}
+    raise newException(BadRequestException, "invalid request")
 
 proc handle(server: Server, client: Socket) =
   try:
@@ -269,20 +106,8 @@ proc handle(server: Server, client: Socket) =
     # response
     let dispatch = (reqMethod: request.reqMethod, path: request.uri.path)
     let response =
-      if dispatch == (httpcore.HttpPost, "/_matrix/client/r0/register"):
-        register(server, request)
-      elif dispatch == (httpcore.HttpPost, "/_matrix/client/r0/login"):
-        login(server, request)
-      elif dispatch == (httpcore.HttpPost, "/_matrix/client/r0/createRoom"):
-        createRoom(server, request)
-      elif dispatch.reqMethod == httpcore.HttpPost and
-          strutils.startsWith(dispatch.path, "/_matrix/client/r0/join/"):
-        join(server, request)
-      elif dispatch.reqMethod == httpcore.HttpPut and
-          strutils.startsWith(dispatch.path, "/_matrix/client/r0/rooms/"):
-        rooms(server, request)
-      elif dispatch == (httpcore.HttpGet, "/_matrix/client/r0/sync"):
-        sync(server, request)
+      if dispatch == (httpcore.HttpPost, "/test"):
+        test(server, request)
       else:
         raise newException(NotFoundException, "Unhandled request: " & $dispatch)
     client.send("HTTP/1.1 200 OK\r\LContent-Length: " & $response.len & "\r\L\r\L" & response)
@@ -323,62 +148,14 @@ proc recvStateAction(server: Server) {.thread.} =
   server.stateReady[].send(true)
   while true:
     let action = server.stateAction[].recv()
+    var resp = false
     case action.kind:
     of Stop:
       break
-    of Register, Login:
-      if server.state[].accounts.hasKey(action.account.username):
-        let account = server.state[].accounts[action.account.username]
-        if account.password == action.account.password:
-          server.state[].tokens[action.token] = AccountPointer(username: action.account.username, timestamp: times.epochTime())
-          action.done[].send(true)
-        else:
-          action.done[].send(false)
-      else:
-        if action.kind == Register:
-          server.state[].accounts[action.account.username] = action.account
-          server.state[].tokens[action.token] = AccountPointer(username: action.account.username, timestamp: times.epochTime())
-          action.done[].send(true)
-        else:
-          action.done[].send(false)
-    of CreateRoom:
-      if action.roomAlias != "" and
-          not server.state[].roomAliasToId.hasKey(action.roomAlias):
-        let roomId = "!" & initToken() & ":" & server.hostname
-        server.state[].rooms[roomId] = Room(id: roomId, alias: action.roomAlias)
-        server.state[].roomAliasToId[action.roomAlias] = roomId
-        action.done[].send(true)
-      else:
-        action.done[].send(false)
-    of Join:
-      if action.roomId != "" and
-          server.state[].rooms.hasKey(action.roomId) and
-          server.state[].tokens.hasKey(action.token):
-        server.state[].rooms[action.roomId].tokens.incl(action.token)
-        server.state[].tokens[action.token].roomIds.incl(action.roomId)
-        action.done[].send(true)
-      else:
-        action.done[].send(false)
-    of Send:
-      if action.eventRoomId != "" and
-          action.event.hasKey("msgtype") and
-          action.event["msgtype"].kind == JString and
-          server.state[].tokens.hasKey(action.token):
-        let accountPtr = server.state[].tokens[action.token]
-        case action.event["msgtype"].str:
-        of "m.text":
-          if server.state[].rooms.hasKey(action.eventRoomId) and
-              action.event.hasKey("body") and
-              action.event["body"].kind == JString:
-            let message = Message(content: action.event, username: accountPtr.username, timestamp: times.epochTime(), eventId: action.eventId)
-            server.state[].rooms[action.eventRoomId].messages.add(message)
-            action.done[].send(true)
-          else:
-            action.done[].send(false)
-        else:
-          action.done[].send(false)
-      else:
-        action.done[].send(false)
+    of Test:
+      if action.success:
+        resp = true
+    action.done[].send(resp)
 
 proc initShared(server: var Server) =
   server.listenStopped = cast[ptr Channel[bool]](
