@@ -32,14 +32,16 @@ test "create posts":
   p2.id = entities.insertPost(conn, p2)
   var p3 = Post(parent_id: p2.id, user_id: alice.id, body: "What's up")
   p3.id = entities.insertPost(conn, p3)
-  check p1 == entities.selectPost(conn, p1.id)
-  check p2 == entities.selectPost(conn, p2.id)
-  check p3 == entities.selectPost(conn, p3.id)
-  check @[p2, p3] == entities.selectPostChildren(conn, p1.id)
-  check @[p3] == entities.selectPostChildren(conn, p2.id)
-  #echo entities.selectPostMetadata(conn, p1.id)
-  #echo entities.selectPostMetadata(conn, p2.id)
-  #echo entities.selectPostMetadata(conn, p3.id)
+  var p4 = Post(parent_id: p2.id, user_id: alice.id, body: "How are you?")
+  p4.id = entities.insertPost(conn, p4)
+  p1 = entities.selectPost(conn, p1.id)
+  p2 = entities.selectPost(conn, p2.id)
+  p3 = entities.selectPost(conn, p3.id)
+  p4 = entities.selectPost(conn, p4.id)
+  check @[p2] == entities.selectPostChildren(conn, p1.id)
+  check 3 == entities.selectPost(conn, p1.id).reply_count
+  check @[p3, p4] == entities.selectPostChildren(conn, p2.id)
+  check 2 == entities.selectPost(conn, p2.id).reply_count
   db_sqlite.close(conn)
 
 test "retrieve sqlite db via http":

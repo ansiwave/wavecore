@@ -39,7 +39,7 @@ type
     user_id*: int64
     body*: string
     parent_ids*: string
-    child_ids*: string
+    reply_count*: int64
 
 proc initPost(entity: var Post, stmt: PStmt, attr: string) =
   case attr:
@@ -51,15 +51,15 @@ proc initPost(entity: var Post, stmt: PStmt, attr: string) =
     entity.body = $sqlite3.column_text(stmt, 2)
   of "parent_ids":
     entity.parent_ids = $sqlite3.column_text(stmt, 2)
-  of "child_ids":
-    entity.child_ids = $sqlite3.column_text(stmt, 2)
+  of "reply_count":
+    entity.reply_count = sqlite3.column_int(stmt, 2)
 
 proc selectPost*(conn: PSqlite3, id: int64): Post =
   const query =
     """
       SELECT * FROM post
       WHERE entity_id MATCH ?
-            AND attribute IN ('parent_id', 'user_id', 'body')
+            AND attribute IN ('parent_id', 'user_id', 'body', 'reply_count')
     """
   #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), id):
   #  echo x
@@ -70,7 +70,7 @@ proc selectPostMetadata*(conn: PSqlite3, id: int64): Post =
     """
       SELECT * FROM post
       WHERE entity_id MATCH ?
-            AND attribute IN ('parent_ids', 'child_ids')
+            AND attribute IN ('parent_ids')
     """
   #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), id):
   #  echo x
@@ -80,10 +80,8 @@ proc selectPostChildren*(conn: PSqlite3, id: int64): seq[Post] =
   const query =
     """
       SELECT * FROM post
-      INNER JOIN post as parent_post ON parent_post.entity_id MATCH ?
-      WHERE parent_post.attribute MATCH 'child_ids'
-            AND parent_post.value_indexed MATCH post.entity_id
-            AND post.attribute IN ('parent_id', 'user_id', 'body')
+      WHERE entity_id IN (SELECT entity_id FROM post WHERE attribute MATCH 'parent_id' AND value_indexed MATCH ?)
+            AND post.attribute IN ('parent_id', 'user_id', 'body', 'reply_count')
     """
   #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), id):
   #  echo x
@@ -101,16 +99,12 @@ proc insertPost*(conn: PSqlite3, entity: Post): int64 =
             $x.parent_id
           else:
             parents & ", " & $x.parent_id
-        # update the parents' child_ids
+        # update the parents' reply count
         let query =
           """
           UPDATE post
-          SET value_indexed = CASE
-                              WHEN value_indexed = ''
-                              THEN $1
-                              ELSE value_indexed || ', ' || $1
-                              END
-          WHERE attribute MATCH 'child_ids' AND
+          SET value_indexed = value_indexed + 1
+          WHERE attribute MATCH 'reply_count' AND
                 CAST(entity_id AS INT) IN ($2)
           """.format(id, x.parent_ids)
         db_sqlite.exec(conn, sql query)
