@@ -41,10 +41,12 @@ test "Request static file asynchronously":
   let response = cast[ptr Channel[puppy.Response]](
     allocShared0(sizeof(Channel[puppy.Response]))
   )
+  response[].open()
   try:
     client.get(c, "config.nims", response)
     discard response[].recv()
   finally:
+    response[].close()
     deallocShared(response)
     server.stop(s)
     client.stop(c)

@@ -56,6 +56,7 @@ proc sendAction(server: Server, action: Action): bool =
   newAction.done = done
   server.action[].send(newAction)
   result = done[].recv()
+  done[].close()
   deallocShared(done)
 
 proc test(server: Server, request: Request): string =

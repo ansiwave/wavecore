@@ -24,7 +24,6 @@ proc initClient*(address: string): Client =
   Client(address: address)
 
 proc sendRequest(client: Client, request: Request, response: ptr Channel[Response]) =
-  response[].open()
   var newAction = Action(kind: SendRequest, request: request)
   newAction.response = response
   client.action[].send(newAction)
