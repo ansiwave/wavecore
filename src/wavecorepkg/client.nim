@@ -1,11 +1,13 @@
 import puppy
 import json
-from uri import nil
 from strutils import format
+from wavecorepkg/db import nil
+from wavecorepkg/db/entities import nil
+from wavecorepkg/db/db_sqlite import nil
 
 type
   ActionKind = enum
-    Stop, SendRequest,
+    Stop, SendRequest, QueryUser,
   Action = object
     case kind: ActionKind
     of Stop:
@@ -13,6 +15,10 @@ type
     of SendRequest:
       request: Request
       response: ptr Channel[Response]
+    of QueryUser:
+      username: string
+      userResponse: ptr Channel[entities.User]
+    dbFilename: string
   Client = ref object
     address*: string
     requestThread: Thread[Client]
@@ -23,10 +29,8 @@ type
 proc initClient*(address: string): Client =
   Client(address: address)
 
-proc sendRequest(client: Client, request: Request, response: ptr Channel[Response]) =
-  var newAction = Action(kind: SendRequest, request: request)
-  newAction.response = response
-  client.action[].send(newAction)
+proc sendAction(client: Client, action: Action) =
+  client.action[].send(action)
 
 proc initUrl(client: Client; endpoint: string): string =
   "$1/$2".format(client.address, endpoint)
@@ -61,7 +65,14 @@ proc get*(client: Client, endpoint: string, response: ptr Channel[Response], ran
   if range != (0, 0):
     headers.add(Header(key: "Range", value: "range=$1-$2".format(range[0], range[1])))
   let request = Request(url: parseUrl(url), headers: headers, verb: "get", body: "")
-  sendRequest(client, request, response)
+  sendAction(client, Action(kind: SendRequest, request: request, response: response))
+
+proc queryUser*(client: Client, filename: string, username: string): ptr Channel[entities.User] =
+  result = cast[ptr Channel[entities.User]](
+    allocShared0(sizeof(Channel[entities.User]))
+  )
+  result[].open()
+  sendAction(client, Action(kind: QueryUser, dbFilename: filename, username: username, userResponse: result))
 
 proc recvAction(client: Client) {.thread.} =
   client.requestReady[].send(true)
@@ -73,6 +84,13 @@ proc recvAction(client: Client) {.thread.} =
     of SendRequest:
       try:
         action.response[].send(fetch(action.request))
+      except Exception as ex:
+        discard
+    of QueryUser:
+      try:
+        let conn = db.open(action.dbFilename, true)
+        action.userResponse[].send(entities.selectUser(conn, action.username))
+        db_sqlite.close(conn)
       except Exception as ex:
         discard
 

@@ -57,7 +57,7 @@ import wavecorepkg/db/vfs
 from wavecorepkg/db/db_sqlite import nil
 from os import nil
 
-test "create users":
+test "query users":
   let conn = db.open(":memory:")
   db.init(conn)
   var
@@ -68,6 +68,39 @@ test "create users":
   check alice == entities.selectUser(conn, "Alice")
   check bob == entities.selectUser(conn, "Bob")
   db_sqlite.close(conn)
+
+test "query users asynchronously":
+  var s = server.initServer("localhost", port, @["."])
+  server.start(s)
+  var c = client.initClient(address)
+  client.start(c)
+  const filename = "test.db"
+  vfs.readUrl = "http://localhost:" & $port & "/" & filename
+  try:
+    # create test db
+    let conn = db.open(filename)
+    db.init(conn)
+    var
+      alice = User(username: "Alice", public_key: "stuff")
+      bob = User(username: "Bob", public_key: "asdf")
+    alice.id = entities.insertUser(conn, alice)
+    bob.id = entities.insertUser(conn, bob)
+    check alice == entities.selectUser(conn, "Alice")
+    check bob == entities.selectUser(conn, "Bob")
+    db_sqlite.close(conn)
+    # re-open db, but this time all reads happen over http
+    let response = client.queryUser(c, filename, "Alice")
+    check response[].recv() == alice
+    response[].close()
+    deallocShared(response)
+    let response2 = client.queryUser(c, filename, "Bob")
+    check response2[].recv() == bob
+    response2[].close()
+    deallocShared(response2)
+  finally:
+    os.removeFile(filename)
+    server.stop(s)
+    client.stop(c)
 
 test "create posts":
   let conn = db.open(":memory:")
