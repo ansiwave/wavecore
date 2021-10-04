@@ -2,7 +2,6 @@ import unittest
 from wavecorepkg/client import nil
 from wavecorepkg/server import nil
 import json
-from puppy import nil
 
 const
   port = 3000
@@ -38,16 +37,12 @@ test "Request static file asynchronously":
   server.start(s)
   var c = client.initClient(address)
   client.start(c)
-  let response = cast[ptr Channel[puppy.Response]](
-    allocShared0(sizeof(Channel[puppy.Response]))
-  )
-  response[].open()
   try:
-    client.get(c, "config.nims", response)
-    discard response[].recv()
-  finally:
+    let response = client.query(c, "config.nims")
+    discard response[].recv().valid
     response[].close()
     deallocShared(response)
+  finally:
     server.stop(s)
     client.stop(c)
 
@@ -88,13 +83,18 @@ test "query users asynchronously":
     db_sqlite.close(conn)
     # query db over http
     let response = client.queryUser(c, filename, "Alice")
-    check response[].recv() == alice
+    check response[].recv().valid == alice
     response[].close()
     deallocShared(response)
     let response2 = client.queryUser(c, filename, "Bob")
-    check response2[].recv() == bob
+    check response2[].recv().valid == bob
     response2[].close()
     deallocShared(response2)
+    # query something invalid
+    let response3 = client.queryUser(c, filename, "STUFF")
+    check response3[].recv().kind == client.Error
+    response3[].close()
+    deallocShared(response3)
   finally:
     os.removeFile(filename)
     server.stop(s)
@@ -154,13 +154,22 @@ test "query posts asynchronously":
     db_sqlite.close(conn)
     # query db over http
     let response = client.queryPost(c, filename, p1.id)
-    check response[].recv() == p1
+    check response[].recv().valid == p1
     response[].close()
     deallocShared(response)
     let response2 = client.queryPostChildren(c, filename, p2.id)
-    check response2[].recv() == @[p3, p4]
+    check response2[].recv().valid == @[p3, p4]
     response2[].close()
     deallocShared(response2)
+    # query something invalid
+    let response3 = client.queryPost(c, filename, -1)
+    check response3[].recv().kind == client.Error
+    response3[].close()
+    deallocShared(response3)
+    let response4 = client.queryPostChildren(c, filename, -1)
+    check response4[].recv().kind == client.Error
+    response4[].close()
+    deallocShared(response4)
   finally:
     os.removeFile(filename)
     server.stop(s)
