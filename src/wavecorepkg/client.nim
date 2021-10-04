@@ -7,7 +7,7 @@ from wavecorepkg/db/db_sqlite import nil
 
 type
   ActionKind = enum
-    Stop, SendRequest, QueryUser,
+    Stop, SendRequest, QueryUser, QueryPost,
   Action = object
     case kind: ActionKind
     of Stop:
@@ -18,6 +18,9 @@ type
     of QueryUser:
       username: string
       userResponse: ptr Channel[entities.User]
+    of QueryPost:
+      postId: int64
+      postResponse: ptr Channel[entities.Post]
     dbFilename: string
   Client = ref object
     address*: string
@@ -74,6 +77,13 @@ proc queryUser*(client: Client, filename: string, username: string): ptr Channel
   result[].open()
   sendAction(client, Action(kind: QueryUser, dbFilename: filename, username: username, userResponse: result))
 
+proc queryPost*(client: Client, filename: string, id: int64): ptr Channel[entities.Post] =
+  result = cast[ptr Channel[entities.Post]](
+    allocShared0(sizeof(Channel[entities.Post]))
+  )
+  result[].open()
+  sendAction(client, Action(kind: QueryPost, dbFilename: filename, postId: id, postResponse: result))
+
 proc recvAction(client: Client) {.thread.} =
   client.requestReady[].send(true)
   while true:
@@ -90,6 +100,13 @@ proc recvAction(client: Client) {.thread.} =
       try:
         let conn = db.open(action.dbFilename, true)
         action.userResponse[].send(entities.selectUser(conn, action.username))
+        db_sqlite.close(conn)
+      except Exception as ex:
+        discard
+    of QueryPost:
+      try:
+        let conn = db.open(action.dbFilename, true)
+        action.postResponse[].send(entities.selectPost(conn, action.postId))
         db_sqlite.close(conn)
       except Exception as ex:
         discard

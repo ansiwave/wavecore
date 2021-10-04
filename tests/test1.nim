@@ -85,10 +85,8 @@ test "query users asynchronously":
       bob = User(username: "Bob", public_key: "asdf")
     alice.id = entities.insertUser(conn, alice)
     bob.id = entities.insertUser(conn, bob)
-    check alice == entities.selectUser(conn, "Alice")
-    check bob == entities.selectUser(conn, "Bob")
     db_sqlite.close(conn)
-    # re-open db, but this time all reads happen over http
+    # query db over http
     let response = client.queryUser(c, filename, "Alice")
     check response[].recv() == alice
     response[].close()
@@ -102,7 +100,7 @@ test "query users asynchronously":
     server.stop(s)
     client.stop(c)
 
-test "create posts":
+test "query posts":
   let conn = db.open(":memory:")
   db.init(conn)
   var
@@ -127,6 +125,42 @@ test "create posts":
   check @[p3, p4] == entities.selectPostChildren(conn, p2.id)
   check 2 == entities.selectPost(conn, p2.id).reply_count
   db_sqlite.close(conn)
+
+test "query posts asynchronously":
+  var s = server.initServer("localhost", port, @["."])
+  server.start(s)
+  var c = client.initClient(address)
+  client.start(c)
+  const filename = "test.db"
+  vfs.readUrl = "http://localhost:" & $port & "/" & filename
+  try:
+    # create test db
+    let conn = db.open(filename)
+    db.init(conn)
+    var
+      alice = User(username: "Alice", public_key: "stuff")
+      bob = User(username: "Bob", public_key: "asdf")
+    alice.id = entities.insertUser(conn, alice)
+    bob.id = entities.insertUser(conn, bob)
+    var p1 = Post(parent_id: 0, user_id: alice.id, body: "Hello, i'm alice")
+    p1.id = entities.insertPost(conn, p1)
+    var p2 = Post(parent_id: p1.id, user_id: bob.id, body: "Hello, i'm bob")
+    p2.id = entities.insertPost(conn, p2)
+    var p3 = Post(parent_id: p2.id, user_id: alice.id, body: "What's up")
+    p3.id = entities.insertPost(conn, p3)
+    var p4 = Post(parent_id: p2.id, user_id: alice.id, body: "How are you?")
+    p4.id = entities.insertPost(conn, p4)
+    p1 = entities.selectPost(conn, p1.id)
+    db_sqlite.close(conn)
+    # query db over http
+    let response = client.queryPost(c, filename, p1.id)
+    check response[].recv() == p1
+    response[].close()
+    deallocShared(response)
+  finally:
+    os.removeFile(filename)
+    server.stop(s)
+    client.stop(c)
 
 test "retrieve sqlite db via http":
   var s = server.initServer("localhost", port, @["."])
