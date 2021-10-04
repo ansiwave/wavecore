@@ -157,6 +157,10 @@ test "query posts asynchronously":
     check response[].recv() == p1
     response[].close()
     deallocShared(response)
+    let response2 = client.queryPostChildren(c, filename, p2.id)
+    check response2[].recv() == @[p3, p4]
+    response2[].close()
+    deallocShared(response2)
   finally:
     os.removeFile(filename)
     server.stop(s)
