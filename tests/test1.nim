@@ -38,10 +38,9 @@ test "Request static file asynchronously":
   var c = client.initClient(address)
   client.start(c)
   try:
-    let response = client.query(c, "config.nims")
-    discard response[].recv().valid
-    response[].close()
-    deallocShared(response)
+    var response = client.query(c, "config.nims")
+    client.get(response, true)
+    check response.value.kind == client.Valid
   finally:
     server.stop(s)
     client.stop(c)
@@ -82,19 +81,16 @@ test "query users asynchronously":
     bob.id = entities.insertUser(conn, bob)
     db_sqlite.close(conn)
     # query db over http
-    let response = client.queryUser(c, filename, "Alice")
-    check response[].recv().valid == alice
-    response[].close()
-    deallocShared(response)
-    let response2 = client.queryUser(c, filename, "Bob")
-    check response2[].recv().valid == bob
-    response2[].close()
-    deallocShared(response2)
+    var response = client.queryUser(c, filename, "Alice")
+    client.get(response, true)
+    check response.value.valid == alice
+    var response2 = client.queryUser(c, filename, "Bob")
+    client.get(response2, true)
+    check response2.value.valid == bob
     # query something invalid
-    let response3 = client.queryUser(c, filename, "STUFF")
-    check response3[].recv().kind == client.Error
-    response3[].close()
-    deallocShared(response3)
+    var response3 = client.queryUser(c, filename, "STUFF")
+    client.get(response3, true)
+    check response3.value.kind == client.Error
   finally:
     os.removeFile(filename)
     server.stop(s)
@@ -153,23 +149,19 @@ test "query posts asynchronously":
     p1 = entities.selectPost(conn, p1.id)
     db_sqlite.close(conn)
     # query db over http
-    let response = client.queryPost(c, filename, p1.id)
-    check response[].recv().valid == p1
-    response[].close()
-    deallocShared(response)
-    let response2 = client.queryPostChildren(c, filename, p2.id)
-    check response2[].recv().valid == @[p3, p4]
-    response2[].close()
-    deallocShared(response2)
+    var response = client.queryPost(c, filename, p1.id)
+    client.get(response, true)
+    check response.value.valid == p1
+    var response2 = client.queryPostChildren(c, filename, p2.id)
+    client.get(response2, true)
+    check response2.value.valid == @[p3, p4]
     # query something invalid
-    let response3 = client.queryPost(c, filename, -1)
-    check response3[].recv().kind == client.Error
-    response3[].close()
-    deallocShared(response3)
-    let response4 = client.queryPostChildren(c, filename, -1)
-    check response4[].recv().kind == client.Error
-    response4[].close()
-    deallocShared(response4)
+    var response3 = client.queryPost(c, filename, -1)
+    client.get(response3, true)
+    check response3.value.kind == client.Error
+    var response4 = client.queryPostChildren(c, filename, -1)
+    client.get(response4, true)
+    check response4.value.kind == client.Error
   finally:
     os.removeFile(filename)
     server.stop(s)

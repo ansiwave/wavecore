@@ -39,6 +39,25 @@ type
     requestReady: ptr Channel[bool]
     action: ptr Channel[Action]
   ClientException* = object of CatchableError
+  ChannelValue*[T] = object
+    chan: ptr Channel[Result[T]]
+    value*: Result[T]
+    ready*: bool
+
+proc get*[T](cv: var ChannelValue[T], blocking: static[bool] = false) =
+  if not cv.ready:
+    when blocking:
+      cv.value = cv.chan[].recv()
+      cv.ready = true
+      cv.chan[].close()
+      deallocShared(cv.chan)
+    else:
+      let res = cv.chan[].tryRecv()
+      if res.dataAvailable:
+        cv.value = res.msg
+        cv.ready = true
+        cv.chan[].close()
+        deallocShared(cv.chan)
 
 proc initClient*(address: string): Client =
   Client(address: address)
@@ -73,38 +92,46 @@ proc get*(client: Client, endpoint: string, range: (int, int) = (0, 0)): string 
     raise newException(ClientException, "Error code " & $response.code & ": " & response.body)
   return response.body
 
-proc query*(client: Client, endpoint: string, range: (int, int) = (0, 0)): ptr Channel[Result[Response]] =
+proc query*(client: Client, endpoint: string, range: (int, int) = (0, 0)): ChannelValue[Response] =
   let url: string = client.initUrl(endpoint)
   var headers = @[Header(key: "Content-Type", value: "application/json")]
   if range != (0, 0):
     headers.add(Header(key: "Range", value: "range=$1-$2".format(range[0], range[1])))
   let request = Request(url: parseUrl(url), headers: headers, verb: "get", body: "")
-  result = cast[ptr Channel[Result[Response]]](
-    allocShared0(sizeof(Channel[Result[Response]]))
+  result = ChannelValue[Response](
+    chan: cast[ptr Channel[Result[Response]]](
+      allocShared0(sizeof(Channel[Result[Response]]))
+    )
   )
-  result[].open()
-  sendAction(client, Action(kind: SendRequest, request: request, response: result))
+  result.chan[].open()
+  sendAction(client, Action(kind: SendRequest, request: request, response: result.chan))
 
-proc queryUser*(client: Client, filename: string, username: string): ptr Channel[Result[entities.User]] =
-  result = cast[ptr Channel[Result[entities.User]]](
-    allocShared0(sizeof(Channel[Result[entities.User]]))
+proc queryUser*(client: Client, filename: string, username: string): ChannelValue[entities.User] =
+  result = ChannelValue[entities.User](
+    chan: cast[ptr Channel[Result[entities.User]]](
+      allocShared0(sizeof(Channel[Result[entities.User]]))
+    )
   )
-  result[].open()
-  sendAction(client, Action(kind: QueryUser, dbFilename: filename, username: username, userResponse: result))
+  result.chan[].open()
+  sendAction(client, Action(kind: QueryUser, dbFilename: filename, username: username, userResponse: result.chan))
 
-proc queryPost*(client: Client, filename: string, id: int64): ptr Channel[Result[entities.Post]] =
-  result = cast[ptr Channel[Result[entities.Post]]](
-    allocShared0(sizeof(Channel[Result[entities.Post]]))
+proc queryPost*(client: Client, filename: string, id: int64): ChannelValue[entities.Post] =
+  result = ChannelValue[entities.Post](
+    chan: cast[ptr Channel[Result[entities.Post]]](
+      allocShared0(sizeof(Channel[Result[entities.Post]]))
+    )
   )
-  result[].open()
-  sendAction(client, Action(kind: QueryPost, dbFilename: filename, postId: id, postResponse: result))
+  result.chan[].open()
+  sendAction(client, Action(kind: QueryPost, dbFilename: filename, postId: id, postResponse: result.chan))
 
-proc queryPostChildren*(client: Client, filename: string, id: int64): ptr Channel[Result[seq[entities.Post]]] =
-  result = cast[ptr Channel[Result[seq[entities.Post]]]](
-    allocShared0(sizeof(Channel[Result[seq[entities.Post]]]))
+proc queryPostChildren*(client: Client, filename: string, id: int64): ChannelValue[seq[entities.Post]] =
+  result = ChannelValue[seq[entities.Post]](
+    chan: cast[ptr Channel[Result[seq[entities.Post]]]](
+      allocShared0(sizeof(Channel[Result[seq[entities.Post]]]))
+    )
   )
-  result[].open()
-  sendAction(client, Action(kind: QueryPostChildren, dbFilename: filename, postParentId: id, postChildrenResponse: result))
+  result.chan[].open()
+  sendAction(client, Action(kind: QueryPostChildren, dbFilename: filename, postParentId: id, postChildrenResponse: result.chan))
 
 proc recvAction(client: Client) {.thread.} =
   client.requestReady[].send(true)
