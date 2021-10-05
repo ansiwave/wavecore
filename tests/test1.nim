@@ -51,6 +51,9 @@ import wavecorepkg/db/vfs
 from wavecorepkg/db/db_sqlite import nil
 from os import nil
 
+const dbFilename = "test.db"
+vfs.readUrl = "http://localhost:" & $port & "/" & dbFilename
+
 test "query users":
   let conn = db.open(":memory:")
   db.init(conn)
@@ -68,11 +71,9 @@ test "query users asynchronously":
   server.start(s)
   var c = client.initClient(address)
   client.start(c)
-  const filename = "test.db"
-  vfs.readUrl = "http://localhost:" & $port & "/" & filename
   try:
     # create test db
-    let conn = db.open(filename)
+    let conn = db.open(dbFilename)
     db.init(conn)
     var
       alice = User(username: "Alice", public_key: "stuff")
@@ -81,18 +82,18 @@ test "query users asynchronously":
     bob.id = entities.insertUser(conn, bob)
     db_sqlite.close(conn)
     # query db over http
-    var response = client.queryUser(c, filename, "Alice")
+    var response = client.queryUser(c, dbFilename, "Alice")
     client.get(response, true)
     check response.value.valid == alice
-    var response2 = client.queryUser(c, filename, "Bob")
+    var response2 = client.queryUser(c, dbFilename, "Bob")
     client.get(response2, true)
     check response2.value.valid == bob
     # query something invalid
-    var response3 = client.queryUser(c, filename, "STUFF")
+    var response3 = client.queryUser(c, dbFilename, "STUFF")
     client.get(response3, true)
     check response3.value.kind == client.Error
   finally:
-    os.removeFile(filename)
+    os.removeFile(dbFilename)
     server.stop(s)
     client.stop(c)
 
@@ -127,11 +128,9 @@ test "query posts asynchronously":
   server.start(s)
   var c = client.initClient(address)
   client.start(c)
-  const filename = "test.db"
-  vfs.readUrl = "http://localhost:" & $port & "/" & filename
   try:
     # create test db
-    let conn = db.open(filename)
+    let conn = db.open(dbFilename)
     db.init(conn)
     var
       alice = User(username: "Alice", public_key: "stuff")
@@ -149,32 +148,30 @@ test "query posts asynchronously":
     p1 = entities.selectPost(conn, p1.id)
     db_sqlite.close(conn)
     # query db over http
-    var response = client.queryPost(c, filename, p1.id)
+    var response = client.queryPost(c, dbFilename, p1.id)
     client.get(response, true)
     check response.value.valid == p1
-    var response2 = client.queryPostChildren(c, filename, p2.id)
+    var response2 = client.queryPostChildren(c, dbFilename, p2.id)
     client.get(response2, true)
     check response2.value.valid == @[p3, p4]
     # query something invalid
-    var response3 = client.queryPost(c, filename, -1)
+    var response3 = client.queryPost(c, dbFilename, -1)
     client.get(response3, true)
     check response3.value.kind == client.Error
-    var response4 = client.queryPostChildren(c, filename, -1)
+    var response4 = client.queryPostChildren(c, dbFilename, -1)
     client.get(response4, true)
     check response4.value.kind == client.Error
   finally:
-    os.removeFile(filename)
+    os.removeFile(dbFilename)
     server.stop(s)
     client.stop(c)
 
 test "retrieve sqlite db via http":
   var s = server.initServer("localhost", port, @["."])
   server.start(s)
-  const filename = "test.db"
-  vfs.readUrl = "http://localhost:" & $port & "/" & filename
   try:
     # create test db
-    var conn = db.open(filename)
+    var conn = db.open(dbFilename)
     db.init(conn)
     var
       alice = User(username: "Alice", public_key: "stuff")
@@ -183,7 +180,7 @@ test "retrieve sqlite db via http":
     discard entities.insertUser(conn, bob)
     db_sqlite.close(conn)
     # re-open db, but this time all reads happen over http
-    conn = db.open(filename, true)
+    conn = db.open(dbFilename, true)
     let
       alice2 = entities.selectUser(conn, "Alice")
       bob2 = entities.selectUser(conn, "Bob")
@@ -193,6 +190,6 @@ test "retrieve sqlite db via http":
     check bob == bob2
     db_sqlite.close(conn)
   finally:
-    os.removeFile(filename)
+    os.removeFile(dbFilename)
     server.stop(s)
 
