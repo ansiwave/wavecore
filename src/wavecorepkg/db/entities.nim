@@ -3,6 +3,7 @@ from wavecorepkg/db/db_sqlite import sql
 from wavecorepkg/db import nil
 from sequtils import nil
 from strutils import format
+from os import nil
 
 type
   User* = object
@@ -87,10 +88,12 @@ proc selectPostChildren*(conn: PSqlite3, id: int64): seq[Post] =
   #  echo x
   sequtils.toSeq(db.select[Post](conn, initPost, query, id))
 
-proc insertPost*(conn: PSqlite3, entity: Post): int64 =
+proc insertPost*(conn: PSqlite3, entity: Post, extraFn: proc (x: var Post, id: int64) = nil): int64 =
   # TODO: strip ANSI codes out of entity.body since they don't need to be searchable
   db.insert(conn, "post", entity,
     proc (x: var Post, id: int64) =
+      if extraFn != nil:
+        extraFn(x, id)
       if x.parent_id > 0:
         # set the parent ids
         let parents = selectPostMetadata(conn, x.parent_id).parent_ids

@@ -2,9 +2,12 @@ import threadpool, net, os, selectors
 from uri import `$`
 from strutils import nil
 from parseutils import nil
-from os import nil
+from os import joinPath
 import httpcore
 import json
+from wavecorepkg/db import nil
+from wavecorepkg/db/entities import nil
+from wavecorepkg/db/db_sqlite import nil
 
 type
   State = object
@@ -43,9 +46,26 @@ const
     else:
       100
   recvTimeout = 2000
+  dbFilename* = "board.db"
+  ansiwavesDir* = "ansiwaves"
 
 proc initServer*(hostname: string, port: int, staticFileDir: string = ""): Server =
   Server(hostname: hostname, port: port, staticFileDir: staticFileDir)
+
+proc insertUser*(server: Server, entity: entities.User): int64 =
+  assert server.staticFileDir != ""
+  let conn = db.open(server.staticFileDir.joinPath(dbFilename))
+  result = entities.insertUser(conn, entity)
+  db_sqlite.close(conn)
+
+proc insertPost*(server: Server, entity: entities.Post): int64 =
+  assert server.staticFileDir != ""
+  let conn = db.open(server.staticFileDir.joinPath(dbFilename))
+  result = entities.insertPost(conn, entity,
+    proc (x: var entities.Post, id: int64) =
+      writeFile(server.staticFileDir.joinPath(ansiwavesDir).joinPath($id & ".ansiwave"), entity.body)
+  )
+  db_sqlite.close(conn)
 
 proc sendAction(server: Server, action: Action): bool =
   let done = cast[ptr Channel[bool]](
@@ -232,3 +252,4 @@ proc start*(server: var Server) =
 proc stop*(server: var Server) =
   deinitThreads(server)
   deinitShared(server)
+
