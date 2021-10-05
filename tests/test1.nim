@@ -21,7 +21,7 @@ test "Full lifecycle":
     client.stop(c)
 
 test "Request static file":
-  var s = server.initServer("localhost", port, @["tests"])
+  var s = server.initServer("localhost", port, "tests")
   server.start(s)
   var c = client.initClient(address)
   client.start(c)
@@ -33,7 +33,7 @@ test "Request static file":
     client.stop(c)
 
 test "Request static file asynchronously":
-  var s = server.initServer("localhost", port, @["tests"])
+  var s = server.initServer("localhost", port, "tests")
   server.start(s)
   var c = client.initClient(address)
   client.start(c)
@@ -67,7 +67,7 @@ test "query users":
   db_sqlite.close(conn)
 
 test "query users asynchronously":
-  var s = server.initServer("localhost", port, @["."])
+  var s = server.initServer("localhost", port, ".")
   server.start(s)
   var c = client.initClient(address)
   client.start(c)
@@ -124,7 +124,7 @@ test "query posts":
   db_sqlite.close(conn)
 
 test "query posts asynchronously":
-  var s = server.initServer("localhost", port, @["."])
+  var s = server.initServer("localhost", port, ".")
   server.start(s)
   var c = client.initClient(address)
   client.start(c)
@@ -167,7 +167,7 @@ test "query posts asynchronously":
     client.stop(c)
 
 test "retrieve sqlite db via http":
-  var s = server.initServer("localhost", port, @["."])
+  var s = server.initServer("localhost", port, ".")
   server.start(s)
   try:
     # create test db

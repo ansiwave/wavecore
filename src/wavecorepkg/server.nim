@@ -21,7 +21,7 @@ type
     hostname: string
     port: int
     socket: Socket
-    staticFileDirs: seq[string]
+    staticFileDir: string
     listenThread, stateThread: Thread[Server]
     listenStopped, listenReady, stateReady: ptr Channel[bool]
     action: ptr Channel[Action]
@@ -44,8 +44,8 @@ const
       100
   recvTimeout = 2000
 
-proc initServer*(hostname: string, port: int, staticFileDirs: seq[string] = @[]): Server =
-  Server(hostname: hostname, port: port, staticFileDirs: staticFileDirs)
+proc initServer*(hostname: string, port: int, staticFileDir: string = ""): Server =
+  Server(hostname: hostname, port: port, staticFileDir: staticFileDir)
 
 proc sendAction(server: Server, action: Action): bool =
   let done = cast[ptr Channel[bool]](
@@ -107,12 +107,10 @@ proc handle(server: Server, client: Socket) =
         request.body = client.recv(contentLength)
     # static file requests
     var filePath = ""
-    if request.reqMethod == httpcore.HttpGet:
-      for dir in server.staticFileDirs:
-        let path = os.joinPath(dir, request.uri.path)
-        if fileExists(path):
-          filePath = path
-          break
+    if request.reqMethod == httpcore.HttpGet and server.staticFileDir != "":
+      let path = os.joinPath(server.staticFileDir, request.uri.path)
+      if fileExists(path):
+        filePath = path
     if filePath != "":
       var response = readFile(filePath)
       if request.headers.hasKey("Range"):
