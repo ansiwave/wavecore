@@ -113,3 +113,14 @@ proc insertPost*(conn: PSqlite3, entity: Post, extraFn: proc (x: var Post, id: i
         db_sqlite.exec(conn, sql query)
   )
 
+proc searchPosts*(conn: PSqlite3, term: string): seq[Post] =
+  const query =
+    """
+      SELECT * FROM post
+      WHERE entity_id IN (SELECT entity_id FROM post WHERE attribute MATCH 'body' AND value_indexed MATCH ?)
+            AND post.attribute IN ('parent_id', 'user_id', 'body', 'reply_count')
+    """
+  #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), term):
+  #  echo x
+  sequtils.toSeq(db.select[Post](conn, initPost, query, term))
+

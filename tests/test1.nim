@@ -166,6 +166,23 @@ test "query posts asynchronously":
     server.stop(s)
     client.stop(c)
 
+test "search posts":
+  let conn = db.open(":memory:")
+  db.init(conn)
+  var
+    alice = User(username: "Alice", public_key: "stuff")
+    bob = User(username: "Bob", public_key: "asdf")
+  alice.id = entities.insertUser(conn, alice)
+  bob.id = entities.insertUser(conn, bob)
+  var p1 = Post(parent_id: 0, user_id: alice.id, body: "Hello, i'm alice")
+  p1.id = entities.insertPost(conn, p1)
+  var p2 = Post(parent_id: p1.id, user_id: bob.id, body: "Hello, i'm bob")
+  p2.id = entities.insertPost(conn, p2)
+  p1 = entities.selectPost(conn, p1.id)
+  p2 = entities.selectPost(conn, p2.id)
+  check @[p1, p2] == entities.searchPosts(conn, "hello")
+  db_sqlite.close(conn)
+
 test "retrieve sqlite db via http":
   var s = server.initServer("localhost", port, ".")
   server.start(s)
