@@ -25,6 +25,11 @@ proc open*(filename: string, http: bool = false): PSqlite3 =
 
 proc init*(conn: PSqlite3) =
   db_sqlite.exec conn, sql"""
+  pragma journal_mode = delete; -- to be able to actually set page size
+  pragma page_size = 1024;
+  """
+
+  db_sqlite.exec conn, sql"""
   CREATE TABLE entity (
     created_ts   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
   )"""
