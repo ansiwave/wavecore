@@ -1,10 +1,17 @@
-#include <emscripten/fetch.h>
+#include <emscripten.h>
 
-emscripten_fetch_t* wavecore_fetch(const char *url) {
-  emscripten_fetch_attr_t attr;
-  emscripten_fetch_attr_init(&attr);
-  strcpy(attr.requestMethod, "GET");
-  attr.attributes = EMSCRIPTEN_FETCH_LOAD_TO_MEMORY | EMSCRIPTEN_FETCH_SYNCHRONOUS;
-  emscripten_fetch_t *fetch = emscripten_fetch(&attr, url);
-  return fetch;
-}
+EM_JS(char*, wavecore_fetch, (const char* url), {
+  var request = new XMLHttpRequest();
+  request.open('GET', UTF8ToString(url), false);  // `false` makes the request synchronous
+  request.send(null);
+
+  if (request.status === 200) {
+    var lengthBytes = lengthBytesUTF8(request.responseText)+1;
+    var stringOnWasmHeap = _malloc(lengthBytes);
+    stringToUTF8(request.responseText, stringOnWasmHeap, lengthBytes);
+    return stringOnWasmHeap;
+  }
+  else {
+    return null;
+  }
+});

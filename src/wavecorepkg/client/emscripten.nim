@@ -65,49 +65,8 @@ proc emscripten_create_worker(url: cstring): cint {.importc.}
 proc emscripten_destroy_worker(worker: cint) {.importc.}
 proc emscripten_call_worker(worker: cint, funcname: cstring, data: cstring, size: cint, callback: proc (data: pointer, size: cint, arg: pointer) {.cdecl.}, arg: pointer) {.importc.}
 proc emscripten_worker_respond(data: cstring, size: cint) {.importc.}
-
-type
-  emscripten_fetch_t* {.bycopy.} = object
-    id*: cuint                 ##  Unique identifier for this fetch in progress.
-    ##  Custom data that can be tagged along the process.
-    userData*: pointer         ##  The remote URL that is being downloaded.
-    url*: cstring ##  In onsuccess() handler:
-                ##    - If the EMSCRIPTEN_FETCH_LOAD_TO_MEMORY attribute was specified for the
-                ##      transfer, this points to the body of the downloaded data. Otherwise
-                ##      this will be null.
-                ##  In onprogress() handler:
-                ##    - If the EMSCRIPTEN_FETCH_STREAM_DATA attribute was specified for the
-                ##      transfer, this points to a partial chunk of bytes related to the
-                ##      transfer. Otherwise this will be null.
-                ##  The data buffer provided here has identical lifetime with the
-                ##  emscripten_fetch_t object itself, and is freed by calling
-                ##  emscripten_fetch_close() on the emscripten_fetch_t pointer.
-    data*: cstring ##  Specifies the length of the above data block in bytes. When the download
-                 ##  finishes, this field will be valid even if EMSCRIPTEN_FETCH_LOAD_TO_MEMORY
-                 ##  was not specified.
-    numBytes*: uint64 ##  If EMSCRIPTEN_FETCH_STREAM_DATA is being performed, this indicates the byte
-                      ##  offset from the start of the stream that the data block specifies. (for
-                      ##  onprogress() streaming XHR transfer, the number of bytes downloaded so far
-                      ##  before this chunk)
-    dataOffset*: uint64 ##  Specifies the total number of bytes that the response body will be.
-                        ##  Note: This field may be zero, if the server does not report the
-                        ##  Content-Length field.
-    totalBytes*: uint64 ##  Specifies the readyState of the XHR request:
-                        ##  0: UNSENT: request not sent yet
-                        ##  1: OPENED: emscripten_fetch has been called.
-                        ##  2: HEADERS_RECEIVED: emscripten_fetch has been called, and headers and
-                        ##     status are available.
-                        ##  3: LOADING: download in progress.
-                        ##  4: DONE: download finished.
-                        ##  See https://developer.mozilla.org/en-US/docs/Web/API/XMLHttpRequest/readyState
-    readyState*: cushort       ##  Specifies the status code of the response.
-    status*: cushort           ##  Specifies a human-readable form of the status code.
-    statusText*: array[64, char]
-    proxyState*: uint32    ##  For internal use only.
-    #attributes*: emscripten_fetch_attr_t
-
-proc wavecore_fetch(url: cstring): ptr emscripten_fetch_t {.importc.}
-proc emscripten_fetch_close(fetch: ptr emscripten_fetch_t): cint {.importc.}
+proc wavecore_fetch(url: cstring): cstring {.importc.}
+proc free(p: pointer) {.importc.}
 
 {.compile: "fetch.c".}
 
@@ -115,14 +74,11 @@ proc fetch*(request: Request): Response =
   let
     url = $request.url
     res = wavecore_fetch(url.cstring)
-  if res.status == 200:
-    var s = newString(res.numBytes)
-    copyMem(s[0].addr, res.data, res.numBytes)
-    result = Response(body: s, code: 200)
+  if res == nil:
+    result = Response(code: 404)
   else:
-    result = Response(code: res.status.int)
-  echo result
-  discard emscripten_fetch_close(res)
+    result = Response(body: $res, code: 200)
+    free(res)
 
 proc initChannelValue*[T](): ChannelValue[T] =
   result = ChannelValue[T](
