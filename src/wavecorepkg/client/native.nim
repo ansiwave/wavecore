@@ -4,6 +4,16 @@ from wavecorepkg/db/db_sqlite import nil
 
 type
   ChannelRef*[T] = ptr Channel[T]
+  ResultKind* = enum
+    Valid, Error,
+  Result*[T] = object
+    case kind*: ResultKind
+    of Valid:
+      valid*: T
+    of Error:
+      error*: ref Exception
+  ActionKind = enum
+    Stop, Fetch, QueryUser, QueryPost, QueryPostChildren,
   Action = object
     case kind: ActionKind
     of Stop:

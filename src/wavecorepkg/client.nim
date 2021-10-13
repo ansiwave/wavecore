@@ -3,18 +3,6 @@ from strutils import format
 from wavecorepkg/db/entities import nil
 from urlly import nil
 
-type
-  ResultKind* = enum
-    Valid, Error,
-  Result*[T] = object
-    case kind*: ResultKind
-    of Valid:
-      valid*: T
-    of Error:
-      error*: ref Exception
-  ActionKind = enum
-    Stop, Fetch, QueryUser, QueryPost, QueryPostChildren,
-
 when defined(emscripten):
   include wavecorepkg/client/emscripten
 else:
