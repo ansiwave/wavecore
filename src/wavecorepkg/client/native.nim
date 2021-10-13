@@ -1,4 +1,6 @@
 import puppy
+from wavecorepkg/db import nil
+from wavecorepkg/db/db_sqlite import nil
 
 type
   ChannelRef*[T] = ptr Channel[T]

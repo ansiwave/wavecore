@@ -7,8 +7,6 @@ from bitops import nil
 from db/vfs import nil
 import tables
 
-vfs.register()
-
 const
   SQLITE_OPEN_READONLY = 1
   SQLITE_OPEN_READWRITE = 2

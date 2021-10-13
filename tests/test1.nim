@@ -53,6 +53,7 @@ from os import nil
 
 const dbFilename = "test.db"
 vfs.readUrl = "http://localhost:" & $port & "/" & dbFilename
+vfs.register()
 
 test "query users":
   let conn = db.open(":memory:")
