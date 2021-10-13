@@ -19,7 +19,7 @@ type
     case kind: ActionKind
     of Stop:
       discard
-    of SendRequest:
+    of Fetch:
       request: Request
       response: ChannelRef[Result[Response]]
     of QueryUser:

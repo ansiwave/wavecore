@@ -8,7 +8,7 @@ type
     case kind: ActionKind
     of Stop:
       discard
-    of SendRequest:
+    of Fetch:
       request: Request
       response: ChannelRef[Result[Response]]
     of QueryUser:
@@ -62,7 +62,7 @@ proc recvAction(client: Client) {.thread.} =
     case action.kind:
     of Stop:
       break
-    of SendRequest:
+    of Fetch:
       try:
         action.response[].send(Result[Response](kind: Valid, valid: fetch(action.request)))
       except Exception as ex:

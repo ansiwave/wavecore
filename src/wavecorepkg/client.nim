@@ -13,7 +13,7 @@ type
     of Error:
       error*: ref Exception
   ActionKind = enum
-    Stop, SendRequest, QueryUser, QueryPost, QueryPostChildren,
+    Stop, Fetch, QueryUser, QueryPost, QueryPostChildren,
 
 when defined(emscripten):
   include wavecorepkg/client/emscripten
@@ -60,7 +60,7 @@ proc query*(client: Client, endpoint: string, range: (int, int) = (0, 0)): Chann
     headers.add(Header(key: "Range", value: "range=$1-$2".format(range[0], range[1])))
   let request = Request(url: urlly.parseUrl(url), headers: headers, verb: "get", body: "")
   result = initChannelValue[Response]()
-  sendAction(client, Action(kind: SendRequest, request: request, response: result.chan), result.chan)
+  sendAction(client, Action(kind: Fetch, request: request, response: result.chan), result.chan)
 
 proc queryUser*(client: Client, filename: string, username: string): ChannelValue[entities.User] =
   result = initChannelValue[entities.User]()
