@@ -1,9 +1,9 @@
-import puppy
 import json
 from strutils import format
 from wavecorepkg/db import nil
 from wavecorepkg/db/entities import nil
 from wavecorepkg/db/db_sqlite import nil
+from urlly import nil
 
 type
   ResultKind* = enum
@@ -16,54 +16,17 @@ type
       error*: ref Exception
   ActionKind = enum
     Stop, SendRequest, QueryUser, QueryPost, QueryPostChildren,
-  Action = object
-    case kind: ActionKind
-    of Stop:
-      discard
-    of SendRequest:
-      request: Request
-      response: ptr Channel[Result[Response]]
-    of QueryUser:
-      username: string
-      userResponse: ptr Channel[Result[entities.User]]
-    of QueryPost:
-      postId: int64
-      postResponse: ptr Channel[Result[entities.Post]]
-    of QueryPostChildren:
-      postParentId: int64
-      postChildrenResponse: ptr Channel[Result[seq[entities.Post]]]
-    dbFilename: string
-  Client = ref object
-    address*: string
-    requestThread: Thread[Client]
-    requestReady: ptr Channel[bool]
-    action: ptr Channel[Action]
-  ClientException* = object of CatchableError
-  ChannelValue*[T] = object
-    chan: ptr Channel[Result[T]]
-    value*: Result[T]
-    ready*: bool
 
-proc get*[T](cv: var ChannelValue[T], blocking: static[bool] = false) =
-  if not cv.ready:
-    when blocking:
-      cv.value = cv.chan[].recv()
-      cv.ready = true
-      cv.chan[].close()
-      deallocShared(cv.chan)
-    else:
-      let res = cv.chan[].tryRecv()
-      if res.dataAvailable:
-        cv.value = res.msg
-        cv.ready = true
-        cv.chan[].close()
-        deallocShared(cv.chan)
+when defined(emscripten):
+  include wavecorepkg/client/emscripten
+else:
+  include wavecorepkg/client/native
+
+type
+  ClientException* = object of CatchableError
 
 proc initClient*(address: string): Client =
   Client(address: address)
-
-proc sendAction(client: Client, action: Action) =
-  client.action[].send(action)
 
 proc initUrl(client: Client; endpoint: string): string =
   "$1/$2".format(client.address, endpoint)
@@ -71,7 +34,7 @@ proc initUrl(client: Client; endpoint: string): string =
 proc request*(client: Client, endpoint: string, data: JsonNode, verb: string): JsonNode =
   let url: string = client.initUrl(endpoint)
   let headers = @[Header(key: "Content-Type", value: "application/json")]
-  let response: Response = fetch(Request(url: parseUrl(url), headers: headers, verb: verb, body: if data != nil: $data else: ""))
+  let response: Response = fetch(Request(url: urlly.parseUrl(url), headers: headers, verb: verb, body: if data != nil: $data else: ""))
   if response.code != 200:
     raise newException(ClientException, "Error code " & $response.code & ": " & response.body)
   return response.body.parseJson
@@ -87,7 +50,7 @@ proc get*(client: Client, endpoint: string, range: (int, int) = (0, 0)): string 
   var headers = @[Header(key: "Content-Type", value: "application/json")]
   if range != (0, 0):
     headers.add(Header(key: "Range", value: "range=$1-$2".format(range[0], range[1])))
-  let response: Response = fetch(Request(url: parseUrl(url), headers: headers, verb: "get", body: ""))
+  let response: Response = fetch(Request(url: urlly.parseUrl(url), headers: headers, verb: "get", body: ""))
   if not response.code in {200, 206}:
     raise newException(ClientException, "Error code " & $response.code & ": " & response.body)
   return response.body
@@ -97,105 +60,18 @@ proc query*(client: Client, endpoint: string, range: (int, int) = (0, 0)): Chann
   var headers = @[Header(key: "Content-Type", value: "application/json")]
   if range != (0, 0):
     headers.add(Header(key: "Range", value: "range=$1-$2".format(range[0], range[1])))
-  let request = Request(url: parseUrl(url), headers: headers, verb: "get", body: "")
-  result = ChannelValue[Response](
-    chan: cast[ptr Channel[Result[Response]]](
-      allocShared0(sizeof(Channel[Result[Response]]))
-    )
-  )
-  result.chan[].open()
-  sendAction(client, Action(kind: SendRequest, request: request, response: result.chan))
+  let request = Request(url: urlly.parseUrl(url), headers: headers, verb: "get", body: "")
+  result = initChannelValue[Response]()
+  sendAction(client, Action(kind: SendRequest, request: request, response: result.chan), result.chan)
 
 proc queryUser*(client: Client, filename: string, username: string): ChannelValue[entities.User] =
-  result = ChannelValue[entities.User](
-    chan: cast[ptr Channel[Result[entities.User]]](
-      allocShared0(sizeof(Channel[Result[entities.User]]))
-    )
-  )
-  result.chan[].open()
-  sendAction(client, Action(kind: QueryUser, dbFilename: filename, username: username, userResponse: result.chan))
+  result = initChannelValue[entities.User]()
+  sendAction(client, Action(kind: QueryUser, dbFilename: filename, username: username, userResponse: result.chan), result.chan)
 
 proc queryPost*(client: Client, filename: string, id: int64): ChannelValue[entities.Post] =
-  result = ChannelValue[entities.Post](
-    chan: cast[ptr Channel[Result[entities.Post]]](
-      allocShared0(sizeof(Channel[Result[entities.Post]]))
-    )
-  )
-  result.chan[].open()
-  sendAction(client, Action(kind: QueryPost, dbFilename: filename, postId: id, postResponse: result.chan))
+  result = initChannelValue[entities.Post]()
+  sendAction(client, Action(kind: QueryPost, dbFilename: filename, postId: id, postResponse: result.chan), result.chan)
 
 proc queryPostChildren*(client: Client, filename: string, id: int64): ChannelValue[seq[entities.Post]] =
-  result = ChannelValue[seq[entities.Post]](
-    chan: cast[ptr Channel[Result[seq[entities.Post]]]](
-      allocShared0(sizeof(Channel[Result[seq[entities.Post]]]))
-    )
-  )
-  result.chan[].open()
-  sendAction(client, Action(kind: QueryPostChildren, dbFilename: filename, postParentId: id, postChildrenResponse: result.chan))
-
-proc recvAction(client: Client) {.thread.} =
-  client.requestReady[].send(true)
-  while true:
-    let action = client.action[].recv()
-    case action.kind:
-    of Stop:
-      break
-    of SendRequest:
-      try:
-        action.response[].send(Result[Response](kind: Valid, valid: fetch(action.request)))
-      except Exception as ex:
-        action.response[].send(Result[Response](kind: Error, error: ex))
-    of QueryUser:
-      try:
-        let conn = db.open(action.dbFilename, true)
-        action.userResponse[].send(Result[entities.User](kind: Valid, valid: entities.selectUser(conn, action.username)))
-        db_sqlite.close(conn)
-      except Exception as ex:
-        action.userResponse[].send(Result[entities.User](kind: Error, error: ex))
-    of QueryPost:
-      try:
-        let conn = db.open(action.dbFilename, true)
-        action.postResponse[].send(Result[entities.Post](kind: Valid, valid: entities.selectPost(conn, action.postId)))
-        db_sqlite.close(conn)
-      except Exception as ex:
-        action.postResponse[].send(Result[entities.Post](kind: Error, error: ex))
-    of QueryPostChildren:
-      try:
-        let conn = db.open(action.dbFilename, true)
-        action.postChildrenResponse[].send(Result[seq[entities.Post]](kind: Valid, valid: entities.selectPostChildren(conn, action.postParentId)))
-        db_sqlite.close(conn)
-      except Exception as ex:
-        action.postChildrenResponse[].send(Result[seq[entities.Post]](kind: Error, error: ex))
-
-proc initShared(client: var Client) =
-  client.requestReady = cast[ptr Channel[bool]](
-    allocShared0(sizeof(Channel[bool]))
-  )
-  client.action = cast[ptr Channel[Action]](
-    allocShared0(sizeof(Channel[Action]))
-  )
-  client.requestReady[].open()
-  client.action[].open()
-
-proc deinitShared(client: var Client) =
-  client.requestReady[].close()
-  client.action[].close()
-  deallocShared(client.requestReady)
-  deallocShared(client.action)
-
-proc initThreads(client: var Client) =
-  createThread(client.requestThread, recvAction, client)
-  discard client.requestReady[].recv()
-
-proc deinitThreads(client: var Client) =
-  client.action[].send(Action(kind: Stop))
-  client.requestThread.joinThread()
-
-proc start*(client: var Client) =
-  initShared(client)
-  initThreads(client)
-
-proc stop*(client: var Client) =
-  deinitThreads(client)
-  deinitShared(client)
-
+  result = initChannelValue[seq[entities.Post]]()
+  sendAction(client, Action(kind: QueryPostChildren, dbFilename: filename, postParentId: id, postChildrenResponse: result.chan), result.chan)
