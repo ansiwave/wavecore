@@ -3,8 +3,8 @@ from sequtils import nil
 from parseutils import nil
 from strutils import nil
 
-when not defined(emscripten):
-  from puppy import nil
+import wavecorepkg/client
+from urlly import nil
 
 type
   sqlite3_vfs* {.bycopy.} = object
@@ -76,43 +76,37 @@ let customMethods = sqlite3_io_methods(
   iVersion: 3,
   xClose: proc (a1: ptr sqlite3_file): cint {.cdecl.} = SQLITE_OK,
   xRead: proc (a1: ptr sqlite3_file; a2: pointer; iAmt: cint; iOfst: int64): cint {.cdecl.} =
-    when defined(emscripten):
-      SQLITE_ERROR
+    var res = fetch(Request(
+      url: urlly.parseUrl(readUrl),
+      verb: "get",
+      headers: @[Header(key: "Range", value: "bytes=" & $iOfst & "-" & $(iOfst+iAmt-1))]
+    ))
+    if res.code == 206:
+      assert res.body.len == iAmt
+      copyMem(a2, res.body[0].addr, res.body.len)
+      SQLITE_OK
     else:
-      let res = puppy.fetch(puppy.Request(
-        url: puppy.parseUrl(readUrl),
-        verb: "get",
-        headers: @[puppy.Header(key: "Range", value: "bytes=" & $iOfst & "-" & $(iOfst+iAmt-1))]
-      ))
-      if res.code == 206:
-        assert res.body.len == iAmt
-        copyMem(a2, res.body[0].addr, res.body.len)
-        SQLITE_OK
-      else:
-        SQLITE_ERROR
+      SQLITE_ERROR
   ,
   xWrite: proc (a1: ptr sqlite3_file; a2: pointer; iAmt: cint; iOfst: int64): cint {.cdecl.} = SQLITE_OK,
   xTruncate: proc (a1: ptr sqlite3_file; size: int64): cint {.cdecl.} = SQLITE_OK,
   xSync: proc (a1: ptr sqlite3_file; flags: cint): cint {.cdecl.} = SQLITE_OK,
   xFileSize: proc (a1: ptr sqlite3_file; pSize: ptr int64): cint {.cdecl.} =
-    when defined(emscripten):
-      SQLITE_ERROR
-    else:
-      let res = puppy.fetch(puppy.Request(
-        url: puppy.parseUrl(readUrl),
-        verb: "get",
-        headers: @[puppy.Header(key: "Range", value: "bytes=0-0")]
-      ))
-      if res.code == 206:
-        for header in res.headers:
-          if header.key == "Content-Range":
-            let vals = sequtils.toSeq(strutils.split(header.value, {' ', '/'}))
-            if vals.len == 3 and vals[0] == "bytes":
-              var size = 0
-              if parseutils.parseInt(vals[2], size) > 0:
-                pSize[] = size
-                return SQLITE_OK
-      SQLITE_ERROR
+    let res = fetch(Request(
+      url: urlly.parseUrl(readUrl),
+      verb: "get",
+      headers: @[Header(key: "Range", value: "bytes=0-0")]
+    ))
+    if res.code == 206:
+      for header in res.headers:
+        if header.key == "Content-Range":
+          let vals = sequtils.toSeq(strutils.split(header.value, {' ', '/'}))
+          if vals.len == 3 and vals[0] == "bytes":
+            var size = 0
+            if parseutils.parseInt(vals[2], size) > 0:
+              pSize[] = size
+              return SQLITE_OK
+    SQLITE_ERROR
   ,
   xLock: proc (a1: ptr sqlite3_file; a2: cint): cint {.cdecl.} = SQLITE_OK,
   xUnlock: proc (a1: ptr sqlite3_file; a2: cint): cint {.cdecl.} = SQLITE_OK,

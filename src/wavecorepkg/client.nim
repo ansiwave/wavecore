@@ -4,12 +4,18 @@ from wavecorepkg/db/entities import nil
 from urlly import nil
 
 when defined(emscripten):
-  include wavecorepkg/client/emscripten
+  import wavecorepkg/client/emscripten
 else:
-  include wavecorepkg/client/native
+  import wavecorepkg/client/native
 
 type
   ClientException* = object of CatchableError
+
+export fetch, start, stop, get, Request, Response, Header
+
+const
+  Valid* = ResultKind.Valid
+  Error* = ResultKind.Error
 
 proc initClient*(address: string): Client =
   Client(address: address)
@@ -48,16 +54,17 @@ proc query*(client: Client, endpoint: string, range: (int, int) = (0, 0)): Chann
     headers.add(Header(key: "Range", value: "range=$1-$2".format(range[0], range[1])))
   let request = Request(url: urlly.parseUrl(url), headers: headers, verb: "get", body: "")
   result = initChannelValue[Response]()
-  sendAction(client, Action(kind: Fetch, request: request, response: result.chan), result.chan)
+  sendFetch(client, request, result.chan)
 
 proc queryUser*(client: Client, filename: string, username: string): ChannelValue[entities.User] =
   result = initChannelValue[entities.User]()
-  sendAction(client, Action(kind: QueryUser, dbFilename: filename, username: username, userResponse: result.chan), result.chan)
+  sendUserQuery(client, filename, username, result.chan)
 
 proc queryPost*(client: Client, filename: string, id: int64): ChannelValue[entities.Post] =
   result = initChannelValue[entities.Post]()
-  sendAction(client, Action(kind: QueryPost, dbFilename: filename, postId: id, postResponse: result.chan), result.chan)
+  sendPostQuery(client, filename, id, result.chan)
 
 proc queryPostChildren*(client: Client, filename: string, id: int64): ChannelValue[seq[entities.Post]] =
   result = initChannelValue[seq[entities.Post]]()
-  sendAction(client, Action(kind: QueryPostChildren, dbFilename: filename, postParentId: id, postChildrenResponse: result.chan), result.chan)
+  sendPostChildrenQuery(client, filename, id, result.chan)
+

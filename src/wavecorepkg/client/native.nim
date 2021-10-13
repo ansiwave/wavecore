@@ -1,6 +1,8 @@
 import puppy
+
 from wavecorepkg/db import nil
 from wavecorepkg/db/db_sqlite import nil
+from wavecorepkg/db/entities import nil
 
 type
   ChannelRef*[T] = ptr Channel[T]
@@ -12,33 +14,35 @@ type
       valid*: T
     of Error:
       error*: ref Exception
-  ActionKind = enum
+  ActionKind* = enum
     Stop, Fetch, QueryUser, QueryPost, QueryPostChildren,
-  Action = object
-    case kind: ActionKind
+  Action* = object
+    case kind*: ActionKind
     of Stop:
       discard
     of Fetch:
-      request: Request
-      response: ChannelRef[Result[Response]]
+      request*: Request
+      response*: ChannelRef[Result[Response]]
     of QueryUser:
-      username: string
-      userResponse: ChannelRef[Result[entities.User]]
+      username*: string
+      userResponse*: ChannelRef[Result[entities.User]]
     of QueryPost:
-      postId: int64
-      postResponse: ChannelRef[Result[entities.Post]]
+      postId*: int64
+      postResponse*: ChannelRef[Result[entities.Post]]
     of QueryPostChildren:
-      postParentId: int64
-      postChildrenResponse: ChannelRef[Result[seq[entities.Post]]]
-    dbFilename: string
-  Client = ref object
+      postParentId*: int64
+      postChildrenResponse*: ChannelRef[Result[seq[entities.Post]]]
+    dbFilename*: string
+  Client* = ref object
     address*: string
-    requestThread: Thread[Client]
-    action: ChannelRef[Action]
+    requestThread*: Thread[Client]
+    action*: ChannelRef[Action]
   ChannelValue*[T] = object
-    chan: ChannelRef[Result[T]]
+    chan*: ChannelRef[Result[T]]
     value*: Result[T]
     ready*: bool
+
+export puppy.fetch, puppy.Request, puppy.Response, puppy.Header
 
 proc initChannelValue*[T](): ChannelValue[T] =
   result = ChannelValue[T](
@@ -63,8 +67,20 @@ proc get*[T](cv: var ChannelValue[T], blocking: static[bool] = false) =
         cv.chan[].close()
         deallocShared(cv.chan)
 
-proc sendAction*(client: Client, action: Action, cr: ChannelRef) =
+proc sendAction*(client: Client, action: Action) =
   client.action[].send(action)
+
+proc sendFetch*(client: Client, request: Request, chan: ChannelRef) =
+  sendAction(client, Action(kind: Fetch, request: request, response: chan))
+
+proc sendUserQuery*(client: Client, filename: string, username: string, chan: ChannelRef) =
+  sendAction(client, Action(kind: QueryUser, dbFilename: filename, username: username, userResponse: chan))
+
+proc sendPostQuery*(client: Client, filename: string, id: int64, chan: ChannelRef) =
+  sendAction(client, Action(kind: QueryPost, dbFilename: filename, postId: id, postResponse: chan))
+
+proc sendPostChildrenQuery*(client: Client, filename: string, id: int64, chan: ChannelRef) =
+  sendAction(client, Action(kind: QueryPostChildren, dbFilename: filename, postParentId: id, postChildrenResponse: chan))
 
 proc recvAction(client: Client) {.thread.} =
   while true:

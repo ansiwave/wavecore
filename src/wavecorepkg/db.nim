@@ -4,7 +4,6 @@ import wavecorepkg/db/sqlite3
 from wavecorepkg/db/db_sqlite import sql
 from sequtils import nil
 from bitops import nil
-from db/vfs import nil
 import tables
 
 const
