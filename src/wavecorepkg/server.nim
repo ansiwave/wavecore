@@ -132,6 +132,12 @@ proc handle(server: Server, client: Socket) =
       if fileExists(path):
         filePath = path
     if filePath != "":
+      let contentType =
+        case os.splitFile(filePath).ext:
+        of ".html": "text/html"
+        of ".js": "text/javascript"
+        of ".wasm": "application/wasm"
+        else: "text/plain"
       var response = readFile(filePath)
       if request.headers.hasKey("Range"):
         let range = strutils.split(strutils.split(request.headers["Range"], '=')[1], '-')
@@ -141,11 +147,11 @@ proc handle(server: Server, client: Socket) =
         if first <= last and last < response.len:
           let contentRange = "bytes " & $range[0] & "-" & $range[1] & "/" & $response.len
           response = response[first .. last]
-          client.send("HTTP/1.1 206 OK\r\LContent-Length: " & $response.len & "\r\LContent-Range: " & contentRange & "\r\L\r\L" & response)
+          client.send("HTTP/1.1 206 OK\r\LContent-Length: " & $response.len & "\r\LContent-Range: " & contentRange & "\r\LContent-Type: " & contentType & "\r\L\r\L" & response)
         else:
           raise newException(BadRequestException, "Bad Request. Invalid Range.")
       else:
-        client.send("HTTP/1.1 200 OK\r\LContent-Length: " & $response.len & "\r\L\r\L" & response)
+        client.send("HTTP/1.1 200 OK\r\LContent-Length: " & $response.len & "\r\LContent-Type: " & contentType & "\r\L\r\L" & response)
     # json response
     else:
       let dispatch = (reqMethod: request.reqMethod, path: request.uri.path)
