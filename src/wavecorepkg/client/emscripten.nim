@@ -1,4 +1,5 @@
 from urlly import nil
+from flatty import nil
 
 type
   ChannelRef*[T] = ref object
@@ -46,6 +47,7 @@ proc fetch*(request: Request): Response =
 proc emscripten_create_worker(url: cstring): cint {.importc.}
 proc emscripten_destroy_worker(worker: cint) {.importc.}
 proc emscripten_call_worker(worker: cint, funcname: cstring, data: cstring, size: cint, callback: proc (data: pointer, size: cint, arg: pointer) {.cdecl.}, arg: pointer) {.importc.}
+proc emscripten_worker_respond(data: cstring, size: cint) {.importc.}
 
 proc initChannelValue*[T](): ChannelValue[T] =
   result = ChannelValue[T](
@@ -64,8 +66,16 @@ proc sendAction*(client: Client, action: Action, cr: var ChannelRef) =
       cr.data = newString(size)
       copyMem(cr.data[0].addr, data, size)
       echo "Output: ", cr.data
-  let data = "HI"
+  let data = flatty.toFlatty(action)
   emscripten_call_worker(client.worker, "recvAction", data, data.len.cint, callback, cr.addr)
+
+proc recvAction(data: pointer, size: cint) {.exportc.} =
+  var input = newString(size)
+  copyMem(input[0].addr, data, size)
+  let action = flatty.fromFlatty(input, Action)
+  echo "Input: ", action
+  let data = "BYE"
+  emscripten_worker_respond(data, data.len.cint)
 
 proc start*(client: var Client) =
   client.worker = emscripten_create_worker("worker.js")
