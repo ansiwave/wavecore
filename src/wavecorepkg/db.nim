@@ -1,7 +1,7 @@
 {.passC: "-DSQLITE_ENABLE_FTS5".}
 
-import wavecorepkg/db/sqlite3
-from wavecorepkg/db/db_sqlite import sql
+import db/sqlite3
+from db/db_sqlite import sql
 from sequtils import nil
 from bitops import nil
 import tables

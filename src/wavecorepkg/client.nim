@@ -1,6 +1,6 @@
 import json
 from strutils import format
-from wavecorepkg/db/entities import nil
+from db/entities import nil
 from urlly import nil
 
 when defined(emscripten):
