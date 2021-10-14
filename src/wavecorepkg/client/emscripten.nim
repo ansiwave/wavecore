@@ -139,25 +139,29 @@ proc recvAction(data: pointer, size: cint) {.exportc.} =
   let
     workerRequest = flatty.fromFlatty(input, WorkerRequest)
     action = workerRequest.action
-  case action.kind:
-  of Stop:
-    return
-  of Fetch:
-    let
-      req = fetch(action.request)
-      res =
-        if req.code == 200:
-          flatty.toFlatty(Result[Response](kind: Valid, valid: req))
-        else:
-          flatty.toFlatty(Result[Response](kind: Error))
-      data = flatty.toFlatty(WorkerResponse(data: res, channel: workerRequest.channel))
-    emscripten_worker_respond(data, data.len.cint)
-  of QueryPostChildren:
-    let conn = db.open(action.dbFilename, true)
-    echo entities.selectPostChildren(conn, action.postParentId)
-    db_sqlite.close(conn)
-  else:
-    return
+  let res =
+    case action.kind:
+    of Stop:
+      return
+    of Fetch:
+      let
+        req = fetch(action.request)
+      if req.code == 200:
+        flatty.toFlatty(Result[Response](kind: Valid, valid: req))
+      else:
+        flatty.toFlatty(Result[Response](kind: Error))
+    of QueryPostChildren:
+      try:
+        let conn = db.open(action.dbFilename, true)
+        let posts = entities.selectPostChildren(conn, action.postParentId)
+        db_sqlite.close(conn)
+        flatty.toFlatty(Result[seq[entities.Post]](kind: Valid, valid: posts))
+      except Exception as ex:
+        flatty.toFlatty(Result[seq[entities.Post]](kind: Error))
+    else:
+      return
+  let data = flatty.toFlatty(WorkerResponse(data: res, channel: workerRequest.channel))
+  emscripten_worker_respond(data, data.len.cint)
 
 proc start*(client: var Client) =
   client.worker = emscripten_create_worker("worker.js")
