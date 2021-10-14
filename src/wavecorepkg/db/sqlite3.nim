@@ -28,7 +28,7 @@ when defined(staticSqlite):
   {.pragma: mylib.}
   {.compile: "sqlite3.c".}
 else:
-  {.pragma: mylib, dynlib: Lib.}
+  {.pragma: mylib.}
 
 const
   SQLITE_INTEGER* = 1
