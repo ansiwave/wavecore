@@ -2,6 +2,9 @@ from urlly import `$`
 from flatty import nil
 from flatty/binny import nil
 from strutils import nil
+import json
+import tables
+from base64 import nil
 
 from wavecorepkg/db import nil
 from wavecorepkg/db/db_sqlite import nil
@@ -65,7 +68,7 @@ proc emscripten_create_worker(url: cstring): cint {.importc.}
 proc emscripten_destroy_worker(worker: cint) {.importc.}
 proc emscripten_call_worker(worker: cint, funcname: cstring, data: cstring, size: cint, callback: proc (data: pointer, size: cint, arg: pointer) {.cdecl.}, arg: pointer) {.importc.}
 proc emscripten_worker_respond(data: cstring, size: cint) {.importc.}
-proc wavecore_fetch(url: cstring): cstring {.importc.}
+proc wavecore_fetch(url: cstring, headers: cstring): cstring {.importc.}
 proc free(p: pointer) {.importc.}
 
 {.compile: "fetch.c".}
@@ -73,12 +76,23 @@ proc free(p: pointer) {.importc.}
 proc fetch*(request: Request): Response =
   let
     url = $request.url
-    res = wavecore_fetch(url.cstring)
-  if res == nil:
-    result = Response(code: 404)
-  else:
-    result = Response(body: $res, code: 200)
-    free(res)
+    reqHeaders = block:
+      var o = json.newJObject()
+      for header in request.headers:
+        o.fields[header.key] = json.newJString(header.value)
+      $o
+    res = wavecore_fetch(url.cstring, reqHeaders.cstring)
+    json = json.parseJson($res)
+    body = base64.decode(json["body"].str)
+    code = json["code"].num.int
+    resHeaders = block:
+      var hs: seq[Header]
+      for k, v in json["headers"].fields:
+        if v.kind == JString:
+          hs.add(Header(key: k, value: v.str))
+      hs
+  result = Response(body: body, code: code, headers: resHeaders)
+  free(res)
 
 proc initChannelValue*[T](): ChannelValue[T] =
   result = ChannelValue[T](
@@ -139,10 +153,9 @@ proc recvAction(data: pointer, size: cint) {.exportc.} =
       data = flatty.toFlatty(WorkerResponse(data: res, channel: workerRequest.channel))
     emscripten_worker_respond(data, data.len.cint)
   of QueryPostChildren:
-    discard
-    #let conn = db.open(action.dbFilename, true)
-    #echo entities.selectPostChildren(conn, action.postParentId)
-    #db_sqlite.close(conn)
+    let conn = db.open(action.dbFilename, true)
+    echo entities.selectPostChildren(conn, action.postParentId)
+    db_sqlite.close(conn)
   else:
     return
 
