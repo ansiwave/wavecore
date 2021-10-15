@@ -146,8 +146,9 @@ proc recvAction(data: pointer, size: cint) {.exportc.} =
       return
     of Fetch:
       var req = fetch(action.request)
-      if req.code == 200 and strutils.endsWith(action.request.url.path, ".ansiwavez"):
-        req.body = zippy.uncompress(cast[string](req.body), dataFormat = zippy.dfZlib)
+      if req.code == 200:
+        if strutils.endsWith(action.request.url.path, ".ansiwavez"):
+          req.body = zippy.uncompress(cast[string](req.body), dataFormat = zippy.dfZlib)
         flatty.toFlatty(Result[Response](kind: Valid, valid: req))
       else:
         flatty.toFlatty(Result[Response](kind: Error))

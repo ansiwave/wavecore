@@ -94,9 +94,12 @@ proc recvAction(client: Client) {.thread.} =
     of Fetch:
       try:
         var req = fetch(action.request)
-        if req.code == 200 and strutils.endsWith(action.request.url.path, ".ansiwavez"):
-          req.body = zippy.uncompress(cast[string](req.body), dataFormat = zippy.dfZlib)
-        action.response[].send(Result[Response](kind: Valid, valid: req))
+        if req.code == 200:
+          if strutils.endsWith(action.request.url.path, ".ansiwavez"):
+            req.body = zippy.uncompress(cast[string](req.body), dataFormat = zippy.dfZlib)
+          action.response[].send(Result[Response](kind: Valid, valid: req))
+        else:
+          action.response[].send(Result[Response](kind: Error))
       except Exception as ex:
         action.response[].send(Result[Response](kind: Error, error: ex))
     of QueryUser:
