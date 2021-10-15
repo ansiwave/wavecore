@@ -4,6 +4,7 @@ from wavecorepkg/db/db_sqlite import nil
 from wavecorepkg/server import nil
 from wavecorepkg/db/vfs import nil
 from os import joinPath
+from osproc import nil
 
 const
   port = 3000
@@ -41,8 +42,7 @@ when isMainModule:
   var s = server.initServer("localhost", port, staticFileDir)
   server.start(s)
   # create test db
-  if os.fileExists(dbPath):
-    os.removeFile(dbPath)
+  discard osproc.execProcess("rm " & dbPath & "*")
   var conn = db.open(dbPath)
   db.init(conn)
   db_sqlite.close(conn)

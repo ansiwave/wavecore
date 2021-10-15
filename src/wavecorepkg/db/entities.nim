@@ -4,7 +4,6 @@ from ../db import nil
 from zippy import nil
 from sequtils import nil
 from strutils import format
-from os import nil
 
 type
   User* = object
@@ -87,7 +86,7 @@ proc selectPostChildren*(conn: PSqlite3, id: int64): seq[Post] =
   const query =
     """
       SELECT * FROM post
-      WHERE entity_id IN (SELECT entity_id FROM post WHERE attribute MATCH 'parent_id' AND value_indexed MATCH ?)
+      WHERE entity_id IN (SELECT entity_id FROM post WHERE attribute MATCH 'parent_id' AND value_indexed MATCH ? LIMIT 10)
             AND post.attribute IN ('parent_id', 'user_id', 'body', 'reply_count')
     """
   #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), id):

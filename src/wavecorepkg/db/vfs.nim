@@ -1,8 +1,7 @@
 import ./sqlite3
-from sequtils import nil
 from parseutils import nil
-from strutils import nil
 from os import joinPath
+from strformat import fmt
 
 import ../client
 from urlly import nil
@@ -83,18 +82,34 @@ const SQLITE_IOCAP_IMMUTABLE = 0x00002000
 let customMethods = sqlite3_io_methods(
   iVersion: 3,
   xClose: proc (a1: ptr sqlite3_file): cint {.cdecl.} = SQLITE_OK,
-  xRead: proc (a1: ptr sqlite3_file; a2: pointer; iAmt: cint; iOfst: int64): cint {.cdecl.} =
-    var res = fetch(Request(
-      url: urlly.parseUrl(readUrl),
-      verb: "get",
-      headers: @[Header(key: "Range", value: "bytes=" & $iOfst & "-" & $(iOfst+iAmt-1))]
-    ))
-    if res.code == 206:
-      assert res.body.len == iAmt
-      copyMem(a2, res.body[0].addr, res.body.len)
-      SQLITE_OK
-    else:
-      SQLITE_ERROR
+  xRead: proc (a1: ptr sqlite3_file; pBuf: pointer; iAmt: cint; iOfst: int64): cint {.cdecl.} =
+    var
+      buf = pBuf
+      amt = iAmt
+      off = iOfst
+    while amt > 0:
+      let i = int(off.int / chunkSize.int)
+      var extra = cint(((off mod chunkSize).int + amt) - chunkSize)
+      if extra < 0: extra = 0
+      amt -= extra;
+      let
+        suffix = if i == 0: "" else : "{i:03}".fmt
+        firstByte = off mod chunkSize
+        lastByte = firstByte + amt - 1
+      var res = fetch(Request(
+        url: urlly.parseUrl(readUrl & suffix),
+        verb: "get",
+        headers: @[Header(key: "Range", value: "bytes=" & $firstByte & "-" & $lastByte)]
+      ))
+      if res.code == 206:
+        assert res.body.len == amt
+        copyMem(buf, res.body[0].addr, res.body.len)
+      else:
+        return SQLITE_ERROR
+      buf = cast[pointer](cast[int](buf) + amt)
+      off += amt
+      amt = extra
+    SQLITE_OK
   ,
   xWrite: proc (a1: ptr sqlite3_file; a2: pointer; iAmt: cint; iOfst: int64): cint {.cdecl.} = SQLITE_OK,
   xTruncate: proc (a1: ptr sqlite3_file; size: int64): cint {.cdecl.} = SQLITE_OK,
@@ -166,6 +181,7 @@ proc register*() =
   assert SQLITE_OK == sqlite3_multiplex_initialize(nil, 0)
   assert SQLITE_OK == sqlite3_vfs_register(httpVfs.unsafeAddr, 0)
 
-proc wavecore_save_file_size(fileName: cstring, fileSize: cint) {.cdecl, exportc.} =
+proc wavecore_save_file_size(fileName: cstring, fileSize: int64): cint {.cdecl, exportc.} =
   writeFile(os.parentDir($fileName).joinPath("size.txt"), $fileSize)
+  0
 
