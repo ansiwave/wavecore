@@ -6,6 +6,8 @@ from sequtils import nil
 from bitops import nil
 import tables
 
+{.compile: "db/sqlite3_multiplex.c".}
+
 const
   SQLITE_OPEN_READONLY = 1
   SQLITE_OPEN_READWRITE = 2

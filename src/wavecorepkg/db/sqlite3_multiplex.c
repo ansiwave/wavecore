@@ -58,6 +58,10 @@
 #endif
 #include "sqlite3ext.h"
 
+#ifndef SQLITE_OMIT_WSD
+int sqlite3PendingByte = 0x40000000;
+#endif
+
 /* 
 ** These should be defined to be the same as the values in 
 ** sqliteInt.h.  They are defined separately here so that
