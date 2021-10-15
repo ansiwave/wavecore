@@ -1,4 +1,7 @@
 import puppy
+from zippy import nil
+from urlly import nil
+from strutils import nil
 
 from ../db import nil
 from ../db/db_sqlite import nil
@@ -90,7 +93,10 @@ proc recvAction(client: Client) {.thread.} =
       break
     of Fetch:
       try:
-        action.response[].send(Result[Response](kind: Valid, valid: fetch(action.request)))
+        var req = fetch(action.request)
+        if req.code == 200 and strutils.endsWith(action.request.url.path, ".ansiwavez"):
+          req.body = zippy.uncompress(cast[string](req.body), dataFormat = zippy.dfZlib)
+        action.response[].send(Result[Response](kind: Valid, valid: req))
       except Exception as ex:
         action.response[].send(Result[Response](kind: Error, error: ex))
     of QueryUser:

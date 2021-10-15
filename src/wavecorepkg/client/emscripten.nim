@@ -5,6 +5,7 @@ from strutils import nil
 import json
 import tables
 from base64 import nil
+from zippy import nil
 
 from wavecorepkg/db import nil
 from wavecorepkg/db/db_sqlite import nil
@@ -144,9 +145,9 @@ proc recvAction(data: pointer, size: cint) {.exportc.} =
     of Stop:
       return
     of Fetch:
-      let
-        req = fetch(action.request)
-      if req.code == 200:
+      var req = fetch(action.request)
+      if req.code == 200 and strutils.endsWith(action.request.url.path, ".ansiwavez"):
+        req.body = zippy.uncompress(cast[string](req.body), dataFormat = zippy.dfZlib)
         flatty.toFlatty(Result[Response](kind: Valid, valid: req))
       else:
         flatty.toFlatty(Result[Response](kind: Error))
