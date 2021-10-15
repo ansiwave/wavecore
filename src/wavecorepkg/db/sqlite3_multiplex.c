@@ -695,6 +695,8 @@ static int multiplexCurrentTimeInt64(sqlite3_vfs *a, sqlite3_int64 *b){
   return gMultiplex.pOrigVfs->xCurrentTimeInt64(gMultiplex.pOrigVfs, b);
 }
 
+static int multiplexFileSize(sqlite3_file *pConn, sqlite3_int64 *pSize);
+
 /************************ I/O Method Wrappers *******************************/
 
 /* xClose requests get passed through to the original VFS.
@@ -706,6 +708,12 @@ static int multiplexClose(sqlite3_file *pConn){
   multiplexConn *p = (multiplexConn*)pConn;
   multiplexGroup *pGroup = p->pGroup;
   int rc = SQLITE_OK;
+  // save file size
+  if(!(pGroup->flags & SQLITE_OPEN_READONLY)){
+    sqlite3_int64 size = 0;
+    multiplexFileSize(p, &size);
+    wavecore_save_file_size(pGroup->zName, size);
+  }
   multiplexFreeComponents(pGroup);
   sqlite3_free(pGroup);
   return rc;

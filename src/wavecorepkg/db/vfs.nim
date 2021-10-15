@@ -2,6 +2,7 @@ import ./sqlite3
 from sequtils import nil
 from parseutils import nil
 from strutils import nil
+from os import joinPath
 
 import ../client
 from urlly import nil
@@ -98,19 +99,14 @@ let customMethods = sqlite3_io_methods(
   xSync: proc (a1: ptr sqlite3_file; flags: cint): cint {.cdecl.} = SQLITE_OK,
   xFileSize: proc (a1: ptr sqlite3_file; pSize: ptr int64): cint {.cdecl.} =
     let res = fetch(Request(
-      url: urlly.parseUrl(readUrl),
+      url: urlly.parseUrl(readUrl & "/../size.txt"),
       verb: "get",
-      headers: @[Header(key: "Range", value: "bytes=0-0")]
     ))
-    if res.code == 206:
-      for header in res.headers:
-        if header.key == "Content-Range":
-          let vals = sequtils.toSeq(strutils.split(header.value, {' ', '/'}))
-          if vals.len == 3 and vals[0] == "bytes":
-            var size = 0
-            if parseutils.parseInt(vals[2], size) > 0:
-              pSize[] = size
-              return SQLITE_OK
+    if res.code == 200:
+      var size = 0
+      if parseutils.parseInt(res.body, size) > 0:
+        pSize[] = size
+        return SQLITE_OK
     SQLITE_ERROR
   ,
   xLock: proc (a1: ptr sqlite3_file; a2: cint): cint {.cdecl.} = SQLITE_OK,
@@ -164,10 +160,10 @@ let httpVfs = sqlite3_vfs(
 
 proc sqlite3_vfs_register(vfs: ptr sqlite3_vfs, makeDflt: cint): cint {.cdecl, importc.}
 
-proc register*(vfsName: string = "http") =
-  case vfsName:
-  of "multiplex":
-    assert SQLITE_OK == sqlite3_multiplex_initialize(nil, 0)
-  of "http":
-    assert SQLITE_OK == sqlite3_vfs_register(httpVfs.unsafeAddr, 0)
+proc register*() =
+  assert SQLITE_OK == sqlite3_multiplex_initialize(nil, 0)
+  assert SQLITE_OK == sqlite3_vfs_register(httpVfs.unsafeAddr, 0)
+
+proc wavecore_save_file_size(fileName: cstring, fileSize: cint) {.cdecl, exportc.} =
+  writeFile(os.parentDir($fileName).joinPath("size.txt"), $fileSize)
 

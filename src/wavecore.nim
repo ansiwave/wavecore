@@ -37,7 +37,7 @@ let
   dbPath = staticFileDir.joinPath(server.dbFilename)
 
 when isMainModule:
-  vfs.register("multiplex")
+  vfs.register()
   var s = server.initServer("localhost", port, staticFileDir)
   server.start(s)
   # create test db

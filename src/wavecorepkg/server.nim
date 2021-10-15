@@ -129,6 +129,7 @@ proc handle(server: Server, client: Socket) =
     var filePath = ""
     if request.reqMethod == httpcore.HttpGet and server.staticFileDir != "":
       let path = os.joinPath(server.staticFileDir, request.uri.path)
+      # TODO: ensure path is inside staticFileDir
       if fileExists(path):
         filePath = path
     if filePath != "":
