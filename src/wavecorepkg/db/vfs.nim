@@ -6,6 +6,11 @@ from strutils import nil
 import ../client
 from urlly import nil
 
+{.passC: "-DSQLITE_MULTIPLEX_CHUNK_SIZE=102400".} # TODO: change this to 10485760
+{.compile: "sqlite3_multiplex.c".}
+
+proc sqlite3_multiplex_initialize(zOrigVfsName: cstring, makeDefault: cint): cint {.cdecl, importc.}
+
 type
   sqlite3_vfs* {.bycopy.} = object
     iVersion*: cint            ##  Structure version number (currently 3)
@@ -159,6 +164,10 @@ let httpVfs = sqlite3_vfs(
 
 proc sqlite3_vfs_register(vfs: ptr sqlite3_vfs, makeDflt: cint): cint {.cdecl, importc.}
 
-proc register*() =
-  assert SQLITE_OK == sqlite3_vfs_register(httpVfs.unsafeAddr, 0)
+proc register*(vfsName: string = "http") =
+  case vfsName:
+  of "multiplex":
+    assert SQLITE_OK == sqlite3_multiplex_initialize(nil, 0)
+  of "http":
+    assert SQLITE_OK == sqlite3_vfs_register(httpVfs.unsafeAddr, 0)
 

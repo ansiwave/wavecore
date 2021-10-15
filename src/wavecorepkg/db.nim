@@ -6,8 +6,6 @@ from sequtils import nil
 from bitops import nil
 import tables
 
-{.compile: "db/sqlite3_multiplex.c".}
-
 const
   SQLITE_OPEN_READONLY = 1
   SQLITE_OPEN_READWRITE = 2
@@ -18,7 +16,7 @@ proc sqlite3_open_v2(filename: cstring, ppDb: var PSqlite3, flags: cint, zVfs: c
 proc open*(filename: string, http: bool = false): PSqlite3 =
   let
     flags: cint = if http: SQLITE_OPEN_READONLY else: bitops.bitor(SQLITE_OPEN_READWRITE, SQLITE_OPEN_CREATE)
-    vfs: cstring = if http: "http".cstring else: nil
+    vfs: cstring = if http: "http".cstring else: "multiplex".cstring
   if sqlite3_open_v2(filename, result, flags, vfs) != SQLITE_OK:
     db_sqlite.dbError(result)
 
