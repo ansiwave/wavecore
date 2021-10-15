@@ -1,9 +1,9 @@
-import wavecorepkg/db/sqlite3
+import ./sqlite3
 from sequtils import nil
 from parseutils import nil
 from strutils import nil
 
-import wavecorepkg/client
+import ../client
 from urlly import nil
 
 type

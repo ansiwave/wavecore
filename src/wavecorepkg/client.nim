@@ -4,9 +4,9 @@ from db/entities import nil
 from urlly import nil
 
 when defined(emscripten):
-  import wavecorepkg/client/emscripten
+  import client/emscripten
 else:
-  import wavecorepkg/client/native
+  import client/native
 
 type
   ClientException* = object of CatchableError
