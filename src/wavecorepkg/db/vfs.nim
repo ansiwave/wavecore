@@ -6,8 +6,10 @@ from os import joinPath
 
 import ../client
 from urlly import nil
+import bitops
 
-{.passC: "-DSQLITE_MULTIPLEX_CHUNK_SIZE=102400".} # TODO: change this to 10485760
+const chunkSize = bitand(102400 + 0xffff, bitnot 0xffff)
+{.passC: "-DSQLITE_MULTIPLEX_CHUNK_SIZE=" & $chunkSize.}
 {.compile: "sqlite3_multiplex.c".}
 
 proc sqlite3_multiplex_initialize(zOrigVfsName: cstring, makeDefault: cint): cint {.cdecl, importc.}
