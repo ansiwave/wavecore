@@ -1,5 +1,5 @@
-import sqlite3
-from db_sqlite import sql
+import ./sqlite3
+from ./db_sqlite import sql
 from ../db import nil
 from zippy import nil
 from sequtils import nil
