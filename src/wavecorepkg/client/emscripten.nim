@@ -7,9 +7,9 @@ import tables
 from base64 import nil
 from zippy import nil
 
-from wavecorepkg/db import nil
-from wavecorepkg/db/db_sqlite import nil
-from wavecorepkg/db/entities import nil
+from ../db import nil
+from ../db/db_sqlite import nil
+from ../db/entities import nil
 
 type
   Channel = object
