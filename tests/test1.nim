@@ -1,6 +1,6 @@
 import unittest
-from wavecorepkg/client import nil
-from wavecorepkg/server import nil
+from ./wavecorepkg/client import nil
+from ./wavecorepkg/server import nil
 import json
 
 const

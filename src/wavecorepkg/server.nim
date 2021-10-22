@@ -5,9 +5,9 @@ from parseutils import nil
 from os import joinPath
 import httpcore
 import json
-from db import nil
-from db/entities import nil
-from db/db_sqlite import nil
+from ./db import nil
+from ./db/entities import nil
+from ./db/db_sqlite import nil
 
 type
   State = object

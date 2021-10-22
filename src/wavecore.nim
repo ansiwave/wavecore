@@ -1,8 +1,8 @@
-from wavecorepkg/db import nil
-from wavecorepkg/db/entities import nil
-from wavecorepkg/db/db_sqlite import nil
-from wavecorepkg/server import nil
-from wavecorepkg/db/vfs import nil
+from ./wavecorepkg/db import nil
+from ./wavecorepkg/db/entities import nil
+from ./wavecorepkg/db/db_sqlite import nil
+from ./wavecorepkg/server import nil
+from ./wavecorepkg/db/vfs import nil
 from os import joinPath
 from osproc import nil
 
