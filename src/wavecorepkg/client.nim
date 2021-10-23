@@ -11,7 +11,7 @@ else:
 type
   ClientException* = object of CatchableError
 
-export fetch, start, stop, get, Request, Response, Header
+export fetch, start, stop, get, Client, ChannelValue, Request, Response, Header
 
 const
   Valid* = ResultKind.Valid
