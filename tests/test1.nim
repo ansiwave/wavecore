@@ -45,10 +45,10 @@ test "Request static file asynchronously":
     server.stop(s)
     client.stop(c)
 
-import wavecorepkg/db
-import wavecorepkg/db/entities
-import wavecorepkg/db/vfs
-from wavecorepkg/db/db_sqlite import nil
+import ./wavecorepkg/db
+import ./wavecorepkg/db/entities
+import ./wavecorepkg/db/vfs
+from ./wavecorepkg/db/db_sqlite import nil
 from os import nil
 
 const dbFilename = "test.db"
