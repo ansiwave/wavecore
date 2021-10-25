@@ -89,6 +89,7 @@ proc test(server: Server, request: Request): string =
     raise newException(BadRequestException, "invalid request")
 
 proc handle(server: Server, client: Socket) =
+  var payload: string
   try:
     var request = Request(headers: httpcore.newHttpHeaders())
     var firstLine = ""
@@ -148,11 +149,11 @@ proc handle(server: Server, client: Socket) =
         if first <= last and last < response.len:
           let contentRange = "bytes " & $range[0] & "-" & $range[1] & "/" & $response.len
           response = response[first .. last]
-          client.send("HTTP/1.1 206 OK\r\LContent-Length: " & $response.len & "\r\LContent-Range: " & contentRange & "\r\LContent-Type: " & contentType & "\r\L\r\L" & response)
+          payload = "HTTP/1.1 206 OK\r\LContent-Length: " & $response.len & "\r\LContent-Range: " & contentRange & "\r\LContent-Type: " & contentType & "\r\L\r\L" & response
         else:
           raise newException(BadRequestException, "Bad Request. Invalid Range.")
       else:
-        client.send("HTTP/1.1 200 OK\r\LContent-Length: " & $response.len & "\r\LContent-Type: " & contentType & "\r\L\r\L" & response)
+        payload = "HTTP/1.1 200 OK\r\LContent-Length: " & $response.len & "\r\LContent-Type: " & contentType & "\r\L\r\L" & response
     # json response
     else:
       let dispatch = (reqMethod: request.reqMethod, path: request.uri.path)
@@ -161,16 +162,20 @@ proc handle(server: Server, client: Socket) =
           test(server, request)
         else:
           raise newException(NotFoundException, "Unhandled request: " & $dispatch)
-      client.send("HTTP/1.1 200 OK\r\LContent-Length: " & $response.len & "\r\L\r\L" & response)
+      payload = "HTTP/1.1 200 OK\r\LContent-Length: " & $response.len & "\r\L\r\L" & response
   except BadRequestException as ex:
-    client.send("HTTP/1.1 400 Bad Request\r\L\r\L" & $ %*{"message": ex.msg})
+    payload = "HTTP/1.1 400 Bad Request\r\L\r\L" & $ %*{"message": ex.msg}
   except ForbiddenException as ex:
-    client.send("HTTP/1.1 403 Forbidden\r\L\r\L" & $ %*{"message": ex.msg})
+    payload = "HTTP/1.1 403 Forbidden\r\L\r\L" & $ %*{"message": ex.msg}
   except NotFoundException as ex:
-    client.send("HTTP/1.1 404 Not Found\r\L\r\L" & $ %*{"message": ex.msg})
+    payload = "HTTP/1.1 404 Not Found\r\L\r\L" & $ %*{"message": ex.msg}
   except Exception as ex:
-    client.send("HTTP/1.1 500 Internal Server Error\r\L\r\L" & $ %*{"message": ex.msg})
+    payload = "HTTP/1.1 500 Internal Server Error\r\L\r\L" & $ %*{"message": ex.msg}
   finally:
+    try:
+      client.send(payload)
+    except Exception as ex:
+      discard
     client.close()
 
 proc loop(server: Server) =
