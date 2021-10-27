@@ -89,7 +89,7 @@ proc test(server: Server, request: Request): string =
     raise newException(BadRequestException, "invalid request")
 
 proc handle(server: Server, client: Socket) =
-  var payload: string
+  var headers, body: string
   try:
     var request = Request(headers: httpcore.newHttpHeaders())
     var firstLine = ""
@@ -140,40 +140,44 @@ proc handle(server: Server, client: Socket) =
         of ".js": "text/javascript"
         of ".wasm": "application/wasm"
         else: "text/plain"
-      var response = readFile(filePath)
+      body = readFile(filePath)
       if request.headers.hasKey("Range"):
         let range = strutils.split(strutils.split(request.headers["Range"], '=')[1], '-')
         var first, last: int
         discard parseutils.parseSaturatedNatural(range[0], first)
         discard parseutils.parseSaturatedNatural(range[1], last)
-        if first <= last and last < response.len:
-          let contentRange = "bytes " & $range[0] & "-" & $range[1] & "/" & $response.len
-          response = response[first .. last]
-          payload = "HTTP/1.1 206 OK\r\LContent-Length: " & $response.len & "\r\LContent-Range: " & contentRange & "\r\LContent-Type: " & contentType & "\r\L\r\L" & response
+        if first <= last and last < body.len:
+          let contentRange = "bytes " & $range[0] & "-" & $range[1] & "/" & $body.len
+          body = body[first .. last]
+          headers = "HTTP/1.1 206 OK\r\LContent-Length: " & $body.len & "\r\LContent-Range: " & contentRange & "\r\LContent-Type: " & contentType
         else:
           raise newException(BadRequestException, "Bad Request. Invalid Range.")
       else:
-        payload = "HTTP/1.1 200 OK\r\LContent-Length: " & $response.len & "\r\LContent-Type: " & contentType & "\r\L\r\L" & response
+        headers = "HTTP/1.1 200 OK\r\LContent-Length: " & $body.len & "\r\LContent-Type: " & contentType
     # json response
     else:
       let dispatch = (reqMethod: request.reqMethod, path: request.uri.path)
-      let response =
+      body =
         if dispatch == (httpcore.HttpPost, "/test"):
           test(server, request)
         else:
           raise newException(NotFoundException, "Unhandled request: " & $dispatch)
-      payload = "HTTP/1.1 200 OK\r\LContent-Length: " & $response.len & "\r\L\r\L" & response
+      headers = "HTTP/1.1 200 OK\r\LContent-Length: " & $body.len
   except BadRequestException as ex:
-    payload = "HTTP/1.1 400 Bad Request\r\L\r\L" & $ %*{"message": ex.msg}
+    headers = "HTTP/1.1 400 Bad Request"
+    body = $ %*{"message": ex.msg}
   except ForbiddenException as ex:
-    payload = "HTTP/1.1 403 Forbidden\r\L\r\L" & $ %*{"message": ex.msg}
+    headers = "HTTP/1.1 403 Forbidden"
+    body = $ %*{"message": ex.msg}
   except NotFoundException as ex:
-    payload = "HTTP/1.1 404 Not Found\r\L\r\L" & $ %*{"message": ex.msg}
+    headers = "HTTP/1.1 404 Not Found"
+    body = $ %*{"message": ex.msg}
   except Exception as ex:
-    payload = "HTTP/1.1 500 Internal Server Error\r\L\r\L" & $ %*{"message": ex.msg}
+    headers = "HTTP/1.1 500 Internal Server Error"
+    body = $ %*{"message": ex.msg}
   finally:
     try:
-      client.send(payload)
+      client.send(headers & "\r\L\r\L" & body)
     except Exception as ex:
       discard
     client.close()
