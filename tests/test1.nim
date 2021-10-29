@@ -159,9 +159,6 @@ test "query posts asynchronously":
     var response3 = client.queryPost(c, dbFilename, -1)
     client.get(response3, true)
     check response3.value.kind == client.Error
-    var response4 = client.queryPostChildren(c, dbFilename, -1)
-    client.get(response4, true)
-    check response4.value.kind == client.Error
   finally:
     os.removeFile(dbFilename)
     server.stop(s)

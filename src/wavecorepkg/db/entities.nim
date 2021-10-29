@@ -4,7 +4,6 @@ from ../db import nil
 from zippy import nil
 from sequtils import nil
 from strutils import format
-import json
 
 type
   User* = object
@@ -16,7 +15,7 @@ proc initUser(entity: var User, stmt: PStmt) =
   for col in 0 .. cols-1:
     let colName = $sqlite3.column_name(stmt, col)
     case colName:
-    of "rowid":
+    of "user_id":
       entity.id = sqlite3.column_int(stmt, col)
     of "username":
       entity.username = $sqlite3.column_text(stmt, col)
@@ -24,8 +23,8 @@ proc initUser(entity: var User, stmt: PStmt) =
 proc selectUser*(conn: PSqlite3, username: string): User =
   const query =
     """
-      SELECT rowid, json_extract(json, "$.username") AS username FROM user
-      WHERE username = ?
+      SELECT user_id, value AS username FROM user_search
+      WHERE attribute MATCH 'username' AND value MATCH ?
     """
   #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), username):
   #  echo x
@@ -37,12 +36,15 @@ proc insertUser*(conn: PSqlite3, entity: User, extraFn: proc (x: var User, id: i
   if extraFn != nil:
     extraFn(e, result)
   var stmt: PStmt
-  const query = "INSERT INTO user (json) VALUES (?)"
-  db.withStatement(conn, query, stmt):
-    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), $ %*{"username": e.username})
+  db.withStatement(conn, "INSERT INTO user (body) VALUES (?)", stmt):
+    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), "")
     if step(stmt) != SQLITE_DONE:
       db_sqlite.dbError(conn)
     result = sqlite3.last_insert_rowid(conn)
+  db.withStatement(conn, "INSERT INTO user_search (user_id, attribute, value) VALUES (?, ?, ?)", stmt):
+    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), result, "username", e.username)
+    if step(stmt) != SQLITE_DONE:
+      db_sqlite.dbError(conn)
   db_sqlite.exec(conn, sql"COMMIT")
 
 type
@@ -59,13 +61,13 @@ proc initPost(entity: var Post, stmt: PStmt) =
   for col in 0 .. cols-1:
     let colName = $sqlite3.column_name(stmt, col)
     case colName:
-    of "rowid":
+    of "post_id":
       entity.id = sqlite3.column_int(stmt, col)
     of "parent_id":
       entity.parent_id = sqlite3.column_int(stmt, col)
     of "user_id":
       entity.user_id = sqlite3.column_int(stmt, col)
-    of "body_compressed":
+    of "body":
       let
         compressedBody = sqlite3.column_blob(stmt, col)
         compressedLen = sqlite3.column_bytes(stmt, col)
@@ -82,8 +84,8 @@ proc initPost(entity: var Post, stmt: PStmt) =
 proc selectPost*(conn: PSqlite3, id: int64): Post =
   const query =
     """
-      SELECT rowid, body, body_compressed, user_id, parent_id, reply_count FROM post
-      WHERE rowid = ?
+      SELECT post_id, body, user_id, parent_id, reply_count FROM post
+      WHERE post_id = ?
     """
   #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), id):
   #  echo x
@@ -93,15 +95,15 @@ proc selectPostParentIds*(conn: PSqlite3, id: int64): string =
   const query =
     """
       SELECT parent_ids FROM post
-      WHERE rowid = ?
+      WHERE post_id = ?
     """
   db.select[Post](conn, initPost, query, id)[0].parent_ids
 
 proc selectPostChildren*(conn: PSqlite3, id: int64): seq[Post] =
   const query =
     """
-      SELECT rowid, body, body_compressed, user_id, parent_id, reply_count FROM post
-      WHERE parent_id MATCH ? LIMIT 10
+      SELECT post_id, body, user_id, parent_id, reply_count FROM post
+      WHERE parent_id = ? LIMIT 10
     """
   #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), id):
   #  echo x
@@ -130,19 +132,22 @@ proc insertPost*(conn: PSqlite3, entity: Post, extraFn: proc (x: var Post, id: i
       """.format(e.parent_ids)
     db_sqlite.exec(conn, sql query)
   var stmt: PStmt
-  const query = "INSERT INTO post (body, body_compressed, user_id, parent_id, parent_ids, reply_count) VALUES (?, ?, ?, ?, ?, ?)"
-  db.withStatement(conn, query, stmt):
-    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), e.body.uncompressed, e.body.compressed, e.user_id, e.parent_id, e.parent_ids, e.reply_count)
+  db.withStatement(conn, "INSERT INTO post (body, user_id, parent_id, parent_ids, reply_count) VALUES (?, ?, ?, ?, ?)", stmt):
+    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), e.body.compressed, e.user_id, e.parent_id, e.parent_ids, e.reply_count)
     if step(stmt) != SQLITE_DONE:
       db_sqlite.dbError(conn)
     result = sqlite3.last_insert_rowid(conn)
+  db.withStatement(conn, "INSERT INTO post_search (post_id, attribute, value) VALUES (?, ?, ?)", stmt):
+    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), result, "body", e.body.uncompressed)
+    if step(stmt) != SQLITE_DONE:
+      db_sqlite.dbError(conn)
   db_sqlite.exec(conn, sql"COMMIT")
 
 proc searchPosts*(conn: PSqlite3, term: string): seq[Post] =
   const query =
     """
-      SELECT rowid, body, body_compressed, user_id, parent_id, reply_count FROM post
-      WHERE body MATCH ?
+      SELECT post_id, body, user_id, parent_id, reply_count FROM post
+      WHERE post_id IN (SELECT post_id FROM post_search WHERE attribute MATCH 'body' AND value MATCH ?)
     """
   #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), term):
   #  echo x
