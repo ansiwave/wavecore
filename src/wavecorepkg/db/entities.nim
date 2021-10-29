@@ -33,8 +33,6 @@ proc selectUser*(conn: PSqlite3, username: string): User =
 proc insertUser*(conn: PSqlite3, entity: User, extraFn: proc (x: var User, id: int64) = nil): int64 =
   db_sqlite.exec(conn, sql"BEGIN TRANSACTION")
   var e = entity
-  if extraFn != nil:
-    extraFn(e, result)
   var stmt: PStmt
   db.withStatement(conn, "INSERT INTO user (body) VALUES (?)", stmt):
     db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), "")
@@ -45,6 +43,8 @@ proc insertUser*(conn: PSqlite3, entity: User, extraFn: proc (x: var User, id: i
     db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), result, "username", e.username)
     if step(stmt) != SQLITE_DONE:
       db_sqlite.dbError(conn)
+  if extraFn != nil:
+    extraFn(e, result)
   db_sqlite.exec(conn, sql"COMMIT")
 
 type
@@ -113,8 +113,6 @@ proc insertPost*(conn: PSqlite3, entity: Post, extraFn: proc (x: var Post, id: i
   db_sqlite.exec(conn, sql"BEGIN TRANSACTION")
   var e = entity
   e.body.compressed = cast[seq[uint8]](sequtils.toSeq(zippy.compress(e.body.uncompressed, dataFormat = zippy.dfZlib)))
-  if extraFn != nil:
-    extraFn(e, result)
   if e.parent_id > 0:
     # set the parent ids
     let parents = selectPostParentIds(conn, e.parent_id)
@@ -141,6 +139,8 @@ proc insertPost*(conn: PSqlite3, entity: Post, extraFn: proc (x: var Post, id: i
     db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), result, "body", e.body.uncompressed)
     if step(stmt) != SQLITE_DONE:
       db_sqlite.dbError(conn)
+  if extraFn != nil:
+    extraFn(e, result)
   db_sqlite.exec(conn, sql"COMMIT")
 
 proc searchPosts*(conn: PSqlite3, term: string): seq[Post] =
