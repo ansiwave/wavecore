@@ -57,8 +57,8 @@ when isMainModule:
   var p1 = entities.Post(parent_id: 0, user_id: 0, body: db.CompressedValue(uncompressed: ansiArt))
   p1.id = server.insertPost(s, p1)
   var
-    alice = entities.User(username: "Alice", public_key: "stuff")
-    bob = entities.User(username: "Bob", public_key: "asdf")
+    alice = entities.User(username: "Alice")
+    bob = entities.User(username: "Bob")
   alice.id = server.insertUser(s, alice)
   bob.id = server.insertUser(s, bob)
   for i in 1..500:

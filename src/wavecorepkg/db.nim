@@ -26,17 +26,10 @@ proc init*(conn: PSqlite3) =
   pragma page_size = 1024;
   """
 
-  db_sqlite.exec conn, sql"""
-  CREATE TABLE entity (
-    created_ts   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-  )"""
+  db_sqlite.exec conn, sql"CREATE VIRTUAL TABLE user USING fts5 (body, body_compressed UNINDEXED, username)"
+  db_sqlite.exec conn, sql"CREATE VIRTUAL TABLE post USING fts5 (body, body_compressed UNINDEXED, user_id, parent_id, parent_ids UNINDEXED, reply_count UNINDEXED)"
 
-  # the value_indexed column contains only human-readable text that must be searchable
-  # the value_unindexed column contains data that should be excluded from the fts index
-  db_sqlite.exec conn, sql"CREATE VIRTUAL TABLE user USING fts5 (entity_id, attribute, value_indexed, value_unindexed UNINDEXED)"
-  db_sqlite.exec conn, sql"CREATE VIRTUAL TABLE post USING fts5 (entity_id, attribute, value_indexed, value_unindexed UNINDEXED)"
-
-template withStatement(conn: PSqlite3, query: string, stmt: PStmt, body: untyped) =
+template withStatement*(conn: PSqlite3, query: string, stmt: PStmt, body: untyped) =
   try:
     if prepare_v2(conn, query, query.len.cint, stmt, nil) != SQLITE_OK:
       db_sqlite.dbError(conn)
@@ -45,45 +38,18 @@ template withStatement(conn: PSqlite3, query: string, stmt: PStmt, body: untyped
     if finalize(stmt) != SQLITE_OK:
       db_sqlite.dbError(conn)
 
-proc select*[T](conn: PSqlite3, setAttr: proc (x: var T, stmt: PStmt, attr: string), query: string, args: varargs[string, `$`]): seq[T] =
+proc select*[T](conn: PSqlite3, init: proc (x: var T, stmt: PStmt), query: string, args: varargs[string, `$`]): seq[T] =
   var stmt: PStmt
-  var t: OrderedTable[int64, T]
   withStatement(conn, query, stmt):
     for i in 0 ..< args.len:
       db_sqlite.bindParam(db_sqlite.SqlPrepared(stmt), i+1, args[i])
     while step(stmt) == SQLITE_ROW:
-      let id = sqlite3.column_int(stmt, 0)
-      if not t.hasKey(id):
-        t[id] = T(id: id)
-      setAttr(t[id], stmt, $sqlite3.column_text(stmt, 1))
-  sequtils.toSeq(t.values)
+      var p: T
+      init(p, stmt)
+      result.add(p)
 
 type
   CompressedValue* = object
     compressed*: seq[uint8]
     uncompressed*: string
-
-proc insert*[T](conn: PSqlite3, table: static[string], entity: T, extraFn: proc (x: var T, id: int64) = nil): int64 =
-  db_sqlite.exec(conn, sql"BEGIN TRANSACTION")
-  db_sqlite.exec(conn, sql"INSERT INTO entity DEFAULT VALUES")
-  result = sqlite3.last_insert_rowid(conn)
-  var e = entity
-  if extraFn != nil:
-    extraFn(e, result)
-  for k, v in e.fieldPairs:
-    when k != "id":
-      var stmt: PStmt
-      when v is CompressedValue:
-        const query = "INSERT INTO " & table & " (entity_id, attribute, value_indexed, value_unindexed) VALUES (?, ?, ?, ?)"
-        withStatement(conn, query, stmt):
-          db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), result, k, v.uncompressed, v.compressed)
-          if step(stmt) != SQLITE_DONE:
-            db_sqlite.dbError(conn)
-      else:
-        const query = "INSERT INTO " & table & " (entity_id, attribute, value_indexed) VALUES (?, ?, ?)"
-        withStatement(conn, query, stmt):
-          db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), result, k, v)
-          if step(stmt) != SQLITE_DONE:
-            db_sqlite.dbError(conn)
-  db_sqlite.exec(conn, sql"COMMIT")
 

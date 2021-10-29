@@ -9,123 +9,139 @@ type
   User* = object
     id*: int64
     username*: string
-    publickey*: string
 
-proc initUser(entity: var User, stmt: PStmt, attr: string) =
-  case attr:
-  of "username":
-    entity.username = $sqlite3.column_text(stmt, 2)
-  of "publickey":
-    entity.publickey = $sqlite3.column_text(stmt, 2)
+proc initUser(entity: var User, stmt: PStmt) =
+  var cols = sqlite3.column_count(stmt)
+  for col in 0 .. cols-1:
+    let colName = $sqlite3.column_name(stmt, col)
+    case colName:
+    of "rowid":
+      entity.id = sqlite3.column_int(stmt, col)
+    of "username":
+      entity.username = $sqlite3.column_text(stmt, col)
 
 proc selectUser*(conn: PSqlite3, username: string): User =
   const query =
     """
-      SELECT * FROM user
-      WHERE entity_id MATCH (SELECT entity_id FROM user WHERE attribute MATCH 'username' AND value_indexed MATCH ?)
-            AND attribute IN ('username', 'publickey')
+      SELECT rowid, * FROM user
+      WHERE username MATCH ?
     """
   #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), username):
   #  echo x
-  for x in db.select[User](conn, initUser, query, username):
-    return x
+  db.select[User](conn, initUser, query, username)[0]
 
-proc insertUser*(conn: PSqlite3, entity: User): int64 =
-  db.insert(conn, "user", entity)
+proc insertUser*(conn: PSqlite3, entity: User, extraFn: proc (x: var User, id: int64) = nil): int64 =
+  db_sqlite.exec(conn, sql"BEGIN TRANSACTION")
+  var e = entity
+  if extraFn != nil:
+    extraFn(e, result)
+  var stmt: PStmt
+  const query = "INSERT INTO user (body, body_compressed, username) VALUES (?, ?, ?)"
+  db.withStatement(conn, query, stmt):
+    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), "", "", e.username)
+    if step(stmt) != SQLITE_DONE:
+      db_sqlite.dbError(conn)
+    result = sqlite3.last_insert_rowid(conn)
+  db_sqlite.exec(conn, sql"COMMIT")
 
 type
   Post* = object
     id*: int64
-    parentid*: int64
-    userid*: int64
+    parent_id*: int64
+    user_id*: int64
     body*: db.CompressedValue
-    parentids*: string
-    replycount*: int64
+    parent_ids*: string
+    reply_count*: int64
 
-proc initPost(entity: var Post, stmt: PStmt, attr: string) =
-  case attr:
-  of "parentid":
-    entity.parentid = sqlite3.column_int(stmt, 2)
-  of "userid":
-    entity.userid = sqlite3.column_int(stmt, 2)
-  of "body":
-    let
-      compressedBody = sqlite3.column_blob(stmt, 3)
-      compressedLen = sqlite3.column_bytes(stmt, 3)
-    var s = newSeq[uint8](compressedLen)
-    copyMem(s[0].addr, compressedBody, compressedLen)
-    entity.body = db.CompressedValue(uncompressed: zippy.uncompress(cast[string](s), dataFormat = zippy.dfZlib))
-  of "parentids":
-    entity.parentids = $sqlite3.column_text(stmt, 2)
-  of "replycount":
-    entity.replycount = sqlite3.column_int(stmt, 2)
+proc initPost(entity: var Post, stmt: PStmt) =
+  var cols = sqlite3.column_count(stmt)
+  for col in 0 .. cols-1:
+    let colName = $sqlite3.column_name(stmt, col)
+    case colName:
+    of "rowid":
+      entity.id = sqlite3.column_int(stmt, col)
+    of "parent_id":
+      entity.parent_id = sqlite3.column_int(stmt, col)
+    of "user_id":
+      entity.user_id = sqlite3.column_int(stmt, col)
+    of "body_compressed":
+      let
+        compressedBody = sqlite3.column_blob(stmt, col)
+        compressedLen = sqlite3.column_bytes(stmt, col)
+      var s = newSeq[uint8](compressedLen)
+      copyMem(s[0].addr, compressedBody, compressedLen)
+      entity.body = db.CompressedValue(uncompressed: zippy.uncompress(cast[string](s), dataFormat = zippy.dfZlib))
+    of "parent_ids":
+      entity.parent_ids = $sqlite3.column_text(stmt, col)
+    of "reply_count":
+      entity.reply_count = sqlite3.column_int(stmt, col)
+    else:
+      discard
 
 proc selectPost*(conn: PSqlite3, id: int64): Post =
   const query =
     """
-      SELECT * FROM post
-      WHERE entity_id MATCH ?
-            AND attribute IN ('parentid', 'userid', 'body', 'replycount')
+      SELECT rowid, body, body_compressed, user_id, parent_id, reply_count FROM post
+      WHERE rowid = ?
     """
   #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), id):
   #  echo x
   db.select[Post](conn, initPost, query, id)[0]
 
-proc selectPostMetadata*(conn: PSqlite3, id: int64): Post =
+proc selectPostParentIds*(conn: PSqlite3, id: int64): string =
   const query =
     """
-      SELECT * FROM post
-      WHERE entity_id MATCH ?
-            AND attribute IN ('parentids')
+      SELECT parent_ids FROM post
+      WHERE rowid = ?
     """
-  #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), id):
-  #  echo x
-  db.select[Post](conn, initPost, query, id)[0]
+  db.select[Post](conn, initPost, query, id)[0].parent_ids
 
 proc selectPostChildren*(conn: PSqlite3, id: int64): seq[Post] =
   const query =
     """
-      SELECT * FROM post
-      WHERE entity_id IN (SELECT entity_id FROM post WHERE attribute MATCH 'parentid' AND value_indexed MATCH ? LIMIT 10)
-            AND post.attribute IN ('parentid', 'userid', 'body', 'replycount')
+      SELECT rowid, body, body_compressed, user_id, parent_id, reply_count FROM post
+      WHERE parent_id MATCH ? LIMIT 10
     """
   #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), id):
   #  echo x
   sequtils.toSeq(db.select[Post](conn, initPost, query, id))
 
 proc insertPost*(conn: PSqlite3, entity: Post, extraFn: proc (x: var Post, id: int64) = nil): int64 =
+  db_sqlite.exec(conn, sql"BEGIN TRANSACTION")
   var e = entity
   e.body.compressed = cast[seq[uint8]](sequtils.toSeq(zippy.compress(e.body.uncompressed, dataFormat = zippy.dfZlib)))
-  # TODO: strip ANSI codes out of e.body.uncompressed since they don't need to be searchable
-  db.insert(conn, "post", e,
-    proc (x: var Post, id: int64) =
-      if extraFn != nil:
-        extraFn(x, id)
-      if x.parentid > 0:
-        # set the parent ids
-        let parents = selectPostMetadata(conn, x.parentid).parentids
-        x.parentids =
-          if parents.len == 0:
-            $x.parentid
-          else:
-            parents & ", " & $x.parentid
-        # update the parents' reply count
-        let query =
-          """
-          UPDATE post
-          SET value_indexed = value_indexed + 1
-          WHERE attribute MATCH 'replycount' AND
-                CAST(entity_id AS INT) IN ($2)
-          """.format(id, x.parentids)
-        db_sqlite.exec(conn, sql query)
-  )
+  if extraFn != nil:
+    extraFn(e, result)
+  if e.parent_id > 0:
+    # set the parent ids
+    let parents = selectPostParentIds(conn, e.parent_id)
+    e.parent_ids =
+      if parents.len == 0:
+        $e.parent_id
+      else:
+        parents & ", " & $e.parent_id
+    # update the parents' reply count
+    let query =
+      """
+      UPDATE post
+      SET reply_count = reply_count + 1
+      WHERE rowid IN ($1)
+      """.format(e.parent_ids)
+    db_sqlite.exec(conn, sql query)
+  var stmt: PStmt
+  const query = "INSERT INTO post (body, body_compressed, user_id, parent_id, parent_ids, reply_count) VALUES (?, ?, ?, ?, ?, ?)"
+  db.withStatement(conn, query, stmt):
+    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), e.body.uncompressed, e.body.compressed, e.user_id, e.parent_id, e.parent_ids, e.reply_count)
+    if step(stmt) != SQLITE_DONE:
+      db_sqlite.dbError(conn)
+    result = sqlite3.last_insert_rowid(conn)
+  db_sqlite.exec(conn, sql"COMMIT")
 
 proc searchPosts*(conn: PSqlite3, term: string): seq[Post] =
   const query =
     """
-      SELECT * FROM post
-      WHERE entity_id IN (SELECT entity_id FROM post WHERE attribute MATCH 'body' AND value_indexed MATCH ?)
-            AND post.attribute IN ('parentid', 'userid', 'body', 'replycount')
+      SELECT rowid, body, body_compressed, user_id, parent_id, reply_count FROM post
+      WHERE body MATCH ?
     """
   #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), term):
   #  echo x
