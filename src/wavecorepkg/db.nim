@@ -1,4 +1,4 @@
-{.passC: "-DSQLITE_ENABLE_FTS5".}
+{.passC: "-DSQLITE_ENABLE_FTS5 -DSQLITE_ENABLE_JSON1".}
 
 import ./db/sqlite3
 from ./db/db_sqlite import sql
@@ -26,8 +26,8 @@ proc init*(conn: PSqlite3) =
   pragma page_size = 1024;
   """
 
-  db_sqlite.exec conn, sql"CREATE VIRTUAL TABLE user USING fts5 (body, body_compressed UNINDEXED, username)"
-  db_sqlite.exec conn, sql"CREATE VIRTUAL TABLE post USING fts5 (body, body_compressed UNINDEXED, user_id, parent_id, parent_ids UNINDEXED, reply_count UNINDEXED)"
+  db_sqlite.exec conn, sql"CREATE VIRTUAL TABLE user USING fts5 (body, body_compressed UNINDEXED, json UNINDEXED)"
+  db_sqlite.exec conn, sql"CREATE VIRTUAL TABLE post USING fts5 (body, body_compressed UNINDEXED, user_id, parent_id, parent_ids UNINDEXED, reply_count UNINDEXED, json UNINDEXED)"
 
 template withStatement*(conn: PSqlite3, query: string, stmt: PStmt, body: untyped) =
   try:

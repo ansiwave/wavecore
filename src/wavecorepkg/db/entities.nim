@@ -4,6 +4,7 @@ from ../db import nil
 from zippy import nil
 from sequtils import nil
 from strutils import format
+import json
 
 type
   User* = object
@@ -23,8 +24,8 @@ proc initUser(entity: var User, stmt: PStmt) =
 proc selectUser*(conn: PSqlite3, username: string): User =
   const query =
     """
-      SELECT rowid, * FROM user
-      WHERE username MATCH ?
+      SELECT rowid, json_extract(json, "$.username") AS username FROM user
+      WHERE username = ?
     """
   #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), username):
   #  echo x
@@ -36,9 +37,9 @@ proc insertUser*(conn: PSqlite3, entity: User, extraFn: proc (x: var User, id: i
   if extraFn != nil:
     extraFn(e, result)
   var stmt: PStmt
-  const query = "INSERT INTO user (body, body_compressed, username) VALUES (?, ?, ?)"
+  const query = "INSERT INTO user (json) VALUES (?)"
   db.withStatement(conn, query, stmt):
-    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), "", "", e.username)
+    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), $ %*{"username": e.username})
     if step(stmt) != SQLITE_DONE:
       db_sqlite.dbError(conn)
     result = sqlite3.last_insert_rowid(conn)
