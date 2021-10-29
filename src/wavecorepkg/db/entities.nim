@@ -9,21 +9,21 @@ type
   User* = object
     id*: int64
     username*: string
-    public_key*: string
+    publickey*: string
 
 proc initUser(entity: var User, stmt: PStmt, attr: string) =
   case attr:
   of "username":
     entity.username = $sqlite3.column_text(stmt, 2)
-  of "public_key":
-    entity.public_key = $sqlite3.column_text(stmt, 2)
+  of "publickey":
+    entity.publickey = $sqlite3.column_text(stmt, 2)
 
 proc selectUser*(conn: PSqlite3, username: string): User =
   const query =
     """
       SELECT * FROM user
       WHERE entity_id MATCH (SELECT entity_id FROM user WHERE attribute MATCH 'username' AND value_indexed MATCH ?)
-            AND attribute IN ('username', 'public_key')
+            AND attribute IN ('username', 'publickey')
     """
   #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), username):
   #  echo x
@@ -36,18 +36,18 @@ proc insertUser*(conn: PSqlite3, entity: User): int64 =
 type
   Post* = object
     id*: int64
-    parent_id*: int64
-    user_id*: int64
+    parentid*: int64
+    userid*: int64
     body*: db.CompressedValue
-    parent_ids*: string
-    reply_count*: int64
+    parentids*: string
+    replycount*: int64
 
 proc initPost(entity: var Post, stmt: PStmt, attr: string) =
   case attr:
-  of "parent_id":
-    entity.parent_id = sqlite3.column_int(stmt, 2)
-  of "user_id":
-    entity.user_id = sqlite3.column_int(stmt, 2)
+  of "parentid":
+    entity.parentid = sqlite3.column_int(stmt, 2)
+  of "userid":
+    entity.userid = sqlite3.column_int(stmt, 2)
   of "body":
     let
       compressedBody = sqlite3.column_blob(stmt, 3)
@@ -55,17 +55,17 @@ proc initPost(entity: var Post, stmt: PStmt, attr: string) =
     var s = newSeq[uint8](compressedLen)
     copyMem(s[0].addr, compressedBody, compressedLen)
     entity.body = db.CompressedValue(uncompressed: zippy.uncompress(cast[string](s), dataFormat = zippy.dfZlib))
-  of "parent_ids":
-    entity.parent_ids = $sqlite3.column_text(stmt, 2)
-  of "reply_count":
-    entity.reply_count = sqlite3.column_int(stmt, 2)
+  of "parentids":
+    entity.parentids = $sqlite3.column_text(stmt, 2)
+  of "replycount":
+    entity.replycount = sqlite3.column_int(stmt, 2)
 
 proc selectPost*(conn: PSqlite3, id: int64): Post =
   const query =
     """
       SELECT * FROM post
       WHERE entity_id MATCH ?
-            AND attribute IN ('parent_id', 'user_id', 'body', 'reply_count')
+            AND attribute IN ('parentid', 'userid', 'body', 'replycount')
     """
   #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), id):
   #  echo x
@@ -76,7 +76,7 @@ proc selectPostMetadata*(conn: PSqlite3, id: int64): Post =
     """
       SELECT * FROM post
       WHERE entity_id MATCH ?
-            AND attribute IN ('parent_ids')
+            AND attribute IN ('parentids')
     """
   #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), id):
   #  echo x
@@ -86,8 +86,8 @@ proc selectPostChildren*(conn: PSqlite3, id: int64): seq[Post] =
   const query =
     """
       SELECT * FROM post
-      WHERE entity_id IN (SELECT entity_id FROM post WHERE attribute MATCH 'parent_id' AND value_indexed MATCH ? LIMIT 10)
-            AND post.attribute IN ('parent_id', 'user_id', 'body', 'reply_count')
+      WHERE entity_id IN (SELECT entity_id FROM post WHERE attribute MATCH 'parentid' AND value_indexed MATCH ? LIMIT 10)
+            AND post.attribute IN ('parentid', 'userid', 'body', 'replycount')
     """
   #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), id):
   #  echo x
@@ -101,22 +101,22 @@ proc insertPost*(conn: PSqlite3, entity: Post, extraFn: proc (x: var Post, id: i
     proc (x: var Post, id: int64) =
       if extraFn != nil:
         extraFn(x, id)
-      if x.parent_id > 0:
+      if x.parentid > 0:
         # set the parent ids
-        let parents = selectPostMetadata(conn, x.parent_id).parent_ids
-        x.parent_ids =
+        let parents = selectPostMetadata(conn, x.parentid).parentids
+        x.parentids =
           if parents.len == 0:
-            $x.parent_id
+            $x.parentid
           else:
-            parents & ", " & $x.parent_id
+            parents & ", " & $x.parentid
         # update the parents' reply count
         let query =
           """
           UPDATE post
           SET value_indexed = value_indexed + 1
-          WHERE attribute MATCH 'reply_count' AND
+          WHERE attribute MATCH 'replycount' AND
                 CAST(entity_id AS INT) IN ($2)
-          """.format(id, x.parent_ids)
+          """.format(id, x.parentids)
         db_sqlite.exec(conn, sql query)
   )
 
@@ -125,7 +125,7 @@ proc searchPosts*(conn: PSqlite3, term: string): seq[Post] =
     """
       SELECT * FROM post
       WHERE entity_id IN (SELECT entity_id FROM post WHERE attribute MATCH 'body' AND value_indexed MATCH ?)
-            AND post.attribute IN ('parent_id', 'user_id', 'body', 'reply_count')
+            AND post.attribute IN ('parentid', 'userid', 'body', 'replycount')
     """
   #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), term):
   #  echo x
