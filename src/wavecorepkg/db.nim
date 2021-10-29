@@ -56,15 +56,13 @@ template withStatement*(conn: PSqlite3, query: string, stmt: PStmt, body: untype
     if finalize(stmt) != SQLITE_OK:
       db_sqlite.dbError(conn)
 
-proc select*[T](conn: PSqlite3, init: proc (x: var T, stmt: PStmt), query: string, args: varargs[string, `$`]): seq[T] =
+proc select*[T](conn: PSqlite3, init: proc (stmt: PStmt): T, query: string, args: varargs[string, `$`]): seq[T] =
   var stmt: PStmt
   withStatement(conn, query, stmt):
     for i in 0 ..< args.len:
       db_sqlite.bindParam(db_sqlite.SqlPrepared(stmt), i+1, args[i])
     while step(stmt) == SQLITE_ROW:
-      var p: T
-      init(p, stmt)
-      result.add(p)
+      result.add(init(stmt))
 
 type
   CompressedValue* = object

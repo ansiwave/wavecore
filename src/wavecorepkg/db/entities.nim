@@ -10,15 +10,15 @@ type
     id*: int64
     username*: string
 
-proc initUser(entity: var User, stmt: PStmt) =
+proc initUser(stmt: PStmt): User =
   var cols = sqlite3.column_count(stmt)
   for col in 0 .. cols-1:
     let colName = $sqlite3.column_name(stmt, col)
     case colName:
     of "user_id":
-      entity.id = sqlite3.column_int(stmt, col)
+      result.id = sqlite3.column_int(stmt, col)
     of "username":
-      entity.username = $sqlite3.column_text(stmt, col)
+      result.username = $sqlite3.column_text(stmt, col)
 
 proc selectUser*(conn: PSqlite3, username: string): User =
   const query =
@@ -56,28 +56,28 @@ type
     parent_ids*: string
     reply_count*: int64
 
-proc initPost(entity: var Post, stmt: PStmt) =
+proc initPost(stmt: PStmt): Post =
   var cols = sqlite3.column_count(stmt)
   for col in 0 .. cols-1:
     let colName = $sqlite3.column_name(stmt, col)
     case colName:
     of "post_id":
-      entity.id = sqlite3.column_int(stmt, col)
+      result.id = sqlite3.column_int(stmt, col)
     of "parent_id":
-      entity.parent_id = sqlite3.column_int(stmt, col)
+      result.parent_id = sqlite3.column_int(stmt, col)
     of "user_id":
-      entity.user_id = sqlite3.column_int(stmt, col)
+      result.user_id = sqlite3.column_int(stmt, col)
     of "body":
       let
         compressedBody = sqlite3.column_blob(stmt, col)
         compressedLen = sqlite3.column_bytes(stmt, col)
       var s = newSeq[uint8](compressedLen)
       copyMem(s[0].addr, compressedBody, compressedLen)
-      entity.body = db.CompressedValue(uncompressed: zippy.uncompress(cast[string](s), dataFormat = zippy.dfZlib))
+      result.body = db.CompressedValue(uncompressed: zippy.uncompress(cast[string](s), dataFormat = zippy.dfZlib))
     of "parent_ids":
-      entity.parent_ids = $sqlite3.column_text(stmt, col)
+      result.parent_ids = $sqlite3.column_text(stmt, col)
     of "reply_count":
-      entity.reply_count = sqlite3.column_int(stmt, col)
+      result.reply_count = sqlite3.column_int(stmt, col)
     else:
       discard
 
