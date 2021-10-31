@@ -103,7 +103,9 @@ proc selectPostChildren*(conn: PSqlite3, id: int64): seq[Post] =
   const query =
     """
       SELECT post_id, body, user_id, parent_id, reply_count FROM post
-      WHERE parent_id = ? LIMIT 10
+      WHERE parent_id = ?
+      ORDER BY reply_count DESC
+      LIMIT 10
     """
   #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), id):
   #  echo x

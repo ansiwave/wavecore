@@ -120,7 +120,7 @@ test "query posts":
   p4 = entities.selectPost(conn, p4.id)
   check @[p2] == entities.selectPostChildren(conn, p1.id)
   check 1 == entities.selectPost(conn, p1.id).reply_count
-  check @[p3, p4] == entities.selectPostChildren(conn, p2.id)
+  check @[p4, p3] == entities.selectPostChildren(conn, p2.id)
   check 2 == entities.selectPost(conn, p2.id).reply_count
   db_sqlite.close(conn)
 
@@ -154,7 +154,7 @@ test "query posts asynchronously":
     check response.value.valid == p1
     var response2 = client.queryPostChildren(c, dbFilename, p2.id)
     client.get(response2, true)
-    check response2.value.valid == @[p3, p4]
+    check response2.value.valid == @[p4, p3]
     # query something invalid
     var response3 = client.queryPost(c, dbFilename, -1)
     client.get(response3, true)
