@@ -119,7 +119,7 @@ test "query posts":
   p3 = entities.selectPost(conn, p3.id)
   p4 = entities.selectPost(conn, p4.id)
   check @[p2] == entities.selectPostChildren(conn, p1.id)
-  check 3 == entities.selectPost(conn, p1.id).reply_count
+  check 1 == entities.selectPost(conn, p1.id).reply_count
   check @[p3, p4] == entities.selectPostChildren(conn, p2.id)
   check 2 == entities.selectPost(conn, p2.id).reply_count
   db_sqlite.close(conn)

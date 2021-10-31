@@ -126,9 +126,9 @@ proc insertPost*(conn: PSqlite3, entity: Post, extraFn: proc (x: var Post, id: i
       """
       UPDATE post
       SET reply_count = reply_count + 1
-      WHERE rowid IN ($1)
+      WHERE post_id IN ($1) AND user_id != ?
       """.format(e.parent_ids)
-    db_sqlite.exec(conn, sql query)
+    db_sqlite.exec(conn, sql query, e.user_id)
   var stmt: PStmt
   db.withStatement(conn, "INSERT INTO post (body, user_id, parent_id, parent_ids, reply_count) VALUES (?, ?, ?, ?, ?)", stmt):
     db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), e.body.compressed, e.user_id, e.parent_id, e.parent_ids, e.reply_count)
