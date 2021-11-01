@@ -104,7 +104,7 @@ proc selectPostChildren*(conn: PSqlite3, id: int64): seq[Post] =
     """
       SELECT post_id, body, user_id, parent_id, reply_count FROM post
       WHERE parent_id = ?
-      ORDER BY reply_count DESC
+      ORDER BY score DESC
       LIMIT 10
     """
   #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), id):
@@ -123,17 +123,24 @@ proc insertPost*(conn: PSqlite3, entity: Post, extraFn: proc (x: var Post, id: i
         $e.parent_id
       else:
         parents & ", " & $e.parent_id
-    # update the parents' reply count
-    let query =
+    # update the parents' reply count and score
+    let reply_count_query =
       """
       UPDATE post
       SET reply_count = reply_count + 1
+      WHERE post_id IN ($1)
+      """.format(e.parent_ids)
+    db_sqlite.exec(conn, sql reply_count_query)
+    let score_query =
+      """
+      UPDATE post
+      SET score = score + 1
       WHERE post_id IN ($1) AND user_id != ?
       """.format(e.parent_ids)
-    db_sqlite.exec(conn, sql query, e.user_id)
+    db_sqlite.exec(conn, sql score_query, e.user_id)
   var stmt: PStmt
-  db.withStatement(conn, "INSERT INTO post (body, user_id, parent_id, parent_ids, reply_count) VALUES (?, ?, ?, ?, ?)", stmt):
-    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), e.body.compressed, e.user_id, e.parent_id, e.parent_ids, e.reply_count)
+  db.withStatement(conn, "INSERT INTO post (body, user_id, parent_id, parent_ids, reply_count, score) VALUES (?, ?, ?, ?, 0, 0)", stmt):
+    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), e.body.compressed, e.user_id, e.parent_id, e.parent_ids)
     if step(stmt) != SQLITE_DONE:
       db_sqlite.dbError(conn)
     result = sqlite3.last_insert_rowid(conn)

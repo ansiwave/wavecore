@@ -36,16 +36,18 @@ proc init*(conn: PSqlite3) =
   db_sqlite.exec conn, sql"""
     CREATE TABLE post (
       post_id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ts DATETIME DEFAULT CURRENT_TIMESTAMP,
       body BLOB,
       user_id INTEGER,
       parent_id INTEGER,
       parent_ids TEXT,
-      reply_count INTEGER
+      reply_count INTEGER,
+      score INTEGER
     )
   """
   db_sqlite.exec conn, sql"CREATE INDEX post_user_id ON post(user_id)"
   db_sqlite.exec conn, sql"CREATE INDEX post_parent_id ON post(parent_id)"
-  db_sqlite.exec conn, sql"CREATE INDEX post_parent_id_reply_count ON post(parent_id, reply_count)"
+  db_sqlite.exec conn, sql"CREATE INDEX post_parent_id_score ON post(parent_id, score)"
   db_sqlite.exec conn, sql"CREATE VIRTUAL TABLE post_search USING fts5 (post_id, attribute, value)"
 
 template withStatement*(conn: PSqlite3, query: string, stmt: PStmt, body: untyped) =
