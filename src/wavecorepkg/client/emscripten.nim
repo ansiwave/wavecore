@@ -70,6 +70,7 @@ proc emscripten_destroy_worker(worker: cint) {.importc.}
 proc emscripten_call_worker(worker: cint, funcname: cstring, data: cstring, size: cint, callback: proc (data: pointer, size: cint, arg: pointer) {.cdecl.}, arg: pointer) {.importc.}
 proc emscripten_worker_respond(data: cstring, size: cint) {.importc.}
 proc wavecore_fetch(url: cstring, headers: cstring): cstring {.importc.}
+proc wavecore_set_innerhtml(selector: cstring, html: cstring) {.importc.}
 proc free(p: pointer) {.importc.}
 
 {.compile: "emscripten.c".}
@@ -94,6 +95,9 @@ proc fetch*(request: Request): Response =
       hs
   result = Response(body: body, code: code, headers: resHeaders)
   free(res)
+
+proc setInnerHtml*(selector: string, html: string) =
+  wavecore_set_innerhtml(selector, html)
 
 proc initChannelValue*[T](): ChannelValue[T] =
   result = ChannelValue[T](

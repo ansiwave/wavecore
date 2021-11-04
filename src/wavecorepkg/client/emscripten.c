@@ -39,3 +39,8 @@ EM_JS(char*, wavecore_fetch, (const char* url, const char* headers), {
   stringToUTF8(json, stringOnWasmHeap, lengthBytes);
   return stringOnWasmHeap;
 });
+
+EM_JS(void, wavecore_set_innerhtml, (const char* selector, const char* html), {
+  var elem = document.querySelector(UTF8ToString(selector));
+  elem.innerHTML = UTF8ToString(html);
+});
