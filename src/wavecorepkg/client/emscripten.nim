@@ -72,7 +72,7 @@ proc emscripten_worker_respond(data: cstring, size: cint) {.importc.}
 proc wavecore_fetch(url: cstring, headers: cstring): cstring {.importc.}
 proc free(p: pointer) {.importc.}
 
-{.compile: "fetch.c".}
+{.compile: "emscripten.c".}
 
 proc fetch*(request: Request): Response =
   let
