@@ -72,6 +72,7 @@ proc emscripten_worker_respond(data: cstring, size: cint) {.importc.}
 proc wavecore_fetch(url: cstring, headers: cstring): cstring {.importc.}
 proc wavecore_set_innerhtml(selector: cstring, html: cstring) {.importc.}
 proc wavecore_set_display(selector: cstring, display: cstring) {.importc.}
+proc wavecore_set_size_max(selector: cstring) {.importc.}
 proc free(p: pointer) {.importc.}
 
 {.compile: "emscripten.c".}
@@ -102,6 +103,9 @@ proc setInnerHtml*(selector: string, html: string) =
 
 proc setDisplay*(selector: string, display: string) =
   wavecore_set_display(selector, display)
+
+proc setSizeMax*(selector: string) =
+  wavecore_set_size_max(selector)
 
 proc initChannelValue*[T](): ChannelValue[T] =
   result = ChannelValue[T](

@@ -49,3 +49,9 @@ EM_JS(void, wavecore_set_display, (const char* selector, const char* display), {
   var elem = document.querySelector(UTF8ToString(selector));
   elem.style.display = UTF8ToString(display);
 });
+
+EM_JS(void, wavecore_set_size_max, (const char* selector), {
+  var elem = document.querySelector(UTF8ToString(selector));
+  elem.width = document.documentElement.clientWidth;
+  elem.height = document.documentElement.clientHeight;
+});
