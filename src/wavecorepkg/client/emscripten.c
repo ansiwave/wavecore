@@ -80,3 +80,7 @@ EM_JS(void, wavecore_browse_file, (const char* selector, const char* callback), 
   elem.addEventListener('change', importImage);
   elem.click();
 });
+
+EM_JS(int, wavecore_get_pixel_density, (), {
+  return window.devicePixelRatio;
+});
