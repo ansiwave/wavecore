@@ -62,19 +62,11 @@ EM_JS(void, wavecore_browse_file, (const char* selector, const char* callback), 
     var reader = new FileReader();
 
     reader.onload = function(e) {
-      // convert response to a binary string
-      var binary = '';
+      // convert response to an array
       var bytes = new Uint8Array(e.target.result);
-      var len = bytes.byteLength;
-      for (var i = 0; i < len; i++) {
-        binary += String.fromCharCode(bytes[i]);
-      }
-
-      // encode in base64
-      var b64 = btoa(binary);
 
       // call c function
-      Module.ccall(UTF8ToString(callback), null, ['string'], [b64]);
+      Module.ccall(UTF8ToString(callback), null, ['array', 'number'], [bytes, bytes.byteLength]);
     };
     reader.readAsArrayBuffer(e.target.files[0]);
     elem.value = '';
