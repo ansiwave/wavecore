@@ -68,7 +68,10 @@ EM_JS(void, wavecore_browse_file, (const char* selector, const char* callback), 
       // call c function
       Module.ccall(UTF8ToString(callback), null, ['array', 'number'], [bytes, bytes.byteLength]);
     };
-    reader.readAsArrayBuffer(e.target.files[0]);
+    var file = e.target.files[0];
+    if (file instanceof File) {
+      reader.readAsArrayBuffer(file);
+    }
     elem.value = '';
   };
   elem.addEventListener('change', importImage);
