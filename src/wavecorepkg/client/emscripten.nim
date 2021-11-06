@@ -74,7 +74,7 @@ proc wavecore_set_innerhtml(selector: cstring, html: cstring) {.importc.}
 proc wavecore_set_display(selector: cstring, display: cstring) {.importc.}
 proc wavecore_set_size_max(selector: cstring, xadd: cint, yadd: cint) {.importc.}
 proc wavecore_browse_file(selector: cstring, callback: cstring) {.importc.}
-proc wavecore_get_pixel_density(): cint {.importc.}
+proc wavecore_get_pixel_density(): cfloat {.importc.}
 proc free(p: pointer) {.importc.}
 
 {.compile: "emscripten.c".}
@@ -112,7 +112,7 @@ proc setSizeMax*(selector: string, xadd: int32, yadd: int32) =
 proc browseFile*(selector: string, callback: string) =
   wavecore_browse_file(selector, callback)
 
-proc getPixelDensity*(): int32 =
+proc getPixelDensity*(): float32 =
   wavecore_get_pixel_density()
 
 proc initChannelValue*[T](): ChannelValue[T] =

@@ -81,6 +81,6 @@ EM_JS(void, wavecore_browse_file, (const char* selector, const char* callback), 
   elem.click();
 });
 
-EM_JS(int, wavecore_get_pixel_density, (), {
+EM_JS(float, wavecore_get_pixel_density, (), {
   return window.devicePixelRatio;
 });
