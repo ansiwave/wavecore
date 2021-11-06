@@ -93,7 +93,8 @@ proc recvAction(client: Client) {.thread.} =
       break
     of Fetch:
       try:
-        var req = fetch(action.request)
+        {.cast(gcsafe).}:
+          var req = fetch(action.request)
         if req.code == 200:
           if strutils.endsWith(action.request.url.path, ".ansiwavez"):
             req.body = zippy.uncompress(cast[string](req.body), dataFormat = zippy.dfZlib)
