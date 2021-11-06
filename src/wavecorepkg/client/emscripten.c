@@ -17,7 +17,7 @@ EM_JS(char*, wavecore_fetch, (const char* url, const char* headers), {
   var bytes = new Uint8Array(request.response);
   var len = bytes.byteLength;
   for (var i = 0; i < len; i++) {
-      binary += String.fromCharCode(bytes[i]);
+    binary += String.fromCharCode(bytes[i]);
   }
 
   var response = {
@@ -54,4 +54,31 @@ EM_JS(void, wavecore_set_size_max, (const char* selector), {
   var elem = document.querySelector(UTF8ToString(selector));
   elem.width = document.documentElement.clientWidth;
   elem.height = document.documentElement.clientHeight;
+});
+
+EM_JS(void, wavecore_browse_file, (const char* selector, const char* callback), {
+  var elem = document.querySelector(UTF8ToString(selector));
+  var importImage = function(e) {
+    var reader = new FileReader();
+
+    reader.onload = function(e) {
+      // convert response to a binary string
+      var binary = '';
+      var bytes = new Uint8Array(e.target.result);
+      var len = bytes.byteLength;
+      for (var i = 0; i < len; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+
+      // encode in base64
+      var b64 = btoa(binary);
+
+      // call c function
+      Module.ccall(UTF8ToString(callback), null, ['string'], [b64]);
+    };
+    reader.readAsArrayBuffer(e.target.files[0]);
+    elem.value = '';
+  };
+  elem.addEventListener('change', importImage);
+  elem.click();
 });
