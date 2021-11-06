@@ -65,8 +65,11 @@ EM_JS(void, wavecore_browse_file, (const char* selector, const char* callback), 
       // convert response to an array
       var bytes = new Uint8Array(e.target.result);
 
+      var arrayOnWasmHeap = _malloc(bytes.byteLength);
+      writeArrayToMemory(bytes, arrayOnWasmHeap);
+
       // call c function
-      Module.ccall(UTF8ToString(callback), null, ['array', 'number'], [bytes, bytes.byteLength]);
+      Module.ccall(UTF8ToString(callback), null, ['number', 'number'], [arrayOnWasmHeap, bytes.byteLength]);
     };
     var file = e.target.files[0];
     if (file instanceof File) {
