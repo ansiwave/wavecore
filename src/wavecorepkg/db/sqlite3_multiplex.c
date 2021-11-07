@@ -712,7 +712,7 @@ static int multiplexClose(sqlite3_file *pConn){
   if(!(pGroup->flags & SQLITE_OPEN_READONLY)){
     sqlite3_int64 size = 0;
     multiplexFileSize(p, &size);
-    wavecore_save_file_size(pGroup->zName, size);
+    wavecore_save_manifest(pGroup->zName, size);
   }
   multiplexFreeComponents(pGroup);
   sqlite3_free(pGroup);

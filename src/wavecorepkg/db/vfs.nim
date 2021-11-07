@@ -11,6 +11,9 @@ const chunkSize = bitand(102400 + 0xffff, bitnot 0xffff)
 {.passC: "-DSQLITE_MULTIPLEX_CHUNK_SIZE=" & $chunkSize.}
 {.compile: "sqlite3_multiplex.c".}
 
+import json
+const manifestFile = "manifest.json"
+
 proc sqlite3_multiplex_initialize(zOrigVfsName: cstring, makeDefault: cint): cint {.cdecl, importc.}
 
 type
@@ -116,15 +119,16 @@ let customMethods = sqlite3_io_methods(
   xSync: proc (a1: ptr sqlite3_file; flags: cint): cint {.cdecl.} = SQLITE_OK,
   xFileSize: proc (a1: ptr sqlite3_file; pSize: ptr int64): cint {.cdecl.} =
     let res = fetch(Request(
-      url: urlly.parseUrl(readUrl & "/../size.txt"),
+      url: urlly.parseUrl(readUrl & "/../" & manifestFile),
       verb: "get",
     ))
     if res.code == 200:
-      var size = 0
-      if parseutils.parseInt(res.body, size) > 0:
-        pSize[] = size
+      try:
+        let data = parseJson(res.body)
+        pSize[] = data["total-size"].num
         return SQLITE_OK
-    SQLITE_ERROR
+      except Exception as ex:
+        return SQLITE_ERROR
   ,
   xLock: proc (a1: ptr sqlite3_file; a2: cint): cint {.cdecl.} = SQLITE_OK,
   xUnlock: proc (a1: ptr sqlite3_file; a2: cint): cint {.cdecl.} = SQLITE_OK,
@@ -181,7 +185,7 @@ proc register*() =
   assert SQLITE_OK == sqlite3_multiplex_initialize(nil, 0)
   assert SQLITE_OK == sqlite3_vfs_register(httpVfs.unsafeAddr, 0)
 
-proc wavecore_save_file_size(fileName: cstring, fileSize: int64): cint {.cdecl, exportc.} =
-  writeFile(os.parentDir($fileName).joinPath("size.txt"), $fileSize)
+proc wavecore_save_manifest(fileName: cstring, fileSize: int64): cint {.cdecl, exportc.} =
+  writeFile(os.parentDir($fileName).joinPath(manifestFile), $ %* {"total-size": fileSize, "chunk-size": chunkSize})
   0
 
