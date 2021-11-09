@@ -208,3 +208,42 @@ test "retrieve sqlite db via http":
     os.removeFile(dbFilename)
     server.stop(s)
 
+import ./wavecorepkg/ed25519
+
+test "ed25519":
+  var
+    seed: array[32, uint8]
+    public_key: array[32, uint8]
+    private_key: array[64, uint8]
+    signature: array[64, uint8]
+
+  var
+    other_public_key: array[32, uint8]
+    other_private_key: array[64, uint8]
+    shared_secret: array[32, uint8]
+
+  const message = "TEST MESSAGE"
+
+  ##  create a random seed, and a key pair out of that seed
+
+  check 0 == ed25519_create_seed(seed.addr)
+  ed25519_create_keypair(public_key.addr, private_key.addr, seed.addr)
+
+  ##  create signature on the message with the key pair
+
+  ed25519_sign(signature.addr, message, message.len, public_key.addr, private_key.addr)
+
+  ##  verify the signature
+  check 1 == ed25519_verify(signature.addr, message, message.len, public_key.addr)
+
+  ##  create a dummy keypair to use for a key exchange, normally you'd only have
+  ## the public key and receive it through some communication channel
+
+  check 0 == ed25519_create_seed(seed.addr)
+
+  ed25519_create_keypair(other_public_key.addr, other_private_key.addr, seed.addr)
+
+  ##  do a key exchange with other_public_key
+
+  ed25519_key_exchange(shared_secret.addr, other_public_key.addr, private_key.addr)
+
