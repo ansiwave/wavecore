@@ -27,3 +27,13 @@ proc ed25519_add_scalar*(public_key: ptr PublicKey; private_key: ptr PrivateKey;
 proc ed25519_key_exchange*(shared_secret: pointer; public_key: ptr PublicKey;
                            private_key: ptr PrivateKey) {.importc.}
 
+type
+  KeyPair = object
+    public*: PublicKey
+    private*: PrivateKey
+
+proc initKeyPair*(): KeyPair =
+  var seed: Seed
+  assert 0 == ed25519_create_seed(seed.addr)
+  ed25519_create_keypair(result.public.addr, result.private.addr, seed.addr)
+

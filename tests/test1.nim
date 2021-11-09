@@ -250,27 +250,11 @@ test "ed25519":
 from base64 import nil
 
 test "user with public key":
-  var
-    seedAlice: Seed
-    publicKeyAlice: PublicKey
-    privateKeyAlice: PrivateKey
-
-  check 0 == ed25519_create_seed(seedAlice.addr)
-  ed25519_create_keypair(publicKeyAlice.addr, privateKeyAlice.addr, seedAlice.addr)
-
-  var
-    seedBob: Seed
-    publicKeyBob: PublicKey
-    privateKeyBob: PrivateKey
-
-  check 0 == ed25519_create_seed(seedBob.addr)
-  ed25519_create_keypair(publicKeyBob.addr, privateKeyBob.addr, seedBob.addr)
-
   let conn = db.open(":memory:")
   db.init(conn)
   var
-    alice = User(public_key: base64.encode(publicKeyAlice, safe = true))
-    bob = User(public_key: base64.encode(publicKeyBob, safe = true))
+    alice = User(public_key: base64.encode(ed25519.initKeyPair().public, safe = true))
+    bob = User(public_key: base64.encode(ed25519.initKeyPair().public, safe = true))
   alice.id = entities.insertUser(conn, alice)
   bob.id = entities.insertUser(conn, bob)
   check alice == entities.selectUser(conn, alice.public_key)
