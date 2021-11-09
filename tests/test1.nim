@@ -2,6 +2,8 @@ import unittest
 from ./wavecorepkg/client import nil
 from ./wavecorepkg/server import nil
 import json
+from ./wavecorepkg/ed25519 import nil
+from base64 import nil
 
 const
   port = 3000
@@ -59,12 +61,12 @@ test "query users":
   let conn = db.open(":memory:")
   db.init(conn)
   var
-    alice = User(username: "Alice")
-    bob = User(username: "Bob")
+    alice = User(public_key: base64.encode(ed25519.initKeyPair().public, safe = true))
+    bob = User(public_key: base64.encode(ed25519.initKeyPair().public, safe = true))
   alice.id = entities.insertUser(conn, alice)
   bob.id = entities.insertUser(conn, bob)
-  check alice == entities.selectUserByName(conn, "Alice")
-  check bob == entities.selectUserByName(conn, "Bob")
+  check alice == entities.selectUser(conn, alice.public_key)
+  check bob == entities.selectUser(conn, bob.public_key)
   db_sqlite.close(conn)
 
 test "query users asynchronously":
@@ -77,16 +79,16 @@ test "query users asynchronously":
     let conn = db.open(dbFilename)
     db.init(conn)
     var
-      alice = User(username: "Alice")
-      bob = User(username: "Bob")
+      alice = User(public_key: base64.encode(ed25519.initKeyPair().public, safe = true))
+      bob = User(public_key: base64.encode(ed25519.initKeyPair().public, safe = true))
     alice.id = entities.insertUser(conn, alice)
     bob.id = entities.insertUser(conn, bob)
     db_sqlite.close(conn)
     # query db over http
-    var response = client.queryUser(c, dbFilename, "Alice")
+    var response = client.queryUser(c, dbFilename, alice.publicKey)
     client.get(response, true)
     check response.value.valid == alice
-    var response2 = client.queryUser(c, dbFilename, "Bob")
+    var response2 = client.queryUser(c, dbFilename, bob.publicKey)
     client.get(response2, true)
     check response2.value.valid == bob
     # query something invalid
@@ -102,8 +104,8 @@ test "query posts":
   let conn = db.open(":memory:")
   db.init(conn)
   var
-    alice = User(username: "Alice")
-    bob = User(username: "Bob")
+    alice = User(public_key: base64.encode(ed25519.initKeyPair().public, safe = true))
+    bob = User(public_key: base64.encode(ed25519.initKeyPair().public, safe = true))
   alice.id = entities.insertUser(conn, alice)
   bob.id = entities.insertUser(conn, bob)
   var p1 = Post(parent_id: 0, user_id: alice.id, body: db.CompressedValue(uncompressed: "Hello, i'm alice"))
@@ -134,8 +136,8 @@ test "query posts asynchronously":
     let conn = db.open(dbFilename)
     db.init(conn)
     var
-      alice = User(username: "Alice")
-      bob = User(username: "Bob")
+      alice = User(public_key: base64.encode(ed25519.initKeyPair().public, safe = true))
+      bob = User(public_key: base64.encode(ed25519.initKeyPair().public, safe = true))
     alice.id = entities.insertUser(conn, alice)
     bob.id = entities.insertUser(conn, bob)
     var p1 = Post(parent_id: 0, user_id: alice.id, body: db.CompressedValue(uncompressed: "Hello, i'm alice"))
@@ -168,8 +170,8 @@ test "search posts":
   let conn = db.open(":memory:")
   db.init(conn)
   var
-    alice = User(username: "Alice")
-    bob = User(username: "Bob")
+    alice = User(public_key: base64.encode(ed25519.initKeyPair().public, safe = true))
+    bob = User(public_key: base64.encode(ed25519.initKeyPair().public, safe = true))
   alice.id = entities.insertUser(conn, alice)
   bob.id = entities.insertUser(conn, bob)
   var p1 = Post(parent_id: 0, user_id: alice.id, body: db.CompressedValue(uncompressed: "Hello, i'm alice"))
@@ -189,16 +191,16 @@ test "retrieve sqlite db via http":
     var conn = db.open(dbFilename)
     db.init(conn)
     var
-      alice = User(username: "Alice")
-      bob = User(username: "Bob")
+      alice = User(public_key: base64.encode(ed25519.initKeyPair().public, safe = true))
+      bob = User(public_key: base64.encode(ed25519.initKeyPair().public, safe = true))
     discard entities.insertUser(conn, alice)
     discard entities.insertUser(conn, bob)
     db_sqlite.close(conn)
     # re-open db, but this time all reads happen over http
     conn = db.open(dbFilename, true)
     let
-      alice2 = entities.selectUserByName(conn, "Alice")
-      bob2 = entities.selectUserByName(conn, "Bob")
+      alice2 = entities.selectUser(conn, alice.public_key)
+      bob2 = entities.selectUser(conn, bob.public_key)
     alice.id = alice2.id
     bob.id = bob2.id
     check alice == alice2
@@ -208,56 +210,40 @@ test "retrieve sqlite db via http":
     os.removeFile(dbFilename)
     server.stop(s)
 
-import ./wavecorepkg/ed25519
-
 test "ed25519":
   var
-    seed: Seed
-    public_key: PublicKey
-    private_key: PrivateKey
-    signature: Signature
+    seed: ed25519.Seed
+    public_key: ed25519.PublicKey
+    private_key: ed25519.PrivateKey
+    signature: ed25519.Signature
 
   var
-    other_public_key: PublicKey
-    other_private_key: PrivateKey
+    other_public_key: ed25519.PublicKey
+    other_private_key: ed25519.PrivateKey
     shared_secret: array[32, uint8]
 
   const message = "TEST MESSAGE"
 
   ##  create a random seed, and a key pair out of that seed
 
-  check 0 == ed25519_create_seed(seed.addr)
-  ed25519_create_keypair(public_key.addr, private_key.addr, seed.addr)
+  check 0 == ed25519.ed25519_create_seed(seed.addr)
+  ed25519.ed25519_create_keypair(public_key.addr, private_key.addr, seed.addr)
 
   ##  create signature on the message with the key pair
 
-  ed25519_sign(signature.addr, message, message.len, public_key.addr, private_key.addr)
+  ed25519.ed25519_sign(signature.addr, message, message.len, public_key.addr, private_key.addr)
 
   ##  verify the signature
-  check 1 == ed25519_verify(signature.addr, message, message.len, public_key.addr)
+  check 1 == ed25519.ed25519_verify(signature.addr, message, message.len, public_key.addr)
 
   ##  create a dummy keypair to use for a key exchange, normally you'd only have
   ## the public key and receive it through some communication channel
 
-  check 0 == ed25519_create_seed(seed.addr)
+  check 0 == ed25519.ed25519_create_seed(seed.addr)
 
-  ed25519_create_keypair(other_public_key.addr, other_private_key.addr, seed.addr)
+  ed25519.ed25519_create_keypair(other_public_key.addr, other_private_key.addr, seed.addr)
 
   ##  do a key exchange with other_public_key
 
-  ed25519_key_exchange(shared_secret.addr, other_public_key.addr, private_key.addr)
-
-from base64 import nil
-
-test "user with public key":
-  let conn = db.open(":memory:")
-  db.init(conn)
-  var
-    alice = User(public_key: base64.encode(ed25519.initKeyPair().public, safe = true))
-    bob = User(public_key: base64.encode(ed25519.initKeyPair().public, safe = true))
-  alice.id = entities.insertUser(conn, alice)
-  bob.id = entities.insertUser(conn, bob)
-  check alice == entities.selectUser(conn, alice.public_key)
-  check bob == entities.selectUser(conn, bob.public_key)
-  db_sqlite.close(conn)
+  ed25519.ed25519_key_exchange(shared_secret.addr, other_public_key.addr, private_key.addr)
 

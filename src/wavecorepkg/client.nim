@@ -56,9 +56,9 @@ proc query*(client: Client, endpoint: string, range: (int, int) = (0, 0)): Chann
   result = initChannelValue[Response]()
   sendFetch(client, request, result.chan)
 
-proc queryUser*(client: Client, filename: string, username: string): ChannelValue[entities.User] =
+proc queryUser*(client: Client, filename: string, publicKey: string): ChannelValue[entities.User] =
   result = initChannelValue[entities.User]()
-  sendUserQuery(client, filename, username, result.chan)
+  sendUserQuery(client, filename, publicKey, result.chan)
 
 proc queryPost*(client: Client, filename: string, id: int64): ChannelValue[entities.Post] =
   result = initChannelValue[entities.Post]()

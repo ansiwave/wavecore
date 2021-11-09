@@ -45,7 +45,7 @@ type
     of Fetch:
       request*: Request
     of QueryUser:
-      username*: string
+      publicKey*: string
     of QueryPost:
       postId*: int64
     of QueryPostChildren:
@@ -145,8 +145,8 @@ proc sendAction*(client: Client, action: Action, chan: ptr Channel) =
 proc sendFetch*(client: Client, request: Request, chan: ChannelRef) =
   sendAction(client, Action(kind: Fetch, request: request), chan)
 
-proc sendUserQuery*(client: Client, filename: string, username: string, chan: ChannelRef) =
-  sendAction(client, Action(kind: QueryUser, dbFilename: filename, username: username), chan)
+proc sendUserQuery*(client: Client, filename: string, publicKey: string, chan: ChannelRef) =
+  sendAction(client, Action(kind: QueryUser, dbFilename: filename, publicKey: publicKey), chan)
 
 proc sendPostQuery*(client: Client, filename: string, id: int64, chan: ChannelRef) =
   sendAction(client, Action(kind: QueryPost, dbFilename: filename, postId: id), chan)
@@ -175,7 +175,7 @@ proc recvAction(data: pointer, size: cint) {.exportc.} =
     of QueryUser:
       try:
         let conn = db.open(action.dbFilename, true)
-        let user = entities.selectUserByName(conn, action.username)
+        let user = entities.selectUser(conn, action.publicKey)
         db_sqlite.close(conn)
         flatty.toFlatty(Result[entities.User](kind: Valid, valid: user))
       except Exception as ex:

@@ -27,7 +27,7 @@ type
       request*: Request
       response*: ChannelRef[Result[Response]]
     of QueryUser:
-      username*: string
+      publicKey*: string
       userResponse*: ChannelRef[Result[entities.User]]
     of QueryPost:
       postId*: int64
@@ -76,8 +76,8 @@ proc sendAction*(client: Client, action: Action) =
 proc sendFetch*(client: Client, request: Request, chan: ChannelRef) =
   sendAction(client, Action(kind: Fetch, request: request, response: chan))
 
-proc sendUserQuery*(client: Client, filename: string, username: string, chan: ChannelRef) =
-  sendAction(client, Action(kind: QueryUser, dbFilename: filename, username: username, userResponse: chan))
+proc sendUserQuery*(client: Client, filename: string, publicKey: string, chan: ChannelRef) =
+  sendAction(client, Action(kind: QueryUser, dbFilename: filename, publicKey: publicKey, userResponse: chan))
 
 proc sendPostQuery*(client: Client, filename: string, id: int64, chan: ChannelRef) =
   sendAction(client, Action(kind: QueryPost, dbFilename: filename, postId: id, postResponse: chan))
@@ -106,7 +106,7 @@ proc recvAction(client: Client) {.thread.} =
     of QueryUser:
       try:
         let conn = db.open(action.dbFilename, true)
-        action.userResponse[].send(Result[entities.User](kind: Valid, valid: entities.selectUserByName(conn, action.username)))
+        action.userResponse[].send(Result[entities.User](kind: Valid, valid: entities.selectUser(conn, action.publicKey)))
         db_sqlite.close(conn)
       except Exception as ex:
         action.userResponse[].send(Result[entities.User](kind: Error, error: ex))

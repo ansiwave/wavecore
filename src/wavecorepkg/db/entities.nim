@@ -8,7 +8,6 @@ from strutils import format
 type
   User* = object
     id*: int64
-    username*: string
     body*: db.CompressedValue
     public_key*: string
 
@@ -19,8 +18,6 @@ proc initUser(stmt: PStmt): User =
     case colName:
     of "user_id":
       result.id = sqlite3.column_int(stmt, col)
-    of "username":
-      result.username = $sqlite3.column_text(stmt, col)
     of "body":
       let
         compressedBody = sqlite3.column_blob(stmt, col)
@@ -42,17 +39,6 @@ proc selectUser*(conn: PSqlite3, publicKey: string): User =
   #  echo x
   db.select[User](conn, initUser, query, publicKey)[0]
 
-proc selectUserByName*(conn: PSqlite3, username: string): User =
-  const query =
-    """
-      SELECT user_search.user_id, user_search.value AS username, user.body, user.public_key FROM user_search
-      INNER JOIN user ON user.user_id = user_search.user_id
-      WHERE user_search.attribute MATCH 'username' AND user_search.value MATCH ?
-    """
-  #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), username):
-  #  echo x
-  db.select[User](conn, initUser, query, username)[0]
-
 proc insertUser*(conn: PSqlite3, entity: User, extraFn: proc (x: var User, id: int64) = nil): int64 =
   db_sqlite.exec(conn, sql"BEGIN TRANSACTION")
   var e = entity
@@ -62,10 +48,6 @@ proc insertUser*(conn: PSqlite3, entity: User, extraFn: proc (x: var User, id: i
     if step(stmt) != SQLITE_DONE:
       db_sqlite.dbError(conn)
     result = sqlite3.last_insert_rowid(conn)
-  db.withStatement(conn, "INSERT INTO user_search (user_id, attribute, value) VALUES (?, ?, ?)", stmt):
-    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), result, "username", e.username)
-    if step(stmt) != SQLITE_DONE:
-      db_sqlite.dbError(conn)
   if extraFn != nil:
     extraFn(e, result)
   db_sqlite.exec(conn, sql"COMMIT")
