@@ -31,7 +31,7 @@ proc init*(conn: PSqlite3) =
       user_id INTEGER PRIMARY KEY AUTOINCREMENT,
       body BLOB,
       public_key TEXT,
-      public_key_raw BlOB,
+      public_key_blob BlOB,
       public_key_algo TEXT
     )
   """

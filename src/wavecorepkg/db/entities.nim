@@ -13,7 +13,7 @@ type
     uncompressed*: string
   PublicKey* = object
     base58*: string
-    raw*: ed25519.PublicKey
+    blob*: ed25519.PublicKey
   User* = object
     id*: int64
     body*: CompressedValue
@@ -23,9 +23,9 @@ proc initCompressedValue*(uncompressed: string): CompressedValue =
   result.compressed = zippy.compress(uncompressed, dataFormat = zippy.dfZlib)
   result.uncompressed = uncompressed
 
-proc initPublicKey*(raw: ed25519.PublicKey): PublicKey =
-  result.raw = raw
-  result.base58 = base58.encode(raw)
+proc initPublicKey*(blob: ed25519.PublicKey): PublicKey =
+  result.blob = blob
+  result.base58 = base58.encode(blob)
 
 proc initUser(stmt: PStmt): User =
   var cols = sqlite3.column_count(stmt)
@@ -44,19 +44,19 @@ proc initUser(stmt: PStmt): User =
         result.body = CompressedValue(compressed: cast[string](s), uncompressed: zippy.uncompress(cast[string](s), dataFormat = zippy.dfZlib))
     of "public_key":
       result.public_key.base58 = $sqlite3.column_text(stmt, col)
-    of "public_key_raw":
+    of "public_key_blob":
       let
         compressedBody = sqlite3.column_blob(stmt, col)
         compressedLen = sqlite3.column_bytes(stmt, col)
       var pubkey: ed25519.PublicKey
       assert compressedLen == pubkey.len
       copyMem(pubkey.addr, compressedBody, compressedLen)
-      result.publicKey.raw = pubkey
+      result.publicKey.blob = pubkey
 
 proc selectUser*(conn: PSqlite3, publicKey: string): User =
   const query =
     """
-      SELECT user_id, body, public_key, public_key_raw FROM user
+      SELECT user_id, body, public_key, public_key_blob FROM user
       WHERE public_key = ?
     """
   #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), publicKey):
@@ -67,8 +67,8 @@ proc insertUser*(conn: PSqlite3, entity: User, extraFn: proc (x: var User, id: i
   db_sqlite.exec(conn, sql"BEGIN TRANSACTION")
   var e = entity
   var stmt: PStmt
-  db.withStatement(conn, "INSERT INTO user (body, public_key, public_key_raw, public_key_algo) VALUES (?, ?, ?, ?)", stmt):
-    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), entity.body.compressed, entity.publicKey.base58, entity.publicKey.raw, "ed25519")
+  db.withStatement(conn, "INSERT INTO user (body, public_key, public_key_blob, public_key_algo) VALUES (?, ?, ?, ?)", stmt):
+    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), entity.body.compressed, entity.publicKey.base58, entity.publicKey.blob, "ed25519")
     if step(stmt) != SQLITE_DONE:
       db_sqlite.dbError(conn)
     result = sqlite3.last_insert_rowid(conn)
