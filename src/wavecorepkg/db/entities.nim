@@ -9,6 +9,8 @@ type
   User* = object
     id*: int64
     username*: string
+    body*: db.CompressedValue
+    public_key*: string
 
 proc initUser(stmt: PStmt): User =
   var cols = sqlite3.column_count(stmt)
@@ -19,12 +21,33 @@ proc initUser(stmt: PStmt): User =
       result.id = sqlite3.column_int(stmt, col)
     of "username":
       result.username = $sqlite3.column_text(stmt, col)
+    of "body":
+      let
+        compressedBody = sqlite3.column_blob(stmt, col)
+        compressedLen = sqlite3.column_bytes(stmt, col)
+      if compressedLen > 0:
+        var s = newSeq[uint8](compressedLen)
+        copyMem(s[0].addr, compressedBody, compressedLen)
+        result.body = db.CompressedValue(uncompressed: zippy.uncompress(cast[string](s), dataFormat = zippy.dfZlib))
+    of "public_key":
+      result.public_key = $sqlite3.column_text(stmt, col)
 
-proc selectUser*(conn: PSqlite3, username: string): User =
+proc selectUser*(conn: PSqlite3, publicKey: string): User =
   const query =
     """
-      SELECT user_id, value AS username FROM user_search
-      WHERE attribute MATCH 'username' AND value MATCH ?
+      SELECT user_id, body, public_key FROM user
+      WHERE public_key = ?
+    """
+  #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), publicKey):
+  #  echo x
+  db.select[User](conn, initUser, query, publicKey)[0]
+
+proc selectUserByName*(conn: PSqlite3, username: string): User =
+  const query =
+    """
+      SELECT user_search.user_id, user_search.value AS username, user.body, user.public_key FROM user_search
+      INNER JOIN user ON user.user_id = user_search.user_id
+      WHERE user_search.attribute MATCH 'username' AND user_search.value MATCH ?
     """
   #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), username):
   #  echo x
@@ -34,8 +57,8 @@ proc insertUser*(conn: PSqlite3, entity: User, extraFn: proc (x: var User, id: i
   db_sqlite.exec(conn, sql"BEGIN TRANSACTION")
   var e = entity
   var stmt: PStmt
-  db.withStatement(conn, "INSERT INTO user (body) VALUES (?)", stmt):
-    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), "")
+  db.withStatement(conn, "INSERT INTO user (body, public_key, public_key_algo) VALUES (?, ?, ?)", stmt):
+    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), entity.body.compressed, entity.publicKey, "ed25519")
     if step(stmt) != SQLITE_DONE:
       db_sqlite.dbError(conn)
     result = sqlite3.last_insert_rowid(conn)
@@ -71,9 +94,10 @@ proc initPost(stmt: PStmt): Post =
       let
         compressedBody = sqlite3.column_blob(stmt, col)
         compressedLen = sqlite3.column_bytes(stmt, col)
-      var s = newSeq[uint8](compressedLen)
-      copyMem(s[0].addr, compressedBody, compressedLen)
-      result.body = db.CompressedValue(uncompressed: zippy.uncompress(cast[string](s), dataFormat = zippy.dfZlib))
+      if compressedLen > 0:
+        var s = newSeq[uint8](compressedLen)
+        copyMem(s[0].addr, compressedBody, compressedLen)
+        result.body = db.CompressedValue(uncompressed: zippy.uncompress(cast[string](s), dataFormat = zippy.dfZlib))
     of "parent_ids":
       result.parent_ids = $sqlite3.column_text(stmt, col)
     of "reply_count":

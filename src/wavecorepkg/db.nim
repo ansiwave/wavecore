@@ -29,9 +29,12 @@ proc init*(conn: PSqlite3) =
   db_sqlite.exec conn, sql"""
     CREATE TABLE user (
       user_id INTEGER PRIMARY KEY AUTOINCREMENT,
-      body BLOB
+      body BLOB,
+      public_key TEXT,
+      public_key_algo TEXT
     )
   """
+  db_sqlite.exec conn, sql"CREATE INDEX user_public_key ON user(public_key)"
   db_sqlite.exec conn, sql"CREATE VIRTUAL TABLE user_search USING fts5 (user_id, attribute, value, value_unindexed UNINDEXED)"
   db_sqlite.exec conn, sql"""
     CREATE TABLE post (

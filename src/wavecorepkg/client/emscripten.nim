@@ -175,7 +175,7 @@ proc recvAction(data: pointer, size: cint) {.exportc.} =
     of QueryUser:
       try:
         let conn = db.open(action.dbFilename, true)
-        let user = entities.selectUser(conn, action.username)
+        let user = entities.selectUserByName(conn, action.username)
         db_sqlite.close(conn)
         flatty.toFlatty(Result[entities.User](kind: Valid, valid: user))
       except Exception as ex:

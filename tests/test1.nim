@@ -63,8 +63,8 @@ test "query users":
     bob = User(username: "Bob")
   alice.id = entities.insertUser(conn, alice)
   bob.id = entities.insertUser(conn, bob)
-  check alice == entities.selectUser(conn, "Alice")
-  check bob == entities.selectUser(conn, "Bob")
+  check alice == entities.selectUserByName(conn, "Alice")
+  check bob == entities.selectUserByName(conn, "Bob")
   db_sqlite.close(conn)
 
 test "query users asynchronously":
@@ -197,8 +197,8 @@ test "retrieve sqlite db via http":
     # re-open db, but this time all reads happen over http
     conn = db.open(dbFilename, true)
     let
-      alice2 = entities.selectUser(conn, "Alice")
-      bob2 = entities.selectUser(conn, "Bob")
+      alice2 = entities.selectUserByName(conn, "Alice")
+      bob2 = entities.selectUserByName(conn, "Bob")
     alice.id = alice2.id
     bob.id = bob2.id
     check alice == alice2
@@ -246,4 +246,34 @@ test "ed25519":
   ##  do a key exchange with other_public_key
 
   ed25519_key_exchange(shared_secret.addr, other_public_key.addr, private_key.addr)
+
+from base64 import nil
+
+test "user with public key":
+  var
+    seedAlice: Seed
+    publicKeyAlice: PublicKey
+    privateKeyAlice: PrivateKey
+
+  check 0 == ed25519_create_seed(seedAlice.addr)
+  ed25519_create_keypair(publicKeyAlice.addr, privateKeyAlice.addr, seedAlice.addr)
+
+  var
+    seedBob: Seed
+    publicKeyBob: PublicKey
+    privateKeyBob: PrivateKey
+
+  check 0 == ed25519_create_seed(seedBob.addr)
+  ed25519_create_keypair(publicKeyBob.addr, privateKeyBob.addr, seedBob.addr)
+
+  let conn = db.open(":memory:")
+  db.init(conn)
+  var
+    alice = User(public_key: base64.encode(publicKeyAlice, safe = true))
+    bob = User(public_key: base64.encode(publicKeyBob, safe = true))
+  alice.id = entities.insertUser(conn, alice)
+  bob.id = entities.insertUser(conn, bob)
+  check alice == entities.selectUser(conn, alice.public_key)
+  check bob == entities.selectUser(conn, bob.public_key)
+  db_sqlite.close(conn)
 

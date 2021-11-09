@@ -771,7 +771,7 @@ proc bindParam*(ps: SqlPrepared, paramIdx: int,val: openArray[byte], copy = true
   ## binds a blob to the specified paramIndex.
   ## if copy is true then SQLite makes its own private copy of the data immediately
   let len = val.len
-  if bind_blob(ps.PStmt, paramIdx.int32, val[0].unsafeAddr, len.int32, if copy: SQLITE_TRANSIENT else: SQLITE_STATIC) != SQLITE_OK:
+  if bind_blob(ps.PStmt, paramIdx.int32, if val.len == 0: nil else: val[0].unsafeAddr, len.int32, if copy: SQLITE_TRANSIENT else: SQLITE_STATIC) != SQLITE_OK:
     dbBindParamError(paramIdx, val)
 
 macro bindParams*(ps: SqlPrepared, params: varargs[untyped]): untyped {.since: (1, 3).} =

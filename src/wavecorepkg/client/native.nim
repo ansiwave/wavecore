@@ -106,7 +106,7 @@ proc recvAction(client: Client) {.thread.} =
     of QueryUser:
       try:
         let conn = db.open(action.dbFilename, true)
-        action.userResponse[].send(Result[entities.User](kind: Valid, valid: entities.selectUser(conn, action.username)))
+        action.userResponse[].send(Result[entities.User](kind: Valid, valid: entities.selectUserByName(conn, action.username)))
         db_sqlite.close(conn)
       except Exception as ex:
         action.userResponse[].send(Result[entities.User](kind: Error, error: ex))
