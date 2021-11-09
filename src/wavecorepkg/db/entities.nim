@@ -9,7 +9,7 @@ from ../base58 import nil
 
 type
   CompressedValue* = object
-    compressed*: seq[uint8]
+    compressed*: string
     uncompressed*: string
   PublicKey* = object
     base58*: string
@@ -18,6 +18,10 @@ type
     id*: int64
     body*: CompressedValue
     public_key*: PublicKey
+
+proc initCompressedValue*(uncompressed: string): CompressedValue =
+  result.compressed = zippy.compress(uncompressed, dataFormat = zippy.dfZlib)
+  result.uncompressed = uncompressed
 
 proc initPublicKey*(raw: ed25519.PublicKey): PublicKey =
   result.raw = raw
@@ -37,7 +41,7 @@ proc initUser(stmt: PStmt): User =
       if compressedLen > 0:
         var s = newSeq[uint8](compressedLen)
         copyMem(s[0].addr, compressedBody, compressedLen)
-        result.body = CompressedValue(uncompressed: zippy.uncompress(cast[string](s), dataFormat = zippy.dfZlib))
+        result.body = CompressedValue(compressed: cast[string](s), uncompressed: zippy.uncompress(cast[string](s), dataFormat = zippy.dfZlib))
     of "public_key":
       result.public_key.base58 = $sqlite3.column_text(stmt, col)
     of "public_key_raw":
@@ -99,7 +103,7 @@ proc initPost(stmt: PStmt): Post =
       if compressedLen > 0:
         var s = newSeq[uint8](compressedLen)
         copyMem(s[0].addr, compressedBody, compressedLen)
-        result.body = CompressedValue(uncompressed: zippy.uncompress(cast[string](s), dataFormat = zippy.dfZlib))
+        result.body = CompressedValue(compressed: cast[string](s), uncompressed: zippy.uncompress(cast[string](s), dataFormat = zippy.dfZlib))
     of "parent_ids":
       result.parent_ids = $sqlite3.column_text(stmt, col)
     of "reply_count":
@@ -140,7 +144,6 @@ proc selectPostChildren*(conn: PSqlite3, id: int64): seq[Post] =
 proc insertPost*(conn: PSqlite3, entity: Post, extraFn: proc (x: var Post, id: int64) = nil): int64 =
   db_sqlite.exec(conn, sql"BEGIN TRANSACTION")
   var e = entity
-  e.body.compressed = cast[seq[uint8]](sequtils.toSeq(zippy.compress(e.body.uncompressed, dataFormat = zippy.dfZlib)))
   if e.parent_id > 0:
     # set the parent ids
     let parents = selectPostParentIds(conn, e.parent_id)
