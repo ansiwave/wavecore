@@ -6,7 +6,7 @@ from ./wavecorepkg/db/vfs import nil
 from os import joinPath
 from osproc import nil
 from ./wavecorepkg/ed25519 import nil
-from base64 import nil
+from ./wavecorepkg/base58 import nil
 
 const
   port = 3000
@@ -171,8 +171,8 @@ when isMainModule:
   var p1 = entities.Post(parent_id: 0, user_id: 0, body: db.CompressedValue(uncompressed: asciiArt))
   p1.id = server.insertPost(s, p1)
   var
-    alice = entities.User(public_key: base64.encode(ed25519.initKeyPair().public, safe = true))
-    bob = entities.User(public_key: base64.encode(ed25519.initKeyPair().public, safe = true))
+    alice = entities.User(public_key: base58.encode(ed25519.initKeyPair().public))
+    bob = entities.User(public_key: base58.encode(ed25519.initKeyPair().public))
   alice.id = server.insertUser(s, alice)
   bob.id = server.insertUser(s, bob)
   var p2 = entities.Post(parent_id: p1.id, user_id: bob.id, body: db.CompressedValue(uncompressed: "Hello, world...this is a lame comment\n\n" & loremIpsum))
