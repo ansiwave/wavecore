@@ -4,12 +4,24 @@ from ../db import nil
 from zippy import nil
 from sequtils import nil
 from strutils import format
+from ../ed25519 import nil
+from ../base58 import nil
 
 type
+  CompressedValue* = object
+    compressed*: seq[uint8]
+    uncompressed*: string
+  PublicKey* = object
+    base58*: string
+    raw*: ed25519.PublicKey
   User* = object
     id*: int64
-    body*: db.CompressedValue
-    public_key*: string
+    body*: CompressedValue
+    public_key*: PublicKey
+
+proc initPublicKey*(raw: ed25519.PublicKey): PublicKey =
+  result.raw = raw
+  result.base58 = base58.encode(raw)
 
 proc initUser(stmt: PStmt): User =
   var cols = sqlite3.column_count(stmt)
@@ -25,14 +37,22 @@ proc initUser(stmt: PStmt): User =
       if compressedLen > 0:
         var s = newSeq[uint8](compressedLen)
         copyMem(s[0].addr, compressedBody, compressedLen)
-        result.body = db.CompressedValue(uncompressed: zippy.uncompress(cast[string](s), dataFormat = zippy.dfZlib))
+        result.body = CompressedValue(uncompressed: zippy.uncompress(cast[string](s), dataFormat = zippy.dfZlib))
     of "public_key":
-      result.public_key = $sqlite3.column_text(stmt, col)
+      result.public_key.base58 = $sqlite3.column_text(stmt, col)
+    of "public_key_raw":
+      let
+        compressedBody = sqlite3.column_blob(stmt, col)
+        compressedLen = sqlite3.column_bytes(stmt, col)
+      var pubkey: ed25519.PublicKey
+      assert compressedLen == pubkey.len
+      copyMem(pubkey.addr, compressedBody, compressedLen)
+      result.publicKey.raw = pubkey
 
 proc selectUser*(conn: PSqlite3, publicKey: string): User =
   const query =
     """
-      SELECT user_id, body, public_key FROM user
+      SELECT user_id, body, public_key, public_key_raw FROM user
       WHERE public_key = ?
     """
   #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), publicKey):
@@ -43,8 +63,8 @@ proc insertUser*(conn: PSqlite3, entity: User, extraFn: proc (x: var User, id: i
   db_sqlite.exec(conn, sql"BEGIN TRANSACTION")
   var e = entity
   var stmt: PStmt
-  db.withStatement(conn, "INSERT INTO user (body, public_key, public_key_algo) VALUES (?, ?, ?)", stmt):
-    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), entity.body.compressed, entity.publicKey, "ed25519")
+  db.withStatement(conn, "INSERT INTO user (body, public_key, public_key_raw, public_key_algo) VALUES (?, ?, ?, ?)", stmt):
+    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), entity.body.compressed, entity.publicKey.base58, entity.publicKey.raw, "ed25519")
     if step(stmt) != SQLITE_DONE:
       db_sqlite.dbError(conn)
     result = sqlite3.last_insert_rowid(conn)
@@ -57,7 +77,7 @@ type
     id*: int64
     parent_id*: int64
     user_id*: int64
-    body*: db.CompressedValue
+    body*: CompressedValue
     parent_ids*: string
     reply_count*: int64
 
@@ -79,7 +99,7 @@ proc initPost(stmt: PStmt): Post =
       if compressedLen > 0:
         var s = newSeq[uint8](compressedLen)
         copyMem(s[0].addr, compressedBody, compressedLen)
-        result.body = db.CompressedValue(uncompressed: zippy.uncompress(cast[string](s), dataFormat = zippy.dfZlib))
+        result.body = CompressedValue(uncompressed: zippy.uncompress(cast[string](s), dataFormat = zippy.dfZlib))
     of "parent_ids":
       result.parent_ids = $sqlite3.column_text(stmt, col)
     of "reply_count":

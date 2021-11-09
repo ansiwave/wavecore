@@ -31,6 +31,7 @@ proc init*(conn: PSqlite3) =
       user_id INTEGER PRIMARY KEY AUTOINCREMENT,
       body BLOB,
       public_key TEXT,
+      public_key_raw BlOB,
       public_key_algo TEXT
     )
   """
@@ -69,9 +70,4 @@ proc select*[T](conn: PSqlite3, init: proc (stmt: PStmt): T, query: string, args
       db_sqlite.bindParam(db_sqlite.SqlPrepared(stmt), i+1, args[i])
     while step(stmt) == SQLITE_ROW:
       result.add(init(stmt))
-
-type
-  CompressedValue* = object
-    compressed*: seq[uint8]
-    uncompressed*: string
 

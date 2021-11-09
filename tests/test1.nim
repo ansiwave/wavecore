@@ -3,7 +3,6 @@ from ./wavecorepkg/client import nil
 from ./wavecorepkg/server import nil
 import json
 from ./wavecorepkg/ed25519 import nil
-from ./wavecorepkg/base58 import nil
 
 const
   port = 3000
@@ -61,12 +60,12 @@ test "query users":
   let conn = db.open(":memory:")
   db.init(conn)
   var
-    alice = User(public_key: base58.encode(ed25519.initKeyPair().public))
-    bob = User(public_key: base58.encode(ed25519.initKeyPair().public))
+    alice = User(public_key: entities.initPublicKey(ed25519.initKeyPair().public))
+    bob = User(public_key: entities.initPublicKey(ed25519.initKeyPair().public))
   alice.id = entities.insertUser(conn, alice)
   bob.id = entities.insertUser(conn, bob)
-  check alice == entities.selectUser(conn, alice.public_key)
-  check bob == entities.selectUser(conn, bob.public_key)
+  check alice == entities.selectUser(conn, alice.public_key.base58)
+  check bob == entities.selectUser(conn, bob.public_key.base58)
   db_sqlite.close(conn)
 
 test "query users asynchronously":
@@ -79,16 +78,16 @@ test "query users asynchronously":
     let conn = db.open(dbFilename)
     db.init(conn)
     var
-      alice = User(public_key: base58.encode(ed25519.initKeyPair().public))
-      bob = User(public_key: base58.encode(ed25519.initKeyPair().public))
+      alice = User(public_key: entities.initPublicKey(ed25519.initKeyPair().public))
+      bob = User(public_key: entities.initPublicKey(ed25519.initKeyPair().public))
     alice.id = entities.insertUser(conn, alice)
     bob.id = entities.insertUser(conn, bob)
     db_sqlite.close(conn)
     # query db over http
-    var response = client.queryUser(c, dbFilename, alice.publicKey)
+    var response = client.queryUser(c, dbFilename, alice.publicKey.base58)
     client.get(response, true)
     check response.value.valid == alice
-    var response2 = client.queryUser(c, dbFilename, bob.publicKey)
+    var response2 = client.queryUser(c, dbFilename, bob.publicKey.base58)
     client.get(response2, true)
     check response2.value.valid == bob
     # query something invalid
@@ -104,17 +103,17 @@ test "query posts":
   let conn = db.open(":memory:")
   db.init(conn)
   var
-    alice = User(public_key: base58.encode(ed25519.initKeyPair().public))
-    bob = User(public_key: base58.encode(ed25519.initKeyPair().public))
+    alice = User(public_key: entities.initPublicKey(ed25519.initKeyPair().public))
+    bob = User(public_key: entities.initPublicKey(ed25519.initKeyPair().public))
   alice.id = entities.insertUser(conn, alice)
   bob.id = entities.insertUser(conn, bob)
-  var p1 = Post(parent_id: 0, user_id: alice.id, body: db.CompressedValue(uncompressed: "Hello, i'm alice"))
+  var p1 = Post(parent_id: 0, user_id: alice.id, body: entities.CompressedValue(uncompressed: "Hello, i'm alice"))
   p1.id = entities.insertPost(conn, p1)
-  var p2 = Post(parent_id: p1.id, user_id: bob.id, body: db.CompressedValue(uncompressed: "Hello, i'm bob"))
+  var p2 = Post(parent_id: p1.id, user_id: bob.id, body: entities.CompressedValue(uncompressed: "Hello, i'm bob"))
   p2.id = entities.insertPost(conn, p2)
-  var p3 = Post(parent_id: p2.id, user_id: alice.id, body: db.CompressedValue(uncompressed: "What's up"))
+  var p3 = Post(parent_id: p2.id, user_id: alice.id, body: entities.CompressedValue(uncompressed: "What's up"))
   p3.id = entities.insertPost(conn, p3)
-  var p4 = Post(parent_id: p2.id, user_id: alice.id, body: db.CompressedValue(uncompressed: "How are you?"))
+  var p4 = Post(parent_id: p2.id, user_id: alice.id, body: entities.CompressedValue(uncompressed: "How are you?"))
   p4.id = entities.insertPost(conn, p4)
   p1 = entities.selectPost(conn, p1.id)
   p2 = entities.selectPost(conn, p2.id)
@@ -136,17 +135,17 @@ test "query posts asynchronously":
     let conn = db.open(dbFilename)
     db.init(conn)
     var
-      alice = User(public_key: base58.encode(ed25519.initKeyPair().public))
-      bob = User(public_key: base58.encode(ed25519.initKeyPair().public))
+      alice = User(public_key: entities.initPublicKey(ed25519.initKeyPair().public))
+      bob = User(public_key: entities.initPublicKey(ed25519.initKeyPair().public))
     alice.id = entities.insertUser(conn, alice)
     bob.id = entities.insertUser(conn, bob)
-    var p1 = Post(parent_id: 0, user_id: alice.id, body: db.CompressedValue(uncompressed: "Hello, i'm alice"))
+    var p1 = Post(parent_id: 0, user_id: alice.id, body: entities.CompressedValue(uncompressed: "Hello, i'm alice"))
     p1.id = entities.insertPost(conn, p1)
-    var p2 = Post(parent_id: p1.id, user_id: bob.id, body: db.CompressedValue(uncompressed: "Hello, i'm bob"))
+    var p2 = Post(parent_id: p1.id, user_id: bob.id, body: entities.CompressedValue(uncompressed: "Hello, i'm bob"))
     p2.id = entities.insertPost(conn, p2)
-    var p3 = Post(parent_id: p2.id, user_id: alice.id, body: db.CompressedValue(uncompressed: "What's up"))
+    var p3 = Post(parent_id: p2.id, user_id: alice.id, body: entities.CompressedValue(uncompressed: "What's up"))
     p3.id = entities.insertPost(conn, p3)
-    var p4 = Post(parent_id: p2.id, user_id: alice.id, body: db.CompressedValue(uncompressed: "How are you?"))
+    var p4 = Post(parent_id: p2.id, user_id: alice.id, body: entities.CompressedValue(uncompressed: "How are you?"))
     p4.id = entities.insertPost(conn, p4)
     p1 = entities.selectPost(conn, p1.id)
     db_sqlite.close(conn)
@@ -170,13 +169,13 @@ test "search posts":
   let conn = db.open(":memory:")
   db.init(conn)
   var
-    alice = User(public_key: base58.encode(ed25519.initKeyPair().public))
-    bob = User(public_key: base58.encode(ed25519.initKeyPair().public))
+    alice = User(public_key: entities.initPublicKey(ed25519.initKeyPair().public))
+    bob = User(public_key: entities.initPublicKey(ed25519.initKeyPair().public))
   alice.id = entities.insertUser(conn, alice)
   bob.id = entities.insertUser(conn, bob)
-  var p1 = Post(parent_id: 0, user_id: alice.id, body: db.CompressedValue(uncompressed: "Hello, i'm alice"))
+  var p1 = Post(parent_id: 0, user_id: alice.id, body: entities.CompressedValue(uncompressed: "Hello, i'm alice"))
   p1.id = entities.insertPost(conn, p1)
-  var p2 = Post(parent_id: p1.id, user_id: bob.id, body: db.CompressedValue(uncompressed: "Hello, i'm bob"))
+  var p2 = Post(parent_id: p1.id, user_id: bob.id, body: entities.CompressedValue(uncompressed: "Hello, i'm bob"))
   p2.id = entities.insertPost(conn, p2)
   p1 = entities.selectPost(conn, p1.id)
   p2 = entities.selectPost(conn, p2.id)
@@ -191,16 +190,16 @@ test "retrieve sqlite db via http":
     var conn = db.open(dbFilename)
     db.init(conn)
     var
-      alice = User(public_key: base58.encode(ed25519.initKeyPair().public))
-      bob = User(public_key: base58.encode(ed25519.initKeyPair().public))
+      alice = User(public_key: entities.initPublicKey(ed25519.initKeyPair().public))
+      bob = User(public_key: entities.initPublicKey(ed25519.initKeyPair().public))
     discard entities.insertUser(conn, alice)
     discard entities.insertUser(conn, bob)
     db_sqlite.close(conn)
     # re-open db, but this time all reads happen over http
     conn = db.open(dbFilename, true)
     let
-      alice2 = entities.selectUser(conn, alice.public_key)
-      bob2 = entities.selectUser(conn, bob.public_key)
+      alice2 = entities.selectUser(conn, alice.public_key.base58)
+      bob2 = entities.selectUser(conn, bob.public_key.base58)
     alice.id = alice2.id
     bob.id = bob2.id
     check alice == alice2
