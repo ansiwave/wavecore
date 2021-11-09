@@ -32,7 +32,7 @@ proc init*(conn: PSqlite3) =
       body BLOB
     )
   """
-  db_sqlite.exec conn, sql"CREATE VIRTUAL TABLE user_search USING fts5 (user_id, attribute, value)"
+  db_sqlite.exec conn, sql"CREATE VIRTUAL TABLE user_search USING fts5 (user_id, attribute, value, value_unindexed UNINDEXED)"
   db_sqlite.exec conn, sql"""
     CREATE TABLE post (
       post_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -48,7 +48,7 @@ proc init*(conn: PSqlite3) =
   db_sqlite.exec conn, sql"CREATE INDEX post_user_id ON post(user_id)"
   db_sqlite.exec conn, sql"CREATE INDEX post_parent_id ON post(parent_id)"
   db_sqlite.exec conn, sql"CREATE INDEX post_parent_id_score ON post(parent_id, score)"
-  db_sqlite.exec conn, sql"CREATE VIRTUAL TABLE post_search USING fts5 (post_id, attribute, value)"
+  db_sqlite.exec conn, sql"CREATE VIRTUAL TABLE post_search USING fts5 (post_id, attribute, value, value_unindexed UNINDEXED)"
 
 template withStatement*(conn: PSqlite3, query: string, stmt: PStmt, body: untyped) =
   try:
