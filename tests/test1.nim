@@ -212,14 +212,14 @@ import ./wavecorepkg/ed25519
 
 test "ed25519":
   var
-    seed: array[32, uint8]
-    public_key: array[32, uint8]
-    private_key: array[64, uint8]
-    signature: array[64, uint8]
+    seed: Seed
+    public_key: PublicKey
+    private_key: PrivateKey
+    signature: Signature
 
   var
-    other_public_key: array[32, uint8]
-    other_private_key: array[64, uint8]
+    other_public_key: PublicKey
+    other_private_key: PrivateKey
     shared_secret: array[32, uint8]
 
   const message = "TEST MESSAGE"
