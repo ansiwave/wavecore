@@ -28,7 +28,7 @@ proc ed25519_key_exchange*(shared_secret: pointer; public_key: ptr PublicKey;
                            private_key: ptr PrivateKey) {.importc.}
 
 type
-  KeyPair = object
+  KeyPair* = object
     public*: PublicKey
     private*: PrivateKey
 
@@ -37,3 +37,5 @@ proc initKeyPair*(): KeyPair =
   assert 0 == ed25519_create_seed(seed.addr)
   ed25519_create_keypair(result.public.addr, result.private.addr, seed.addr)
 
+proc sign*(keys: KeyPair, content: string): Signature =
+  ed25519_sign(result.addr, content, content.len.csize_t, keys.public.unsafeAddr, keys.private.unsafeAddr)

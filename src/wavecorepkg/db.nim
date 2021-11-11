@@ -30,6 +30,8 @@ proc init*(conn: PSqlite3) =
     CREATE TABLE user (
       user_id INTEGER PRIMARY KEY AUTOINCREMENT,
       content BLOB,
+      content_sig TEXT,
+      content_sig_blob BLOB,
       public_key TEXT,
       public_key_blob BlOB,
       public_key_algo TEXT
@@ -42,6 +44,8 @@ proc init*(conn: PSqlite3) =
       post_id INTEGER PRIMARY KEY AUTOINCREMENT,
       ts DATETIME DEFAULT CURRENT_TIMESTAMP,
       content BLOB,
+      content_sig TEXT,
+      content_sig_blob BLOB,
       user_id INTEGER,
       parent_id INTEGER,
       parent_ids TEXT,
@@ -49,6 +53,7 @@ proc init*(conn: PSqlite3) =
       score INTEGER
     )
   """
+  db_sqlite.exec conn, sql"CREATE INDEX post_content_sig ON post(content_sig)"
   db_sqlite.exec conn, sql"CREATE INDEX post_user_id ON post(user_id)"
   db_sqlite.exec conn, sql"CREATE INDEX post_parent_id ON post(parent_id)"
   db_sqlite.exec conn, sql"CREATE INDEX post_parent_id_score ON post(parent_id, score)"
