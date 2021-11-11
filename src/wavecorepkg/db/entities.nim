@@ -156,7 +156,7 @@ proc selectPostExtras*(conn: PSqlite3, sig: string): tuple =
       SELECT post_id, score FROM post
       WHERE content_sig = ?
     """
-  proc init(stmt: PStmt): tuple[post_id: int64, score: int64] =
+  proc init(stmt: PStmt): tuple =
     var cols = sqlite3.column_count(stmt)
     for col in 0 .. cols-1:
       let colName = $sqlite3.column_name(stmt, col)
@@ -173,7 +173,7 @@ proc selectUserExtras*(conn: PSqlite3, publicKey: string): tuple =
       SELECT user_id FROM user
       WHERE public_key = ?
     """
-  proc init(stmt: PStmt): tuple[user_id: int64] =
+  proc init(stmt: PStmt): tuple =
     var cols = sqlite3.column_count(stmt)
     for col in 0 .. cols-1:
       let colName = $sqlite3.column_name(stmt, col)
