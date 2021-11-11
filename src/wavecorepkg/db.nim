@@ -33,8 +33,8 @@ proc init*(conn: PSqlite3) =
       content BLOB,
       content_sig TEXT,
       content_sig_blob BLOB,
-      public_key TEXT,
-      public_key_blob BlOB,
+      public_key TEXT UNIQUE,
+      public_key_blob BlOB UNIQUE,
       public_key_algo TEXT
     )
   """
@@ -45,12 +45,12 @@ proc init*(conn: PSqlite3) =
       post_id INTEGER PRIMARY KEY AUTOINCREMENT,
       ts DATETIME DEFAULT CURRENT_TIMESTAMP,
       content BLOB,
-      content_sig TEXT,
-      content_sig_blob BLOB,
+      content_sig TEXT UNIQUE,
+      content_sig_blob BLOB UNIQUE,
       user_id INTEGER,
       parent_id INTEGER,
       parent_ids TEXT,
-      parent_content_sig TEXT,
+      parent TEXT,
       reply_count INTEGER,
       score INTEGER
     )
@@ -58,8 +58,8 @@ proc init*(conn: PSqlite3) =
   db_sqlite.exec conn, sql"CREATE INDEX post_content_sig ON post(content_sig)"
   db_sqlite.exec conn, sql"CREATE INDEX post_user_id ON post(user_id)"
   db_sqlite.exec conn, sql"CREATE INDEX post_parent_id ON post(parent_id)"
-  db_sqlite.exec conn, sql"CREATE INDEX post_parent_content_sig ON post(parent_content_sig)"
-  db_sqlite.exec conn, sql"CREATE INDEX post_parent_content_sig_score ON post(parent_content_sig, score)"
+  db_sqlite.exec conn, sql"CREATE INDEX post_parent ON post(parent)"
+  db_sqlite.exec conn, sql"CREATE INDEX post_parent_score ON post(parent, score)"
   db_sqlite.exec conn, sql"CREATE VIRTUAL TABLE post_search USING fts5 (post_id, attribute, value, value_unindexed UNINDEXED)"
 
 template withStatement*(conn: PSqlite3, query: string, stmt: PStmt, body: untyped) =
