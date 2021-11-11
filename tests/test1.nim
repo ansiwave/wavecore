@@ -192,6 +192,27 @@ test "search posts":
   check @[p1, p2] == entities.searchPosts(conn, "hello")
   db_sqlite.close(conn)
 
+test "score":
+  let conn = db.open(":memory:")
+  db.init(conn)
+  let
+    aliceKeys = ed25519.initKeyPair()
+    bobKeys = ed25519.initKeyPair()
+    alice = User(public_key: entities.initPublicKey(aliceKeys.public), content: entities.initContent(aliceKeys, ""))
+    bob = User(public_key: entities.initPublicKey(bobKeys.public), content: entities.initContent(bobKeys, ""))
+  entities.insertUser(conn, alice)
+  entities.insertUser(conn, bob)
+  let p1 = Post(public_key: alice.public_key.base58, content: entities.initContent(aliceKeys, "Hello, i'm alice"))
+  entities.insertPost(conn, p1)
+  let p2 = Post(parent: p1.content.sig.base58, public_key: bob.public_key.base58, content: entities.initContent(bobKeys, "Hello, i'm bob"))
+  entities.insertPost(conn, p2)
+  let p3 = Post(parent: p2.content.sig.base58, public_key: alice.public_key.base58, content: entities.initContent(aliceKeys, "What's up"))
+  entities.insertPost(conn, p3)
+  let p4 = Post(parent: p2.content.sig.base58, public_key: alice.public_key.base58, content: entities.initContent(aliceKeys, "How are you?"))
+  entities.insertPost(conn, p4)
+  check 2 == entities.selectPostExtras(conn, p1.content.sig.base58).score
+  db_sqlite.close(conn)
+
 test "retrieve sqlite db via http":
   var s = server.initServer("localhost", port, ".")
   server.start(s)

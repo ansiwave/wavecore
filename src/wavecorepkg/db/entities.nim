@@ -26,7 +26,6 @@ type
   Post* = object
     content*: Content
     public_key*: string
-    parent_ids*: string
     parent*: string
     reply_count*: int64
 
@@ -134,8 +133,6 @@ proc initPost(stmt: PStmt): Post =
       result.content.sig.blob = sig
     of "public_key":
       result.public_key = $sqlite3.column_text(stmt, col)
-    of "parent_ids":
-      result.parent_ids = $sqlite3.column_text(stmt, col)
     of "parent":
       result.parent = $sqlite3.column_text(stmt, col)
     of "reply_count":
@@ -153,28 +150,52 @@ proc selectPost*(conn: PSqlite3, sig: string): Post =
   #  echo x
   db.select[Post](conn, initPost, query, sig)[0]
 
-proc selectPostId*(conn: PSqlite3, sig: string): int64 =
+proc selectPostExtras*(conn: PSqlite3, sig: string): tuple =
   const query =
     """
-      SELECT post_id FROM post
+      SELECT post_id, score FROM post
       WHERE content_sig = ?
     """
-  proc init(stmt: PStmt): tuple[post_id: int64] =
+  proc init(stmt: PStmt): tuple[post_id: int64, score: int64] =
     var cols = sqlite3.column_count(stmt)
     for col in 0 .. cols-1:
       let colName = $sqlite3.column_name(stmt, col)
       case colName:
       of "post_id":
         result.post_id = sqlite3.column_int(stmt, col)
-  db.select[tuple[post_id: int64]](conn, init, query, sig)[0].post_id
+      of "score":
+        result.score = sqlite3.column_int(stmt, col)
+  db.select[tuple[post_id: int64, score: int64]](conn, init, query, sig)[0]
 
-proc selectPostParentIds(conn: PSqlite3, sig: string): string =
+proc selectUserExtras*(conn: PSqlite3, publicKey: string): tuple =
   const query =
     """
-      SELECT parent_ids FROM post
-      WHERE content_sig = ?
+      SELECT user_id FROM user
+      WHERE public_key = ?
     """
-  db.select[Post](conn, initPost, query, sig)[0].parent_ids
+  proc init(stmt: PStmt): tuple[user_id: int64] =
+    var cols = sqlite3.column_count(stmt)
+    for col in 0 .. cols-1:
+      let colName = $sqlite3.column_name(stmt, col)
+      case colName:
+      of "user_id":
+        result.user_id = sqlite3.column_int(stmt, col)
+  db.select[tuple[user_id: int64]](conn, init, query, publicKey)[0]
+
+proc selectPostParentIds(conn: PSqlite3, id: int64): string =
+  const query =
+    """
+      SELECT value AS parent_ids FROM post_search
+      WHERE post_id MATCH ? AND attribute MATCH 'parent_ids'
+    """
+  proc init(stmt: PStmt): tuple[parent_ids: string] =
+    var cols = sqlite3.column_count(stmt)
+    for col in 0 .. cols-1:
+      let colName = $sqlite3.column_name(stmt, col)
+      case colName:
+      of "parent_ids":
+        result.parent_ids = $sqlite3.column_text(stmt, col)
+  db.select[tuple[parent_ids: string]](conn, init, query, id)[0].parent_ids
 
 proc selectPostChildren*(conn: PSqlite3, sig: string): seq[Post] =
   const query =
@@ -190,44 +211,52 @@ proc selectPostChildren*(conn: PSqlite3, sig: string): seq[Post] =
 
 proc insertPost*(conn: PSqlite3, entity: Post, extraFn: proc (x: var Post, id: int64) = nil) =
   db_sqlite.exec(conn, sql"BEGIN TRANSACTION")
-  var e = entity
-  if e.parent != "":
-    # set the parent ids
-    let
-      parentId = selectPostId(conn, e.parent)
-      parents = selectPostParentIds(conn, e.parent)
-    e.parent_ids =
-      if parents.len == 0:
+  var
+    e = entity
+    stmt: PStmt
+    id: int64
+  let parentIds =
+    if e.parent == "":
+      ""
+    else:
+      # set the parent ids
+      let
+        parentId = selectPostExtras(conn, e.parent).post_id
+        parentParentIds = selectPostParentIds(conn, parentId)
+      if parentParentIds.len == 0:
         $parentId
       else:
-        parents & ", " & $parentId
+        parentParentIds & ", " & $parentId
+  db.withStatement(conn, "INSERT INTO post (content, content_sig, content_sig_blob, public_key, parent, reply_count, score) VALUES (?, ?, ?, ?, ?, 0, 0)", stmt):
+    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), e.content.value.compressed, e.content.sig.base58, e.content.sig.blob, e.public_key, e.parent)
+    if step(stmt) != SQLITE_DONE:
+      db_sqlite.dbError(conn)
+    id = sqlite3.last_insert_rowid(conn)
+  let userId = selectUserExtras(conn, e.public_key).user_id
+  db.withStatement(conn, "INSERT INTO post_search (post_id, user_id, attribute, value) VALUES (?, ?, ?, ?)", stmt):
+    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), id, userId, "content", e.content.value.uncompressed)
+    if step(stmt) != SQLITE_DONE:
+      db_sqlite.dbError(conn)
+  db.withStatement(conn, "INSERT INTO post_search (post_id, user_id, attribute, value) VALUES (?, ?, ?, ?)", stmt):
+    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), id, userId, "parent_ids", parentIds)
+    if step(stmt) != SQLITE_DONE:
+      db_sqlite.dbError(conn)
+  if e.parent != "":
     # update the parents' reply count and score
     let reply_count_query =
       """
       UPDATE post
       SET reply_count = reply_count + 1
       WHERE post_id IN ($1)
-      """.format(e.parent_ids)
+      """.format(parentIds)
     db_sqlite.exec(conn, sql reply_count_query)
     let score_query =
       """
       UPDATE post
-      SET score = score + 1
-      WHERE post_id IN ($1) AND public_key != ?
-      """.format(e.parent_ids)
-    db_sqlite.exec(conn, sql score_query, e.public_key)
-  var
-    stmt: PStmt
-    id: int64
-  db.withStatement(conn, "INSERT INTO post (content, content_sig, content_sig_blob, public_key, parent_ids, parent, reply_count, score) VALUES (?, ?, ?, ?, ?, ?, 0, 0)", stmt):
-    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), e.content.value.compressed, e.content.sig.base58, e.content.sig.blob, e.public_key, e.parent_ids, e.parent)
-    if step(stmt) != SQLITE_DONE:
-      db_sqlite.dbError(conn)
-    id = sqlite3.last_insert_rowid(conn)
-  db.withStatement(conn, "INSERT INTO post_search (post_id, attribute, value) VALUES (?, ?, ?)", stmt):
-    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), id, "content", e.content.value.uncompressed)
-    if step(stmt) != SQLITE_DONE:
-      db_sqlite.dbError(conn)
+      SET score = (SELECT COUNT(DISTINCT user_id) FROM post_search WHERE attribute MATCH 'parent_ids' AND value MATCH post.post_id)
+      WHERE post_id IN ($1)
+      """.format(parentIds)
+    db_sqlite.exec(conn, sql score_query)
   if extraFn != nil:
     extraFn(e, id)
   db_sqlite.exec(conn, sql"COMMIT")

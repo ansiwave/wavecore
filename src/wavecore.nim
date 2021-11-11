@@ -168,8 +168,11 @@ when isMainModule:
   var conn = db.open(dbPath)
   db.init(conn)
   db_sqlite.close(conn)
-  let sysopKeys = ed25519.initKeyPair()
-  var p1 = entities.Post(content: entities.initContent(sysopKeys, asciiArt))
+  let
+    sysopKeys = ed25519.initKeyPair()
+    sysop = entities.User(public_key: entities.initPublicKey(sysopKeys.public))
+  server.insertUser(s, sysop)
+  var p1 = entities.Post(public_key: sysop.public_key.base58, content: entities.initContent(sysopKeys, asciiArt))
   p1.content.sig.base58 = "root" # FIXME: this is just temporary
   server.insertPost(s, p1)
   let
