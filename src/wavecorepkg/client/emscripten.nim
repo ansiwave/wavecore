@@ -47,9 +47,9 @@ type
     of QueryUser:
       publicKey*: string
     of QueryPost:
-      postId*: int64
+      postSig*: string
     of QueryPostChildren:
-      postParentId*: int64
+      postParentSig*: string
     dbFilename*: string
   WorkerRequest = object
     action: Action
@@ -148,11 +148,11 @@ proc sendFetch*(client: Client, request: Request, chan: ChannelRef) =
 proc sendUserQuery*(client: Client, filename: string, publicKey: string, chan: ChannelRef) =
   sendAction(client, Action(kind: QueryUser, dbFilename: filename, publicKey: publicKey), chan)
 
-proc sendPostQuery*(client: Client, filename: string, id: int64, chan: ChannelRef) =
-  sendAction(client, Action(kind: QueryPost, dbFilename: filename, postId: id), chan)
+proc sendPostQuery*(client: Client, filename: string, sig: string, chan: ChannelRef) =
+  sendAction(client, Action(kind: QueryPost, dbFilename: filename, postSig: sig), chan)
 
-proc sendPostChildrenQuery*(client: Client, filename: string, id: int64, chan: ChannelRef) =
-  sendAction(client, Action(kind: QueryPostChildren, dbFilename: filename, postParentId: id), chan)
+proc sendPostChildrenQuery*(client: Client, filename: string, sig: string, chan: ChannelRef) =
+  sendAction(client, Action(kind: QueryPostChildren, dbFilename: filename, postParentSig: sig), chan)
 
 proc recvAction(data: pointer, size: cint) {.exportc.} =
   var input = newString(size)
@@ -183,7 +183,7 @@ proc recvAction(data: pointer, size: cint) {.exportc.} =
     of QueryPost:
       try:
         let conn = db.open(action.dbFilename, true)
-        let post = entities.selectPost(conn, action.postId)
+        let post = entities.selectPost(conn, action.postSig)
         db_sqlite.close(conn)
         flatty.toFlatty(Result[entities.Post](kind: Valid, valid: post))
       except Exception as ex:
@@ -191,7 +191,7 @@ proc recvAction(data: pointer, size: cint) {.exportc.} =
     of QueryPostChildren:
       try:
         let conn = db.open(action.dbFilename, true)
-        let posts = entities.selectPostChildren(conn, action.postParentId)
+        let posts = entities.selectPostChildren(conn, action.postParentSig)
         db_sqlite.close(conn)
         flatty.toFlatty(Result[seq[entities.Post]](kind: Valid, valid: posts))
       except Exception as ex:

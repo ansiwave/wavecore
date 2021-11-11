@@ -147,17 +147,17 @@ proc initPost(stmt: PStmt): Post =
     else:
       discard
 
-proc selectPost*(conn: PSqlite3, id: int64): Post =
+proc selectPost*(conn: PSqlite3, sig: string): Post =
   const query =
     """
       SELECT post_id, content, content_sig, content_sig_blob, user_id, parent_id, reply_count FROM post
-      WHERE post_id = ?
+      WHERE content_sig = ?
     """
-  #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), id):
+  #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), sig):
   #  echo x
-  db.select[Post](conn, initPost, query, id)[0]
+  db.select[Post](conn, initPost, query, sig)[0]
 
-proc selectPostParentIds*(conn: PSqlite3, id: int64): string =
+proc selectPostParentIds(conn: PSqlite3, id: int64): string =
   const query =
     """
       SELECT parent_ids FROM post
@@ -165,17 +165,17 @@ proc selectPostParentIds*(conn: PSqlite3, id: int64): string =
     """
   db.select[Post](conn, initPost, query, id)[0].parent_ids
 
-proc selectPostChildren*(conn: PSqlite3, id: int64): seq[Post] =
+proc selectPostChildren*(conn: PSqlite3, sig: string): seq[Post] =
   const query =
     """
       SELECT post_id, content, content_sig, content_sig_blob, user_id, parent_id, reply_count FROM post
-      WHERE parent_id = ?
+      WHERE parent_id = (SELECT post_id FROM post WHERE content_sig = ?)
       ORDER BY score DESC
       LIMIT 10
     """
-  #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), id):
+  #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), sig):
   #  echo x
-  sequtils.toSeq(db.select[Post](conn, initPost, query, id))
+  sequtils.toSeq(db.select[Post](conn, initPost, query, sig))
 
 proc insertPost*(conn: PSqlite3, entity: Post, extraFn: proc (x: var Post, id: int64) = nil): int64 =
   db_sqlite.exec(conn, sql"BEGIN TRANSACTION")

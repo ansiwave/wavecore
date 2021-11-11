@@ -63,7 +63,7 @@ proc insertPost*(server: Server, entity: entities.Post): int64 =
   let conn = db.open(server.staticFileDir.joinPath(dbFilename))
   result = entities.insertPost(conn, entity,
     proc (x: var entities.Post, id: int64) =
-      writeFile(server.staticFileDir.joinPath(ansiwavesDir).joinPath($id & ".ansiwavez"), x.content.value.compressed)
+      writeFile(server.staticFileDir.joinPath(ansiwavesDir).joinPath($x.content.sig.base58 & ".ansiwavez"), x.content.value.compressed)
   )
   db_sqlite.close(conn)
 

@@ -121,14 +121,14 @@ test "query posts":
   p3.id = entities.insertPost(conn, p3)
   var p4 = Post(parent_id: p2.id, user_id: alice.id, content: entities.initContent(aliceKeys, "How are you?"))
   p4.id = entities.insertPost(conn, p4)
-  p1 = entities.selectPost(conn, p1.id)
-  p2 = entities.selectPost(conn, p2.id)
-  p3 = entities.selectPost(conn, p3.id)
-  p4 = entities.selectPost(conn, p4.id)
-  check @[p2] == entities.selectPostChildren(conn, p1.id)
-  check 3 == entities.selectPost(conn, p1.id).reply_count
-  check @[p4, p3] == entities.selectPostChildren(conn, p2.id)
-  check 2 == entities.selectPost(conn, p2.id).reply_count
+  p1 = entities.selectPost(conn, p1.content.sig.base58)
+  p2 = entities.selectPost(conn, p2.content.sig.base58)
+  p3 = entities.selectPost(conn, p3.content.sig.base58)
+  p4 = entities.selectPost(conn, p4.content.sig.base58)
+  check @[p2] == entities.selectPostChildren(conn, p1.content.sig.base58)
+  check 3 == entities.selectPost(conn, p1.content.sig.base58).reply_count
+  check @[p4, p3] == entities.selectPostChildren(conn, p2.content.sig.base58)
+  check 2 == entities.selectPost(conn, p2.content.sig.base58).reply_count
   db_sqlite.close(conn)
 
 test "query posts asynchronously":
@@ -155,17 +155,17 @@ test "query posts asynchronously":
     p3.id = entities.insertPost(conn, p3)
     var p4 = Post(parent_id: p2.id, user_id: alice.id, content: entities.initContent(aliceKeys, "How are you?"))
     p4.id = entities.insertPost(conn, p4)
-    p1 = entities.selectPost(conn, p1.id)
+    p1 = entities.selectPost(conn, p1.content.sig.base58)
     db_sqlite.close(conn)
     # query db over http
-    var response = client.queryPost(c, dbFilename, p1.id)
+    var response = client.queryPost(c, dbFilename, p1.content.sig.base58)
     client.get(response, true)
     check response.value.valid == p1
-    var response2 = client.queryPostChildren(c, dbFilename, p2.id)
+    var response2 = client.queryPostChildren(c, dbFilename, p2.content.sig.base58)
     client.get(response2, true)
     check response2.value.valid == @[p4, p3]
     # query something invalid
-    var response3 = client.queryPost(c, dbFilename, -1)
+    var response3 = client.queryPost(c, dbFilename, "yo")
     client.get(response3, true)
     check response3.value.kind == client.Error
   finally:
@@ -187,8 +187,8 @@ test "search posts":
   p1.id = entities.insertPost(conn, p1)
   var p2 = Post(parent_id: p1.id, user_id: bob.id, content: entities.initContent(bobKeys, "Hello, i'm bob"))
   p2.id = entities.insertPost(conn, p2)
-  p1 = entities.selectPost(conn, p1.id)
-  p2 = entities.selectPost(conn, p2.id)
+  p1 = entities.selectPost(conn, p1.content.sig.base58)
+  p2 = entities.selectPost(conn, p2.content.sig.base58)
   check @[p1, p2] == entities.searchPosts(conn, "hello")
   db_sqlite.close(conn)
 

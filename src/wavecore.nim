@@ -164,11 +164,13 @@ when isMainModule:
   server.start(s)
   # create test db
   discard osproc.execProcess("rm " & dbPath & "*")
+  discard osproc.execProcess("rm " & staticFileDir.joinPath("ansiwaves") & "/*")
   var conn = db.open(dbPath)
   db.init(conn)
   db_sqlite.close(conn)
   let sysopKeys = ed25519.initKeyPair()
   var p1 = entities.Post(parent_id: 0, user_id: 0, content: entities.initContent(sysopKeys, asciiArt))
+  p1.content.sig.base58 = "root" # FIXME: this is just temporary
   p1.id = server.insertPost(s, p1)
   var
     aliceKeys = ed25519.initKeyPair()
