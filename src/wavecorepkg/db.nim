@@ -29,6 +29,7 @@ proc init*(conn: PSqlite3) =
   db_sqlite.exec conn, sql"""
     CREATE TABLE user (
       user_id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ts DATETIME DEFAULT CURRENT_TIMESTAMP,
       content BLOB,
       content_sig TEXT,
       content_sig_blob BLOB,
