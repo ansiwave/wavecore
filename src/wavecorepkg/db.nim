@@ -29,7 +29,7 @@ proc init*(conn: PSqlite3) =
   db_sqlite.exec conn, sql"""
     CREATE TABLE user (
       user_id INTEGER PRIMARY KEY AUTOINCREMENT,
-      body BLOB,
+      content BLOB,
       public_key TEXT,
       public_key_blob BlOB,
       public_key_algo TEXT
@@ -41,7 +41,7 @@ proc init*(conn: PSqlite3) =
     CREATE TABLE post (
       post_id INTEGER PRIMARY KEY AUTOINCREMENT,
       ts DATETIME DEFAULT CURRENT_TIMESTAMP,
-      body BLOB,
+      content BLOB,
       user_id INTEGER,
       parent_id INTEGER,
       parent_ids TEXT,
