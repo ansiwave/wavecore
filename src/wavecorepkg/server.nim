@@ -52,16 +52,16 @@ const
 proc initServer*(hostname: string, port: int, staticFileDir: string = ""): Server =
   Server(hostname: hostname, port: port, staticFileDir: staticFileDir)
 
-proc insertUser*(server: Server, entity: entities.User): int64 =
+proc insertUser*(server: Server, entity: entities.User) =
   assert server.staticFileDir != ""
   let conn = db.open(server.staticFileDir.joinPath(dbFilename))
-  result = entities.insertUser(conn, entity)
+  entities.insertUser(conn, entity)
   db_sqlite.close(conn)
 
-proc insertPost*(server: Server, entity: entities.Post): int64 =
+proc insertPost*(server: Server, entity: entities.Post) =
   assert server.staticFileDir != ""
   let conn = db.open(server.staticFileDir.joinPath(dbFilename))
-  result = entities.insertPost(conn, entity,
+  entities.insertPost(conn, entity,
     proc (x: var entities.Post, id: int64) =
       writeFile(server.staticFileDir.joinPath(ansiwavesDir).joinPath($x.content.sig.base58 & ".ansiwavez"), x.content.value.compressed)
   )

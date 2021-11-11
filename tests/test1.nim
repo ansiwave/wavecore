@@ -59,13 +59,13 @@ vfs.register()
 test "query users":
   let conn = db.open(":memory:")
   db.init(conn)
-  var
+  let
     aliceKeys = ed25519.initKeyPair()
     bobKeys = ed25519.initKeyPair()
     alice = User(public_key: entities.initPublicKey(aliceKeys.public), content: entities.initContent(aliceKeys, ""))
     bob = User(public_key: entities.initPublicKey(bobKeys.public), content: entities.initContent(bobKeys, ""))
-  alice.user_id = entities.insertUser(conn, alice)
-  bob.user_id = entities.insertUser(conn, bob)
+  entities.insertUser(conn, alice)
+  entities.insertUser(conn, bob)
   check alice == entities.selectUser(conn, alice.public_key.base58)
   check bob == entities.selectUser(conn, bob.public_key.base58)
   db_sqlite.close(conn)
@@ -79,13 +79,13 @@ test "query users asynchronously":
     # create test db
     let conn = db.open(dbFilename)
     db.init(conn)
-    var
+    let
       aliceKeys = ed25519.initKeyPair()
       bobKeys = ed25519.initKeyPair()
       alice = User(public_key: entities.initPublicKey(aliceKeys.public), content: entities.initContent(aliceKeys, ""))
       bob = User(public_key: entities.initPublicKey(bobKeys.public), content: entities.initContent(bobKeys, ""))
-    alice.user_id = entities.insertUser(conn, alice)
-    bob.user_id = entities.insertUser(conn, bob)
+    entities.insertUser(conn, alice)
+    entities.insertUser(conn, bob)
     db_sqlite.close(conn)
     # query db over http
     var response = client.queryUser(c, dbFilename, alice.publicKey.base58)
@@ -106,21 +106,21 @@ test "query users asynchronously":
 test "query posts":
   let conn = db.open(":memory:")
   db.init(conn)
-  var
+  let
     aliceKeys = ed25519.initKeyPair()
     bobKeys = ed25519.initKeyPair()
     alice = User(public_key: entities.initPublicKey(aliceKeys.public), content: entities.initContent(aliceKeys, ""))
     bob = User(public_key: entities.initPublicKey(bobKeys.public), content: entities.initContent(bobKeys, ""))
-  alice.user_id = entities.insertUser(conn, alice)
-  bob.user_id = entities.insertUser(conn, bob)
-  var p1 = Post(user_id: alice.user_id, content: entities.initContent(aliceKeys, "Hello, i'm alice"))
-  p1.post_id = entities.insertPost(conn, p1)
-  var p2 = Post(parent: p1.content.sig.base58, user_id: bob.user_id, content: entities.initContent(bobKeys, "Hello, i'm bob"))
-  p2.post_id = entities.insertPost(conn, p2)
-  var p3 = Post(parent: p2.content.sig.base58, user_id: alice.user_id, content: entities.initContent(aliceKeys, "What's up"))
-  p3.post_id = entities.insertPost(conn, p3)
-  var p4 = Post(parent: p2.content.sig.base58, user_id: alice.user_id, content: entities.initContent(aliceKeys, "How are you?"))
-  p4.post_id = entities.insertPost(conn, p4)
+  entities.insertUser(conn, alice)
+  entities.insertUser(conn, bob)
+  var p1 = Post(public_key: alice.public_key.base58, content: entities.initContent(aliceKeys, "Hello, i'm alice"))
+  entities.insertPost(conn, p1)
+  var p2 = Post(parent: p1.content.sig.base58, public_key: bob.public_key.base58, content: entities.initContent(bobKeys, "Hello, i'm bob"))
+  entities.insertPost(conn, p2)
+  var p3 = Post(parent: p2.content.sig.base58, public_key: alice.public_key.base58, content: entities.initContent(aliceKeys, "What's up"))
+  entities.insertPost(conn, p3)
+  var p4 = Post(parent: p2.content.sig.base58, public_key: alice.public_key.base58, content: entities.initContent(aliceKeys, "How are you?"))
+  entities.insertPost(conn, p4)
   p1 = entities.selectPost(conn, p1.content.sig.base58)
   p2 = entities.selectPost(conn, p2.content.sig.base58)
   p3 = entities.selectPost(conn, p3.content.sig.base58)
@@ -140,21 +140,21 @@ test "query posts asynchronously":
     # create test db
     let conn = db.open(dbFilename)
     db.init(conn)
-    var
+    let
       aliceKeys = ed25519.initKeyPair()
       bobKeys = ed25519.initKeyPair()
       alice = User(public_key: entities.initPublicKey(aliceKeys.public), content: entities.initContent(aliceKeys, ""))
       bob = User(public_key: entities.initPublicKey(bobKeys.public), content: entities.initContent(bobKeys, ""))
-    alice.user_id = entities.insertUser(conn, alice)
-    bob.user_id = entities.insertUser(conn, bob)
-    var p1 = Post(user_id: alice.user_id, content: entities.initContent(aliceKeys, "Hello, i'm alice"))
-    p1.post_id = entities.insertPost(conn, p1)
-    var p2 = Post(parent: p1.content.sig.base58, user_id: bob.user_id, content: entities.initContent(bobKeys, "Hello, i'm bob"))
-    p2.post_id = entities.insertPost(conn, p2)
-    var p3 = Post(parent: p2.content.sig.base58, user_id: alice.user_id, content: entities.initContent(aliceKeys, "What's up"))
-    p3.post_id = entities.insertPost(conn, p3)
-    var p4 = Post(parent: p2.content.sig.base58, user_id: alice.user_id, content: entities.initContent(aliceKeys, "How are you?"))
-    p4.post_id = entities.insertPost(conn, p4)
+    entities.insertUser(conn, alice)
+    entities.insertUser(conn, bob)
+    var p1 = Post(public_key: alice.public_key.base58, content: entities.initContent(aliceKeys, "Hello, i'm alice"))
+    entities.insertPost(conn, p1)
+    var p2 = Post(parent: p1.content.sig.base58, public_key: bob.public_key.base58, content: entities.initContent(bobKeys, "Hello, i'm bob"))
+    entities.insertPost(conn, p2)
+    var p3 = Post(parent: p2.content.sig.base58, public_key: alice.public_key.base58, content: entities.initContent(aliceKeys, "What's up"))
+    entities.insertPost(conn, p3)
+    var p4 = Post(parent: p2.content.sig.base58, public_key: alice.public_key.base58, content: entities.initContent(aliceKeys, "How are you?"))
+    entities.insertPost(conn, p4)
     p1 = entities.selectPost(conn, p1.content.sig.base58)
     db_sqlite.close(conn)
     # query db over http
@@ -176,17 +176,17 @@ test "query posts asynchronously":
 test "search posts":
   let conn = db.open(":memory:")
   db.init(conn)
-  var
+  let
     aliceKeys = ed25519.initKeyPair()
     bobKeys = ed25519.initKeyPair()
     alice = User(public_key: entities.initPublicKey(aliceKeys.public), content: entities.initContent(aliceKeys, ""))
     bob = User(public_key: entities.initPublicKey(bobKeys.public), content: entities.initContent(bobKeys, ""))
-  alice.user_id = entities.insertUser(conn, alice)
-  bob.user_id = entities.insertUser(conn, bob)
-  var p1 = Post(user_id: alice.user_id, content: entities.initContent(aliceKeys, "Hello, i'm alice"))
-  p1.post_id = entities.insertPost(conn, p1)
-  var p2 = Post(parent: p1.content.sig.base58, user_id: bob.user_id, content: entities.initContent(bobKeys, "Hello, i'm bob"))
-  p2.post_id = entities.insertPost(conn, p2)
+  entities.insertUser(conn, alice)
+  entities.insertUser(conn, bob)
+  var p1 = Post(public_key: alice.public_key.base58, content: entities.initContent(aliceKeys, "Hello, i'm alice"))
+  entities.insertPost(conn, p1)
+  var p2 = Post(parent: p1.content.sig.base58, public_key: bob.public_key.base58, content: entities.initContent(bobKeys, "Hello, i'm bob"))
+  entities.insertPost(conn, p2)
   p1 = entities.selectPost(conn, p1.content.sig.base58)
   p2 = entities.selectPost(conn, p2.content.sig.base58)
   check @[p1, p2] == entities.searchPosts(conn, "hello")
@@ -199,21 +199,19 @@ test "retrieve sqlite db via http":
     # create test db
     var conn = db.open(dbFilename)
     db.init(conn)
-    var
+    let
       aliceKeys = ed25519.initKeyPair()
       bobKeys = ed25519.initKeyPair()
       alice = User(public_key: entities.initPublicKey(aliceKeys.public), content: entities.initContent(aliceKeys, ""))
       bob = User(public_key: entities.initPublicKey(bobKeys.public), content: entities.initContent(bobKeys, ""))
-    discard entities.insertUser(conn, alice)
-    discard entities.insertUser(conn, bob)
+    entities.insertUser(conn, alice)
+    entities.insertUser(conn, bob)
     db_sqlite.close(conn)
     # re-open db, but this time all reads happen over http
     conn = db.open(dbFilename, true)
     let
       alice2 = entities.selectUser(conn, alice.public_key.base58)
       bob2 = entities.selectUser(conn, bob.public_key.base58)
-    alice.user_id = alice2.user_id
-    bob.user_id = bob2.user_id
     check alice == alice2
     check bob == bob2
     db_sqlite.close(conn)
