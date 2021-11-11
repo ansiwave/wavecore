@@ -54,6 +54,7 @@ proc init*(conn: PSqlite3) =
     )
   """
   db_sqlite.exec conn, sql"CREATE INDEX post_content_sig ON post(content_sig)"
+  db_sqlite.exec conn, sql"CREATE INDEX post_public_key ON post(public_key)"
   db_sqlite.exec conn, sql"CREATE INDEX post_parent ON post(parent)"
   db_sqlite.exec conn, sql"CREATE INDEX post_parent_score ON post(parent, score)"
   db_sqlite.exec conn, sql"CREATE VIRTUAL TABLE post_search USING fts5 (post_id, user_id, attribute, value, value_unindexed UNINDEXED)"
