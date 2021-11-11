@@ -21,14 +21,13 @@ type
     value*: CompressedValue
     sig*: Signature
   User* = object
-    id*: int64
+    user_id*: int64
     content*: Content
     public_key*: PublicKey
   Post* = object
-    id*: int64
+    post_id*: int64
     content*: Content
     user_id*: int64
-    parent_id*: int64
     parent_ids*: string
     parent*: string
     reply_count*: int64
@@ -55,7 +54,7 @@ proc initUser(stmt: PStmt): User =
     let colName = $sqlite3.column_name(stmt, col)
     case colName:
     of "user_id":
-      result.id = sqlite3.column_int(stmt, col)
+      result.user_id = sqlite3.column_int(stmt, col)
     of "content":
       let
         compressed = sqlite3.column_blob(stmt, col)
@@ -118,9 +117,7 @@ proc initPost(stmt: PStmt): Post =
     let colName = $sqlite3.column_name(stmt, col)
     case colName:
     of "post_id":
-      result.id = sqlite3.column_int(stmt, col)
-    of "parent_id":
-      result.parent_id = sqlite3.column_int(stmt, col)
+      result.post_id = sqlite3.column_int(stmt, col)
     of "user_id":
       result.user_id = sqlite3.column_int(stmt, col)
     of "content":
@@ -153,7 +150,7 @@ proc initPost(stmt: PStmt): Post =
 proc selectPost*(conn: PSqlite3, sig: string): Post =
   const query =
     """
-      SELECT post_id, content, content_sig, content_sig_blob, user_id, parent_id, parent, reply_count FROM post
+      SELECT post_id, content, content_sig, content_sig_blob, user_id, parent, reply_count FROM post
       WHERE content_sig = ?
     """
   #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), sig):
@@ -171,7 +168,7 @@ proc selectPostParentIds(conn: PSqlite3, id: int64): string =
 proc selectPostChildren*(conn: PSqlite3, sig: string): seq[Post] =
   const query =
     """
-      SELECT post_id, content, content_sig, content_sig_blob, user_id, parent_id, parent, reply_count FROM post
+      SELECT post_id, content, content_sig, content_sig_blob, user_id, parent, reply_count FROM post
       WHERE parent = ?
       ORDER BY score DESC
       LIMIT 10
@@ -182,15 +179,20 @@ proc selectPostChildren*(conn: PSqlite3, sig: string): seq[Post] =
 
 proc insertPost*(conn: PSqlite3, entity: Post, extraFn: proc (x: var Post, id: int64) = nil): int64 =
   db_sqlite.exec(conn, sql"BEGIN TRANSACTION")
-  var e = entity
-  if e.parent_id > 0:
+  var
+    e = entity
+    parentId = 0'i64
+  if e.parent != "":
     # set the parent ids
-    let parents = selectPostParentIds(conn, e.parent_id)
+    let
+      parent = selectPost(conn, e.parent)
+      parents = selectPostParentIds(conn, parent.post_id)
+    parentId = parent.post_id
     e.parent_ids =
       if parents.len == 0:
-        $e.parent_id
+        $parentId
       else:
-        parents & ", " & $e.parent_id
+        parents & ", " & $parentId
     # update the parents' reply count and score
     let reply_count_query =
       """
@@ -208,7 +210,7 @@ proc insertPost*(conn: PSqlite3, entity: Post, extraFn: proc (x: var Post, id: i
     db_sqlite.exec(conn, sql score_query, e.user_id)
   var stmt: PStmt
   db.withStatement(conn, "INSERT INTO post (content, content_sig, content_sig_blob, user_id, parent_id, parent_ids, parent, reply_count, score) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0)", stmt):
-    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), e.content.value.compressed, e.content.sig.base58, e.content.sig.blob, e.user_id, e.parent_id, e.parent_ids, e.parent)
+    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), e.content.value.compressed, e.content.sig.base58, e.content.sig.blob, e.user_id, parentId, e.parent_ids, e.parent)
     if step(stmt) != SQLITE_DONE:
       db_sqlite.dbError(conn)
     result = sqlite3.last_insert_rowid(conn)
@@ -223,7 +225,7 @@ proc insertPost*(conn: PSqlite3, entity: Post, extraFn: proc (x: var Post, id: i
 proc searchPosts*(conn: PSqlite3, term: string): seq[Post] =
   const query =
     """
-      SELECT post_id, content, content_sig, content_sig_blob, user_id, parent_id, parent, reply_count FROM post
+      SELECT post_id, content, content_sig, content_sig_blob, user_id, parent, reply_count FROM post
       WHERE post_id IN (SELECT post_id FROM post_search WHERE attribute MATCH 'content' AND value MATCH ? ORDER BY rank)
     """
   #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), term):
