@@ -75,6 +75,7 @@ proc wavecore_set_display(selector: cstring, display: cstring) {.importc.}
 proc wavecore_set_size_max(selector: cstring, xadd: cint, yadd: cint) {.importc.}
 proc wavecore_browse_file(selector: cstring, callback: cstring) {.importc.}
 proc wavecore_get_pixel_density(): cfloat {.importc.}
+proc wavecore_start_download(data_uri: cstring, filename: cstring) {.importc.}
 proc free(p: pointer) {.importc.}
 
 {.compile: "emscripten.c".}
@@ -114,6 +115,9 @@ proc browseFile*(selector: string, callback: string) =
 
 proc getPixelDensity*(): float32 =
   wavecore_get_pixel_density()
+
+proc startDownload*(dataUri: string, filename: string) =
+  wavecore_start_download(dataUri, filename)
 
 proc initChannelValue*[T](): ChannelValue[T] =
   result = ChannelValue[T](

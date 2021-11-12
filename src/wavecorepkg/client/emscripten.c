@@ -84,3 +84,11 @@ EM_JS(void, wavecore_browse_file, (const char* selector, const char* callback), 
 EM_JS(float, wavecore_get_pixel_density, (), {
   return window.devicePixelRatio;
 });
+
+EM_JS(void, wavecore_start_download, (const char* data_uri, const char* filename), {
+  var elem = document.createElement("a");
+  elem.href = UTF8ToString(data_uri);
+  elem.download = UTF8ToString(filename);
+  elem.click();
+});
+
