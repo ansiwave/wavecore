@@ -93,3 +93,24 @@ EM_JS(void, wavecore_start_download, (const char* data_uri, const char* filename
   elem.click();
 });
 
+EM_JS(int, wavecore_localstorage_set, (const char* key, const char* val), {
+  try {
+    window.localStorage.setItem(UTF8ToString(key), UTF8ToString(val));
+    return 1;
+  } catch (e) {
+    return 0;
+  }
+});
+
+EM_JS(char*, wavecore_localstorage_get, (const char* key), {
+  var val = window.localStorage.getItem(UTF8ToString(key));
+  var lengthBytes = lengthBytesUTF8(val)+1;
+  var stringOnWasmHeap = _malloc(lengthBytes);
+  stringToUTF8(val, stringOnWasmHeap, lengthBytes);
+  return stringOnWasmHeap;
+});
+
+EM_JS(void, wavecore_localstorage_remove, (const char* key), {
+  window.localStorage.removeItem(UTF8ToString(key));
+});
+

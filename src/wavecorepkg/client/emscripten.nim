@@ -76,6 +76,9 @@ proc wavecore_set_size_max(selector: cstring, xadd: cint, yadd: cint) {.importc.
 proc wavecore_browse_file(callback: cstring) {.importc.}
 proc wavecore_get_pixel_density(): cfloat {.importc.}
 proc wavecore_start_download(data_uri: cstring, filename: cstring) {.importc.}
+proc wavecore_localstorage_set(key: cstring, val: cstring): bool {.importc.}
+proc wavecore_localstorage_get(key: cstring): cstring {.importc.}
+proc wavecore_localstorage_remove(key: cstring) {.importc.}
 proc free(p: pointer) {.importc.}
 
 {.compile: "emscripten.c".}
@@ -118,6 +121,17 @@ proc getPixelDensity*(): float32 =
 
 proc startDownload*(dataUri: string, filename: string) =
   wavecore_start_download(dataUri, filename)
+
+proc localSet*(key: string, val: string): bool =
+  wavecore_localstorage_set(key, val)
+
+proc localGet*(key: string): string =
+  let val = wavecore_localstorage_get(key)
+  result = $val
+  free(val)
+
+proc localRemove*(key: string) =
+  wavecore_localstorage_remove(key)
 
 proc initChannelValue*[T](): ChannelValue[T] =
   result = ChannelValue[T](
