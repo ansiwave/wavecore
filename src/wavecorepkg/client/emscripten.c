@@ -56,8 +56,9 @@ EM_JS(void, wavecore_set_size_max, (const char* selector, int xadd, int yadd), {
   elem.height = document.documentElement.clientHeight * window.devicePixelRatio + yadd;
 });
 
-EM_JS(void, wavecore_browse_file, (const char* selector, const char* callback), {
-  var elem = document.querySelector(UTF8ToString(selector));
+EM_JS(void, wavecore_browse_file, (const char* callback), {
+  var elem = document.createElement("input");
+  elem.type = "file";
   var importImage = function(e) {
     var reader = new FileReader();
 

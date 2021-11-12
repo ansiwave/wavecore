@@ -73,7 +73,7 @@ proc wavecore_fetch(url: cstring, headers: cstring): cstring {.importc.}
 proc wavecore_set_innerhtml(selector: cstring, html: cstring) {.importc.}
 proc wavecore_set_display(selector: cstring, display: cstring) {.importc.}
 proc wavecore_set_size_max(selector: cstring, xadd: cint, yadd: cint) {.importc.}
-proc wavecore_browse_file(selector: cstring, callback: cstring) {.importc.}
+proc wavecore_browse_file(callback: cstring) {.importc.}
 proc wavecore_get_pixel_density(): cfloat {.importc.}
 proc wavecore_start_download(data_uri: cstring, filename: cstring) {.importc.}
 proc free(p: pointer) {.importc.}
@@ -110,8 +110,8 @@ proc setDisplay*(selector: string, display: string) =
 proc setSizeMax*(selector: string, xadd: int32, yadd: int32) =
   wavecore_set_size_max(selector, xadd, yadd)
 
-proc browseFile*(selector: string, callback: string) =
-  wavecore_browse_file(selector, callback)
+proc browseFile*(callback: string) =
+  wavecore_browse_file(callback)
 
 proc getPixelDensity*(): float32 =
   wavecore_get_pixel_density()
