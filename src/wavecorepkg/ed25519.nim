@@ -18,6 +18,7 @@ type
 proc ed25519_create_seed*(seed: ptr Seed): cint {.importc.}
 proc ed25519_create_keypair*(public_key: ptr PublicKey; private_key: ptr PrivateKey;
                              seed: ptr Seed) {.importc.}
+proc ed25519_create_keypair_from_private_key*(public_key: ptr PublicKey; private_key: ptr PrivateKey) {.importc.}
 proc ed25519_sign*(signature: ptr Signature; message: cstring; message_len: csize_t;
                    public_key: ptr PublicKey; private_key: ptr PrivateKey) {.importc.}
 proc ed25519_verify*(signature: ptr Signature; message: cstring; message_len: csize_t;
@@ -34,8 +35,11 @@ type
 
 proc initKeyPair*(): KeyPair =
   var seed: Seed
-  assert 0 == ed25519_create_seed(seed.addr)
+  doAssert 0 == ed25519_create_seed(seed.addr)
   ed25519_create_keypair(result.public.addr, result.private.addr, seed.addr)
+
+proc initKeyPair*(private: PrivateKey): KeyPair =
+  ed25519_create_keypair_from_private_key(result.public.addr, private.unsafeAddr)
 
 proc sign*(keys: KeyPair, content: string): Signature =
   ed25519_sign(result.addr, content, content.len.csize_t, keys.public.unsafeAddr, keys.private.unsafeAddr)

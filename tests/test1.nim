@@ -259,6 +259,11 @@ test "ed25519":
   check 0 == ed25519.ed25519_create_seed(seed.addr)
   ed25519.ed25519_create_keypair(public_key.addr, private_key.addr, seed.addr)
 
+  ##  make sure we can get public key from the private key
+  var pubkey: ed25519.PublicKey
+  ed25519.ed25519_create_keypair_from_private_key(pubkey.addr, private_key.addr)
+  check pubkey == public_key
+
   ##  create signature on the message with the key pair
 
   ed25519.ed25519_sign(signature.addr, message, message.len, public_key.addr, private_key.addr)
