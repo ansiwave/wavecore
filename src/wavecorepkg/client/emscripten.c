@@ -60,6 +60,7 @@ EM_JS(void, wavecore_browse_file, (const char* callback), {
   var elem = document.createElement("input");
   elem.type = "file";
   var importImage = function(e) {
+    var file = e.target.files[0];
     var reader = new FileReader();
 
     reader.onload = function(e) {
@@ -70,9 +71,8 @@ EM_JS(void, wavecore_browse_file, (const char* callback), {
       writeArrayToMemory(bytes, arrayOnWasmHeap);
 
       // call c function
-      Module.ccall(UTF8ToString(callback), null, ['number', 'number'], [arrayOnWasmHeap, bytes.byteLength]);
+      Module.ccall(UTF8ToString(callback), null, ['string', 'number', 'number'], [file.name, arrayOnWasmHeap, bytes.byteLength]);
     };
-    var file = e.target.files[0];
     if (file instanceof File) {
       reader.readAsArrayBuffer(file);
     }
