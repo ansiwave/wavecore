@@ -25,7 +25,7 @@ proc initUrl(client: Client; endpoint: string): string =
 
 proc request*(client: Client, endpoint: string, data: JsonNode, verb: string): JsonNode =
   let url: string = client.initUrl(endpoint)
-  let headers = @[Header(key: "Content-Type", value: "application/json")]
+  let headers: seq[Header] = @[Header(key: "Content-Type", value: "application/json")]
   let response: Response = fetch(Request(url: urlly.parseUrl(url), headers: headers, verb: verb, body: if data != nil: $data else: ""))
   if response.code != 200:
     raise newException(ClientException, "Error code " & $response.code & ": " & response.body)
@@ -39,7 +39,7 @@ proc put*(client: Client, endpoint: string, data: JsonNode): JsonNode =
 
 proc get*(client: Client, endpoint: string, range: (int, int) = (0, 0)): string =
   let url: string = client.initUrl(endpoint)
-  var headers = @[Header(key: "Content-Type", value: "application/json")]
+  var headers: seq[Header] = @[]
   if range != (0, 0):
     headers.add(Header(key: "Range", value: "range=$1-$2".format(range[0], range[1])))
   let response: Response = fetch(Request(url: urlly.parseUrl(url), headers: headers, verb: "get", body: ""))
@@ -49,10 +49,16 @@ proc get*(client: Client, endpoint: string, range: (int, int) = (0, 0)): string 
 
 proc query*(client: Client, endpoint: string, range: (int, int) = (0, 0)): ChannelValue[Response] =
   let url: string = client.initUrl(endpoint)
-  var headers = @[Header(key: "Content-Type", value: "application/json")]
+  var headers: seq[Header] = @[]
   if range != (0, 0):
     headers.add(Header(key: "Range", value: "range=$1-$2".format(range[0], range[1])))
   let request = Request(url: urlly.parseUrl(url), headers: headers, verb: "get", body: "")
+  result = initChannelValue[Response]()
+  sendFetch(client, request, result.chan)
+
+proc submit*(client: Client, endpoint: string, body: string): ChannelValue[Response] =
+  let url: string = client.initUrl(endpoint)
+  let request = Request(url: urlly.parseUrl(url), verb: "post", body: body)
   result = initChannelValue[Response]()
   sendFetch(client, request, result.chan)
 
