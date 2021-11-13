@@ -5,17 +5,17 @@ from zippy import nil
 from sequtils import nil
 from strutils import format
 from ../ed25519 import nil
-from ../base58 import nil
+from base64 import nil
 
 type
   CompressedValue* = object
     compressed*: string
     uncompressed*: string
   PublicKey* = object
-    base58*: string
+    base64*: string
     blob*: ed25519.PublicKey
   Signature* = object
-    base58*: string
+    base64*: string
     blob*: ed25519.Signature
   Content* = object
     value*: CompressedValue
@@ -34,11 +34,11 @@ proc initCompressedValue*(uncompressed: string): CompressedValue =
   result.uncompressed = uncompressed
 
 proc initPublicKey*(blob: ed25519.PublicKey): PublicKey =
-  result.base58 = base58.encode(blob)
+  result.base64 = base64.encode(blob, safe = true)
   result.blob = blob
 
 proc initSignature*(blob: ed25519.Signature): Signature =
-  result.base58 = base58.encode(blob)
+  result.base64 = base64.encode(blob, safe = true)
   result.blob = blob
 
 proc initContent*(keys: ed25519.KeyPair, content: string): Content =
@@ -59,7 +59,7 @@ proc initUser(stmt: PStmt): User =
         copyMem(s[0].addr, compressed, compressedLen)
         result.content.value = CompressedValue(compressed: cast[string](s), uncompressed: zippy.uncompress(cast[string](s), dataFormat = zippy.dfZlib))
     of "content_sig":
-      result.content.sig.base58 = $sqlite3.column_text(stmt, col)
+      result.content.sig.base64 = $sqlite3.column_text(stmt, col)
     of "content_sig_blob":
       let
         compressed = sqlite3.column_blob(stmt, col)
@@ -69,7 +69,7 @@ proc initUser(stmt: PStmt): User =
       copyMem(sig[0].addr, compressed, compressedLen)
       result.content.sig.blob = sig
     of "public_key":
-      result.public_key.base58 = $sqlite3.column_text(stmt, col)
+      result.public_key.base64 = $sqlite3.column_text(stmt, col)
     of "public_key_blob":
       let
         compressed = sqlite3.column_blob(stmt, col)
@@ -96,7 +96,7 @@ proc insertUser*(conn: PSqlite3, entity: User, extraFn: proc (x: var User, id: i
     stmt: PStmt
     id: int64
   db.withStatement(conn, "INSERT INTO user (content, content_sig, content_sig_blob, public_key, public_key_blob, public_key_algo) VALUES (?, ?, ?, ?, ?, ?)", stmt):
-    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), entity.content.value.compressed, entity.content.sig.base58, entity.content.sig.blob, entity.publicKey.base58, entity.publicKey.blob, "ed25519")
+    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), entity.content.value.compressed, entity.content.sig.base64, entity.content.sig.blob, entity.publicKey.base64, entity.publicKey.blob, "ed25519")
     if step(stmt) != SQLITE_DONE:
       db_sqlite.dbError(conn)
     id = sqlite3.last_insert_rowid(conn)
@@ -122,7 +122,7 @@ proc initPost(stmt: PStmt): Post =
         copyMem(s[0].addr, compressed, compressedLen)
         result.content.value = CompressedValue(compressed: cast[string](s), uncompressed: zippy.uncompress(cast[string](s), dataFormat = zippy.dfZlib))
     of "content_sig":
-      result.content.sig.base58 = $sqlite3.column_text(stmt, col)
+      result.content.sig.base64 = $sqlite3.column_text(stmt, col)
     of "content_sig_blob":
       let
         compressed = sqlite3.column_blob(stmt, col)
@@ -228,7 +228,7 @@ proc insertPost*(conn: PSqlite3, entity: Post, extraFn: proc (x: var Post, id: i
       else:
         parentParentIds & ", " & $parentId
   db.withStatement(conn, "INSERT INTO post (content, content_sig, content_sig_blob, public_key, parent, reply_count, score) VALUES (?, ?, ?, ?, ?, 0, 0)", stmt):
-    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), e.content.value.compressed, e.content.sig.base58, e.content.sig.blob, e.public_key, e.parent)
+    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), e.content.value.compressed, e.content.sig.base64, e.content.sig.blob, e.public_key, e.parent)
     if step(stmt) != SQLITE_DONE:
       db_sqlite.dbError(conn)
     id = sqlite3.last_insert_rowid(conn)

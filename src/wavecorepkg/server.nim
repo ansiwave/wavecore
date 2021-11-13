@@ -57,7 +57,7 @@ proc insertUser*(server: Server, entity: entities.User) =
   let conn = db.open(server.staticFileDir.joinPath(dbFilename))
   entities.insertUser(conn, entity,
     proc (x: var entities.User, id: int64) =
-      writeFile(server.staticFileDir.joinPath(ansiwavesDir).joinPath($x.public_key.base58 & ".ansiwavez"), x.content.value.compressed)
+      writeFile(server.staticFileDir.joinPath(ansiwavesDir).joinPath($x.public_key.base64 & ".ansiwavez"), x.content.value.compressed)
   )
   db_sqlite.close(conn)
 
@@ -66,7 +66,7 @@ proc insertPost*(server: Server, entity: entities.Post) =
   let conn = db.open(server.staticFileDir.joinPath(dbFilename))
   entities.insertPost(conn, entity,
     proc (x: var entities.Post, id: int64) =
-      writeFile(server.staticFileDir.joinPath(ansiwavesDir).joinPath($x.content.sig.base58 & ".ansiwavez"), x.content.value.compressed)
+      writeFile(server.staticFileDir.joinPath(ansiwavesDir).joinPath($x.content.sig.base64 & ".ansiwavez"), x.content.value.compressed)
   )
   db_sqlite.close(conn)
 

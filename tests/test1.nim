@@ -66,8 +66,8 @@ test "query users":
     bob = User(public_key: entities.initPublicKey(bobKeys.public), content: entities.initContent(bobKeys, ""))
   entities.insertUser(conn, alice)
   entities.insertUser(conn, bob)
-  check alice == entities.selectUser(conn, alice.public_key.base58)
-  check bob == entities.selectUser(conn, bob.public_key.base58)
+  check alice == entities.selectUser(conn, alice.public_key.base64)
+  check bob == entities.selectUser(conn, bob.public_key.base64)
   db_sqlite.close(conn)
 
 test "query users asynchronously":
@@ -88,10 +88,10 @@ test "query users asynchronously":
     entities.insertUser(conn, bob)
     db_sqlite.close(conn)
     # query db over http
-    var response = client.queryUser(c, dbFilename, alice.publicKey.base58)
+    var response = client.queryUser(c, dbFilename, alice.publicKey.base64)
     client.get(response, true)
     check response.value.valid == alice
-    var response2 = client.queryUser(c, dbFilename, bob.publicKey.base58)
+    var response2 = client.queryUser(c, dbFilename, bob.publicKey.base64)
     client.get(response2, true)
     check response2.value.valid == bob
     # query something invalid
@@ -113,22 +113,22 @@ test "query posts":
     bob = User(public_key: entities.initPublicKey(bobKeys.public), content: entities.initContent(bobKeys, ""))
   entities.insertUser(conn, alice)
   entities.insertUser(conn, bob)
-  var p1 = Post(public_key: alice.public_key.base58, content: entities.initContent(aliceKeys, "Hello, i'm alice"))
+  var p1 = Post(public_key: alice.public_key.base64, content: entities.initContent(aliceKeys, "Hello, i'm alice"))
   entities.insertPost(conn, p1)
-  var p2 = Post(parent: p1.content.sig.base58, public_key: bob.public_key.base58, content: entities.initContent(bobKeys, "Hello, i'm bob"))
+  var p2 = Post(parent: p1.content.sig.base64, public_key: bob.public_key.base64, content: entities.initContent(bobKeys, "Hello, i'm bob"))
   entities.insertPost(conn, p2)
-  var p3 = Post(parent: p2.content.sig.base58, public_key: alice.public_key.base58, content: entities.initContent(aliceKeys, "What's up"))
+  var p3 = Post(parent: p2.content.sig.base64, public_key: alice.public_key.base64, content: entities.initContent(aliceKeys, "What's up"))
   entities.insertPost(conn, p3)
-  var p4 = Post(parent: p2.content.sig.base58, public_key: alice.public_key.base58, content: entities.initContent(aliceKeys, "How are you?"))
+  var p4 = Post(parent: p2.content.sig.base64, public_key: alice.public_key.base64, content: entities.initContent(aliceKeys, "How are you?"))
   entities.insertPost(conn, p4)
-  p1 = entities.selectPost(conn, p1.content.sig.base58)
-  p2 = entities.selectPost(conn, p2.content.sig.base58)
-  p3 = entities.selectPost(conn, p3.content.sig.base58)
-  p4 = entities.selectPost(conn, p4.content.sig.base58)
-  check @[p2] == entities.selectPostChildren(conn, p1.content.sig.base58)
-  check 3 == entities.selectPost(conn, p1.content.sig.base58).reply_count
-  check @[p4, p3] == entities.selectPostChildren(conn, p2.content.sig.base58)
-  check 2 == entities.selectPost(conn, p2.content.sig.base58).reply_count
+  p1 = entities.selectPost(conn, p1.content.sig.base64)
+  p2 = entities.selectPost(conn, p2.content.sig.base64)
+  p3 = entities.selectPost(conn, p3.content.sig.base64)
+  p4 = entities.selectPost(conn, p4.content.sig.base64)
+  check @[p2] == entities.selectPostChildren(conn, p1.content.sig.base64)
+  check 3 == entities.selectPost(conn, p1.content.sig.base64).reply_count
+  check @[p4, p3] == entities.selectPostChildren(conn, p2.content.sig.base64)
+  check 2 == entities.selectPost(conn, p2.content.sig.base64).reply_count
   db_sqlite.close(conn)
 
 test "query posts asynchronously":
@@ -147,21 +147,21 @@ test "query posts asynchronously":
       bob = User(public_key: entities.initPublicKey(bobKeys.public), content: entities.initContent(bobKeys, ""))
     entities.insertUser(conn, alice)
     entities.insertUser(conn, bob)
-    var p1 = Post(public_key: alice.public_key.base58, content: entities.initContent(aliceKeys, "Hello, i'm alice"))
+    var p1 = Post(public_key: alice.public_key.base64, content: entities.initContent(aliceKeys, "Hello, i'm alice"))
     entities.insertPost(conn, p1)
-    var p2 = Post(parent: p1.content.sig.base58, public_key: bob.public_key.base58, content: entities.initContent(bobKeys, "Hello, i'm bob"))
+    var p2 = Post(parent: p1.content.sig.base64, public_key: bob.public_key.base64, content: entities.initContent(bobKeys, "Hello, i'm bob"))
     entities.insertPost(conn, p2)
-    var p3 = Post(parent: p2.content.sig.base58, public_key: alice.public_key.base58, content: entities.initContent(aliceKeys, "What's up"))
+    var p3 = Post(parent: p2.content.sig.base64, public_key: alice.public_key.base64, content: entities.initContent(aliceKeys, "What's up"))
     entities.insertPost(conn, p3)
-    var p4 = Post(parent: p2.content.sig.base58, public_key: alice.public_key.base58, content: entities.initContent(aliceKeys, "How are you?"))
+    var p4 = Post(parent: p2.content.sig.base64, public_key: alice.public_key.base64, content: entities.initContent(aliceKeys, "How are you?"))
     entities.insertPost(conn, p4)
-    p1 = entities.selectPost(conn, p1.content.sig.base58)
+    p1 = entities.selectPost(conn, p1.content.sig.base64)
     db_sqlite.close(conn)
     # query db over http
-    var response = client.queryPost(c, dbFilename, p1.content.sig.base58)
+    var response = client.queryPost(c, dbFilename, p1.content.sig.base64)
     client.get(response, true)
     check response.value.valid == p1
-    var response2 = client.queryPostChildren(c, dbFilename, p2.content.sig.base58)
+    var response2 = client.queryPostChildren(c, dbFilename, p2.content.sig.base64)
     client.get(response2, true)
     check response2.value.valid == @[p4, p3]
     # query something invalid
@@ -183,12 +183,12 @@ test "search posts":
     bob = User(public_key: entities.initPublicKey(bobKeys.public), content: entities.initContent(bobKeys, ""))
   entities.insertUser(conn, alice)
   entities.insertUser(conn, bob)
-  var p1 = Post(public_key: alice.public_key.base58, content: entities.initContent(aliceKeys, "Hello, i'm alice"))
+  var p1 = Post(public_key: alice.public_key.base64, content: entities.initContent(aliceKeys, "Hello, i'm alice"))
   entities.insertPost(conn, p1)
-  var p2 = Post(parent: p1.content.sig.base58, public_key: bob.public_key.base58, content: entities.initContent(bobKeys, "Hello, i'm bob"))
+  var p2 = Post(parent: p1.content.sig.base64, public_key: bob.public_key.base64, content: entities.initContent(bobKeys, "Hello, i'm bob"))
   entities.insertPost(conn, p2)
-  p1 = entities.selectPost(conn, p1.content.sig.base58)
-  p2 = entities.selectPost(conn, p2.content.sig.base58)
+  p1 = entities.selectPost(conn, p1.content.sig.base64)
+  p2 = entities.selectPost(conn, p2.content.sig.base64)
   check @[p1, p2] == entities.searchPosts(conn, "hello")
   db_sqlite.close(conn)
 
@@ -202,15 +202,15 @@ test "score":
     bob = User(public_key: entities.initPublicKey(bobKeys.public), content: entities.initContent(bobKeys, ""))
   entities.insertUser(conn, alice)
   entities.insertUser(conn, bob)
-  let p1 = Post(public_key: alice.public_key.base58, content: entities.initContent(aliceKeys, "Hello, i'm alice"))
+  let p1 = Post(public_key: alice.public_key.base64, content: entities.initContent(aliceKeys, "Hello, i'm alice"))
   entities.insertPost(conn, p1)
-  let p2 = Post(parent: p1.content.sig.base58, public_key: bob.public_key.base58, content: entities.initContent(bobKeys, "Hello, i'm bob"))
+  let p2 = Post(parent: p1.content.sig.base64, public_key: bob.public_key.base64, content: entities.initContent(bobKeys, "Hello, i'm bob"))
   entities.insertPost(conn, p2)
-  let p3 = Post(parent: p2.content.sig.base58, public_key: alice.public_key.base58, content: entities.initContent(aliceKeys, "What's up"))
+  let p3 = Post(parent: p2.content.sig.base64, public_key: alice.public_key.base64, content: entities.initContent(aliceKeys, "What's up"))
   entities.insertPost(conn, p3)
-  let p4 = Post(parent: p2.content.sig.base58, public_key: alice.public_key.base58, content: entities.initContent(aliceKeys, "How are you?"))
+  let p4 = Post(parent: p2.content.sig.base64, public_key: alice.public_key.base64, content: entities.initContent(aliceKeys, "How are you?"))
   entities.insertPost(conn, p4)
-  check 2 == entities.selectPostExtras(conn, p1.content.sig.base58).score
+  check 2 == entities.selectPostExtras(conn, p1.content.sig.base64).score
   db_sqlite.close(conn)
 
 test "retrieve sqlite db via http":
@@ -231,8 +231,8 @@ test "retrieve sqlite db via http":
     # re-open db, but this time all reads happen over http
     conn = db.open(dbFilename, true)
     let
-      alice2 = entities.selectUser(conn, alice.public_key.base58)
-      bob2 = entities.selectUser(conn, bob.public_key.base58)
+      alice2 = entities.selectUser(conn, alice.public_key.base64)
+      bob2 = entities.selectUser(conn, bob.public_key.base64)
     check alice == alice2
     check bob == bob2
     db_sqlite.close(conn)
