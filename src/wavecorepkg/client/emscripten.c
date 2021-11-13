@@ -1,8 +1,8 @@
 #include <emscripten.h>
 
-EM_JS(char*, wavecore_fetch, (const char* url, const char* headers), {
+EM_JS(char*, wavecore_fetch, (const char* url, const char* verb, const char* headers, const char* body), {
   var request = new XMLHttpRequest();
-  request.open('GET', UTF8ToString(url), false);  // `false` makes the request synchronous
+  request.open(UTF8ToString(verb), UTF8ToString(url), false);  // `false` makes the request synchronous
 
   var headerMap = JSON.parse(UTF8ToString(headers));
   for (key in headerMap) {
@@ -21,7 +21,7 @@ EM_JS(char*, wavecore_fetch, (const char* url, const char* headers), {
   }
 
   var response = {
-    "body": "",
+    "body": UTF8ToString(body),
     "code": request.status,
     "headers": {
       "Content-Length": request.getResponseHeader("Content-Length"),

@@ -69,7 +69,7 @@ proc emscripten_create_worker(url: cstring): cint {.importc.}
 proc emscripten_destroy_worker(worker: cint) {.importc.}
 proc emscripten_call_worker(worker: cint, funcname: cstring, data: cstring, size: cint, callback: proc (data: pointer, size: cint, arg: pointer) {.cdecl.}, arg: pointer) {.importc.}
 proc emscripten_worker_respond(data: cstring, size: cint) {.importc.}
-proc wavecore_fetch(url: cstring, headers: cstring): cstring {.importc.}
+proc wavecore_fetch(url: cstring, verb: cstring, headers: cstring, body: cstring): cstring {.importc.}
 proc wavecore_set_innerhtml(selector: cstring, html: cstring) {.importc.}
 proc wavecore_set_display(selector: cstring, display: cstring) {.importc.}
 proc wavecore_set_size_max(selector: cstring, xadd: cint, yadd: cint) {.importc.}
@@ -91,7 +91,7 @@ proc fetch*(request: Request): Response =
       for header in request.headers:
         o.fields[header.key] = json.newJString(header.value)
       $o
-    res = wavecore_fetch(url.cstring, reqHeaders.cstring)
+    res = wavecore_fetch(url.cstring, request.verb, reqHeaders.cstring, request.body)
     json = json.parseJson($res)
     body = base64.decode(json["body"].str)
     code = json["code"].num.int
