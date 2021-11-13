@@ -104,6 +104,9 @@ EM_JS(int, wavecore_localstorage_set, (const char* key, const char* val), {
 
 EM_JS(char*, wavecore_localstorage_get, (const char* key), {
   var val = window.localStorage.getItem(UTF8ToString(key));
+  if (val == null) {
+    val = "";
+  }
   var lengthBytes = lengthBytesUTF8(val)+1;
   var stringOnWasmHeap = _malloc(lengthBytes);
   stringToUTF8(val, stringOnWasmHeap, lengthBytes);
