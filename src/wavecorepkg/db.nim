@@ -32,9 +32,7 @@ proc init*(conn: PSqlite3) =
       ts DATETIME DEFAULT CURRENT_TIMESTAMP,
       content BLOB,
       content_sig TEXT,
-      content_sig_blob BLOB,
       public_key TEXT UNIQUE,
-      public_key_blob BlOB UNIQUE,
       public_key_algo TEXT
     )
   """
@@ -46,7 +44,6 @@ proc init*(conn: PSqlite3) =
       ts DATETIME DEFAULT CURRENT_TIMESTAMP,
       content BLOB,
       content_sig TEXT UNIQUE,
-      content_sig_blob BLOB UNIQUE,
       public_key TEXT,
       parent TEXT,
       reply_count INTEGER,

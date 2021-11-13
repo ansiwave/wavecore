@@ -11,18 +11,12 @@ type
   CompressedValue* = object
     compressed*: string
     uncompressed*: string
-  PublicKey* = object
-    base64*: string
-    blob*: ed25519.PublicKey
-  Signature* = object
-    base64*: string
-    blob*: ed25519.Signature
   Content* = object
     value*: CompressedValue
-    sig*: Signature
+    sig*: string
   User* = object
     content*: Content
-    public_key*: PublicKey
+    public_key*: string
   Post* = object
     content*: Content
     public_key*: string
@@ -33,13 +27,11 @@ proc initCompressedValue*(uncompressed: string): CompressedValue =
   result.compressed = zippy.compress(uncompressed, dataFormat = zippy.dfZlib)
   result.uncompressed = uncompressed
 
-proc initPublicKey*(blob: ed25519.PublicKey): PublicKey =
-  result.base64 = base64.encode(blob, safe = true)
-  result.blob = blob
+proc initPublicKey*(blob: ed25519.PublicKey): string =
+  base64.encode(blob, safe = true)
 
-proc initSignature*(blob: ed25519.Signature): Signature =
-  result.base64 = base64.encode(blob, safe = true)
-  result.blob = blob
+proc initSignature*(blob: ed25519.Signature): string =
+  base64.encode(blob, safe = true)
 
 proc initContent*(keys: ed25519.KeyPair, content: string): Content =
   result.value = initCompressedValue(content)
@@ -59,30 +51,14 @@ proc initUser(stmt: PStmt): User =
         copyMem(s[0].addr, compressed, compressedLen)
         result.content.value = CompressedValue(compressed: cast[string](s), uncompressed: zippy.uncompress(cast[string](s), dataFormat = zippy.dfZlib))
     of "content_sig":
-      result.content.sig.base64 = $sqlite3.column_text(stmt, col)
-    of "content_sig_blob":
-      let
-        compressed = sqlite3.column_blob(stmt, col)
-        compressedLen = sqlite3.column_bytes(stmt, col)
-      var sig: ed25519.Signature
-      assert compressedLen == sig.len
-      copyMem(sig[0].addr, compressed, compressedLen)
-      result.content.sig.blob = sig
+      result.content.sig = $sqlite3.column_text(stmt, col)
     of "public_key":
-      result.public_key.base64 = $sqlite3.column_text(stmt, col)
-    of "public_key_blob":
-      let
-        compressed = sqlite3.column_blob(stmt, col)
-        compressedLen = sqlite3.column_bytes(stmt, col)
-      var pubkey: ed25519.PublicKey
-      assert compressedLen == pubkey.len
-      copyMem(pubkey.addr, compressed, compressedLen)
-      result.publicKey.blob = pubkey
+      result.public_key = $sqlite3.column_text(stmt, col)
 
 proc selectUser*(conn: PSqlite3, publicKey: string): User =
   const query =
     """
-      SELECT content, content_sig, content_sig_blob, public_key, public_key_blob FROM user
+      SELECT content, content_sig, public_key FROM user
       WHERE public_key = ?
     """
   #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), publicKey):
@@ -95,8 +71,8 @@ proc insertUser*(conn: PSqlite3, entity: User, extraFn: proc (x: var User, id: i
     e = entity
     stmt: PStmt
     id: int64
-  db.withStatement(conn, "INSERT INTO user (content, content_sig, content_sig_blob, public_key, public_key_blob, public_key_algo) VALUES (?, ?, ?, ?, ?, ?)", stmt):
-    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), entity.content.value.compressed, entity.content.sig.base64, entity.content.sig.blob, entity.publicKey.base64, entity.publicKey.blob, "ed25519")
+  db.withStatement(conn, "INSERT INTO user (content, content_sig, public_key, public_key_algo) VALUES (?, ?, ?, ?)", stmt):
+    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), entity.content.value.compressed, entity.content.sig, entity.publicKey, "ed25519")
     if step(stmt) != SQLITE_DONE:
       db_sqlite.dbError(conn)
     id = sqlite3.last_insert_rowid(conn)
@@ -122,15 +98,7 @@ proc initPost(stmt: PStmt): Post =
         copyMem(s[0].addr, compressed, compressedLen)
         result.content.value = CompressedValue(compressed: cast[string](s), uncompressed: zippy.uncompress(cast[string](s), dataFormat = zippy.dfZlib))
     of "content_sig":
-      result.content.sig.base64 = $sqlite3.column_text(stmt, col)
-    of "content_sig_blob":
-      let
-        compressed = sqlite3.column_blob(stmt, col)
-        compressedLen = sqlite3.column_bytes(stmt, col)
-      var sig: ed25519.Signature
-      assert compressedLen == sig.len
-      copyMem(sig[0].addr, compressed, compressedLen)
-      result.content.sig.blob = sig
+      result.content.sig = $sqlite3.column_text(stmt, col)
     of "public_key":
       result.public_key = $sqlite3.column_text(stmt, col)
     of "parent":
@@ -143,7 +111,7 @@ proc initPost(stmt: PStmt): Post =
 proc selectPost*(conn: PSqlite3, sig: string): Post =
   const query =
     """
-      SELECT content, content_sig, content_sig_blob, public_key, parent, reply_count FROM post
+      SELECT content, content_sig, public_key, parent, reply_count FROM post
       WHERE content_sig = ?
     """
   #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), sig):
@@ -200,7 +168,7 @@ proc selectPostParentIds(conn: PSqlite3, id: int64): string =
 proc selectPostChildren*(conn: PSqlite3, sig: string): seq[Post] =
   const query =
     """
-      SELECT content, content_sig, content_sig_blob, public_key, parent, reply_count FROM post
+      SELECT content, content_sig, public_key, parent, reply_count FROM post
       WHERE parent = ?
       ORDER BY score DESC
       LIMIT 10
@@ -227,8 +195,8 @@ proc insertPost*(conn: PSqlite3, entity: Post, extraFn: proc (x: var Post, id: i
         $parentId
       else:
         parentParentIds & ", " & $parentId
-  db.withStatement(conn, "INSERT INTO post (content, content_sig, content_sig_blob, public_key, parent, reply_count, score) VALUES (?, ?, ?, ?, ?, 0, 0)", stmt):
-    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), e.content.value.compressed, e.content.sig.base64, e.content.sig.blob, e.public_key, e.parent)
+  db.withStatement(conn, "INSERT INTO post (content, content_sig, public_key, parent, reply_count, score) VALUES (?, ?, ?, ?, 0, 0)", stmt):
+    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), e.content.value.compressed, e.content.sig, e.public_key, e.parent)
     if step(stmt) != SQLITE_DONE:
       db_sqlite.dbError(conn)
     id = sqlite3.last_insert_rowid(conn)
@@ -264,7 +232,7 @@ proc insertPost*(conn: PSqlite3, entity: Post, extraFn: proc (x: var Post, id: i
 proc searchPosts*(conn: PSqlite3, term: string): seq[Post] =
   const query =
     """
-      SELECT content, content_sig, content_sig_blob, public_key, parent, reply_count FROM post
+      SELECT content, content_sig, public_key, parent, reply_count FROM post
       WHERE post_id IN (SELECT post_id FROM post_search WHERE attribute MATCH 'content' AND value MATCH ? ORDER BY rank)
     """
   #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), term):
