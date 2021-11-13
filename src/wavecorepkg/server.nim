@@ -55,7 +55,10 @@ proc initServer*(hostname: string, port: int, staticFileDir: string = ""): Serve
 proc insertUser*(server: Server, entity: entities.User) =
   assert server.staticFileDir != ""
   let conn = db.open(server.staticFileDir.joinPath(dbFilename))
-  entities.insertUser(conn, entity)
+  entities.insertUser(conn, entity,
+    proc (x: var entities.User, id: int64) =
+      writeFile(server.staticFileDir.joinPath(ansiwavesDir).joinPath($x.public_key.base58 & ".ansiwavez"), x.content.value.compressed)
+  )
   db_sqlite.close(conn)
 
 proc insertPost*(server: Server, entity: entities.Post) =
