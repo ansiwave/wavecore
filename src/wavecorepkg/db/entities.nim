@@ -183,20 +183,28 @@ proc insertPost*(conn: PSqlite3, entity: Post, extraFn: proc (x: var Post, id: i
     e = entity
     stmt: PStmt
     id: int64
-  let parentIds =
-    if e.parent == "":
-      ""
-    else:
-      # set the parent ids
-      let
-        parentId = selectPostExtras(conn, e.parent).post_id
-        parentParentIds = selectPostParentIds(conn, parentId)
-      if parentParentIds.len == 0:
-        $parentId
+  let
+    parentIds =
+      if e.parent == "":
+        ""
       else:
-        parentParentIds & ", " & $parentId
-  db.withStatement(conn, "INSERT INTO post (content, content_sig, public_key, parent, reply_count, score) VALUES (?, ?, ?, ?, 0, 0)", stmt):
-    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), e.content.value.compressed, e.content.sig, e.public_key, e.parent)
+        # set the parent ids
+        let
+          parentId = selectPostExtras(conn, e.parent).post_id
+          parentParentIds = selectPostParentIds(conn, parentId)
+        if parentParentIds.len == 0:
+          $parentId
+        else:
+          parentParentIds & ", " & $parentId
+    parentPublicKey =
+      if e.parent == e.public_key:
+        e.public_key
+      elif e.parent != "":
+        selectPost(conn, e.parent).public_key
+      else:
+        "" # only the root post can have an empty parent
+  db.withStatement(conn, "INSERT INTO post (content, content_sig, public_key, parent, parent_public_key, reply_count, score) VALUES (?, ?, ?, ?, ?, 0, 0)", stmt):
+    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), e.content.value.compressed, e.content.sig, e.public_key, e.parent, parentPublicKey)
     if step(stmt) != SQLITE_DONE:
       db_sqlite.dbError(conn)
     id = sqlite3.last_insert_rowid(conn)
