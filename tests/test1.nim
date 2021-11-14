@@ -14,9 +14,9 @@ test "Full lifecycle":
   var c = client.initClient(address)
   client.start(c)
   try:
-    discard client.post(c, "test", %* {"success": true})
+    discard client.post(c, "ansiwave", "Hello, world!")
     expect client.ClientException:
-      discard client.post(c, "test", nil)
+      discard client.post(c, "ansiwave", "")
   finally:
     server.stop(s)
     client.stop(c)

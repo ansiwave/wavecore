@@ -81,9 +81,9 @@ proc sendAction(server: Server, action: Action): bool =
   done[].close()
   deallocShared(done)
 
-proc test(server: Server, request: Request): string =
+proc ansiwavePost(server: Server, request: Request): string =
   echo request.body
-  if true:
+  if request.body.len > 0:
     ""
   else:
     raise newException(BadRequestException, "invalid request")
@@ -154,12 +154,12 @@ proc handle(server: Server, client: Socket) =
           raise newException(BadRequestException, "Bad Request. Invalid Range.")
       else:
         headers = "HTTP/1.1 200 OK\r\LContent-Length: " & $body.len & "\r\LContent-Type: " & contentType
-    # json response
+    # REST api
     else:
       let dispatch = (reqMethod: request.reqMethod, path: request.uri.path)
       body =
-        if dispatch == (httpcore.HttpPost, "/test"):
-          test(server, request)
+        if dispatch == (httpcore.HttpPost, "/ansiwave"):
+          ansiwavePost(server, request)
         else:
           raise newException(NotFoundException, "Unhandled request: " & $dispatch)
       headers = "HTTP/1.1 200 OK\r\LContent-Length: " & $body.len
