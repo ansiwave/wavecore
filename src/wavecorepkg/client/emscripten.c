@@ -10,7 +10,7 @@ EM_JS(char*, wavecore_fetch, (const char* url, const char* verb, const char* hea
   }
 
   request.responseType = "arraybuffer";
-  request.send(null);
+  request.send(UTF8ToString(body));
 
   // convert response to a binary string
   var binary = '';
@@ -21,7 +21,7 @@ EM_JS(char*, wavecore_fetch, (const char* url, const char* verb, const char* hea
   }
 
   var response = {
-    "body": UTF8ToString(body),
+    "body": "",
     "code": request.status,
     "headers": {
       "Content-Length": request.getResponseHeader("Content-Length"),
