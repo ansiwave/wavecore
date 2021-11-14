@@ -4,7 +4,6 @@ from strutils import nil
 from parseutils import nil
 from os import joinPath
 import httpcore
-import json
 from ./db import nil
 from ./db/entities import nil
 from ./db/db_sqlite import nil
@@ -83,11 +82,9 @@ proc sendAction(server: Server, action: Action): bool =
   deallocShared(done)
 
 proc test(server: Server, request: Request): string =
-  let
-    body = request.body.parseJson
-    action = Action(kind: Test, success: body["success"].getBool)
-  if sendAction(server, action):
-    $ %*{}
+  echo request.body
+  if true:
+    ""
   else:
     raise newException(BadRequestException, "invalid request")
 
@@ -168,16 +165,16 @@ proc handle(server: Server, client: Socket) =
       headers = "HTTP/1.1 200 OK\r\LContent-Length: " & $body.len
   except BadRequestException as ex:
     headers = "HTTP/1.1 400 Bad Request"
-    body = $ %*{"message": ex.msg}
+    body = ex.msg
   except ForbiddenException as ex:
     headers = "HTTP/1.1 403 Forbidden"
-    body = $ %*{"message": ex.msg}
+    body = ex.msg
   except NotFoundException as ex:
     headers = "HTTP/1.1 404 Not Found"
-    body = $ %*{"message": ex.msg}
+    body = ex.msg
   except Exception as ex:
     headers = "HTTP/1.1 500 Internal Server Error"
-    body = $ %*{"message": ex.msg}
+    body = ex.msg
   finally:
     try:
       client.send(headers & "\r\L\r\L" & body)

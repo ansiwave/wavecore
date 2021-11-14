@@ -1,4 +1,3 @@
-import json
 from strutils import format
 from ./db/entities import nil
 from urlly import nil
@@ -23,18 +22,17 @@ proc initClient*(address: string): Client =
 proc initUrl(client: Client; endpoint: string): string =
   "$1/$2".format(client.address, endpoint)
 
-proc request*(client: Client, endpoint: string, data: JsonNode, verb: string): JsonNode =
+proc request*(client: Client, endpoint: string, data: string, verb: string): string =
   let url: string = client.initUrl(endpoint)
-  let headers: seq[Header] = @[Header(key: "Content-Type", value: "application/json")]
-  let response: Response = fetch(Request(url: urlly.parseUrl(url), headers: headers, verb: verb, body: if data != nil: $data else: ""))
+  let response: Response = fetch(Request(url: urlly.parseUrl(url), verb: verb, body: data))
   if response.code != 200:
     raise newException(ClientException, "Error code " & $response.code & ": " & response.body)
-  return response.body.parseJson
+  return response.body
 
-proc post*(client: Client, endpoint: string, data: JsonNode): JsonNode =
+proc post*(client: Client, endpoint: string, data: string): string =
   request(client, endpoint, data, "post")
 
-proc put*(client: Client, endpoint: string, data: JsonNode): JsonNode =
+proc put*(client: Client, endpoint: string, data: string): string =
   request(client, endpoint, data, "put")
 
 proc get*(client: Client, endpoint: string, range: (int, int) = (0, 0)): string =
