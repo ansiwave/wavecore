@@ -156,7 +156,7 @@ when isMainModule:
   var s = server.initServer("localhost", paths.port, paths.staticFileDir)
   server.start(s)
   # create test db
-  discard osproc.execProcess("rm -r " & paths.staticFileDir)
+  discard osproc.execProcess("rm -r " & paths.staticFileDir / paths.boardsDir)
   os.createDir(paths.boardDir / paths.ansiwavesDir)
   var conn = db.open(paths.boardDir / paths.dbFilename)
   db.init(conn)
