@@ -203,8 +203,8 @@ proc insertPost*(conn: PSqlite3, entity: Post, extraFn: proc (x: var Post, id: i
         selectPost(conn, e.parent).public_key
       else:
         "" # only the root post can have an empty parent
-  db.withStatement(conn, "INSERT INTO post (content, content_sig, public_key, parent, parent_public_key, reply_count, score) VALUES (?, ?, ?, ?, ?, 0, 0)", stmt):
-    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), e.content.value.compressed, e.content.sig, e.public_key, e.parent, parentPublicKey)
+  db.withStatement(conn, "INSERT INTO post (content, content_sig, content_sig_last, public_key, parent, parent_public_key, reply_count, score) VALUES (?, ?, ?, ?, ?, ?, 0, 0)", stmt):
+    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), e.content.value.compressed, e.content.sig, e.content.sig, e.public_key, e.parent, parentPublicKey)
     if step(stmt) != SQLITE_DONE:
       db_sqlite.dbError(conn)
     id = sqlite3.last_insert_rowid(conn)

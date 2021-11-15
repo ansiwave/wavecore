@@ -44,6 +44,7 @@ proc init*(conn: PSqlite3) =
       ts DATETIME DEFAULT CURRENT_TIMESTAMP,
       content BLOB,
       content_sig TEXT UNIQUE,
+      content_sig_last TEXT,
       public_key TEXT,
       parent TEXT,
       parent_public_key TEXT,
