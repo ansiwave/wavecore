@@ -5,7 +5,7 @@ from zippy import nil
 from sequtils import nil
 from strutils import format
 from ../ed25519 import nil
-from base64 import nil
+from ../utils import nil
 
 type
   CompressedValue* = object
@@ -28,10 +28,10 @@ proc initCompressedValue*(uncompressed: string): CompressedValue =
   result.uncompressed = uncompressed
 
 proc initPublicKey*(blob: ed25519.PublicKey): string =
-  base64.encode(blob, safe = true)
+  utils.encode(blob)
 
 proc initSignature*(blob: ed25519.Signature): string =
-  base64.encode(blob, safe = true)
+  utils.encode(blob)
 
 proc initContent*(keys: ed25519.KeyPair, content: string): Content =
   result.value = initCompressedValue(content)

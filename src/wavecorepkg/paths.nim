@@ -1,7 +1,7 @@
 from os import `/`
 from ./db/entities import nil
 from ./ed25519 import nil
-from base64 import nil
+from ./utils import nil
 
 const
   port* = 3000
@@ -12,7 +12,7 @@ const
   boardsDir* = "boards"
 
 when defined(emscripten):
-  const sysopPublicKey* = base64.encode(staticRead(".." / ".." / "pubkey"), safe = true)
+  const sysopPublicKey* = utils.encode(staticRead(".." / ".." / "pubkey"))
 else:
   let
     sysopKeys* = block:
