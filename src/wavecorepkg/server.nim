@@ -2,11 +2,12 @@ import threadpool, net, os, selectors
 from uri import `$`
 from strutils import nil
 from parseutils import nil
-from os import joinPath
+from os import `/`
 import httpcore
 from ./db import nil
 from ./db/entities import nil
 from ./db/db_sqlite import nil
+import ./board
 
 type
   State = object
@@ -45,27 +46,25 @@ const
     else:
       100
   recvTimeout = 2000
-  dbFilename* = "board.db"
-  ansiwavesDir* = "ansiwaves"
 
 proc initServer*(hostname: string, port: int, staticFileDir: string = ""): Server =
   Server(hostname: hostname, port: port, staticFileDir: staticFileDir)
 
-proc insertUser*(server: Server, entity: entities.User) =
+proc insertUser*(server: Server, board: string, entity: entities.User) =
   assert server.staticFileDir != ""
-  let conn = db.open(server.staticFileDir.joinPath(dbFilename))
+  let conn = db.open(server.staticFileDir / board / dbFilename)
   entities.insertUser(conn, entity,
     proc (x: var entities.User, id: int64) =
-      writeFile(server.staticFileDir.joinPath(ansiwavesDir).joinPath($x.public_key & ".ansiwavez"), x.content.value.compressed)
+      writeFile(server.staticFileDir / board / ansiwavesDir / $x.public_key & ".ansiwavez", x.content.value.compressed)
   )
   db_sqlite.close(conn)
 
-proc insertPost*(server: Server, entity: entities.Post) =
+proc insertPost*(server: Server, board: string, entity: entities.Post) =
   assert server.staticFileDir != ""
-  let conn = db.open(server.staticFileDir.joinPath(dbFilename))
+  let conn = db.open(server.staticFileDir / board / dbFilename)
   entities.insertPost(conn, entity,
     proc (x: var entities.Post, id: int64) =
-      writeFile(server.staticFileDir.joinPath(ansiwavesDir).joinPath($x.content.sig & ".ansiwavez"), x.content.value.compressed)
+      writeFile(server.staticFileDir / board / ansiwavesDir / $x.content.sig & ".ansiwavez", x.content.value.compressed)
   )
   db_sqlite.close(conn)
 
@@ -129,7 +128,7 @@ proc handle(server: Server, client: Socket) =
     # static file requests
     var filePath = ""
     if request.reqMethod == httpcore.HttpGet and server.staticFileDir != "":
-      let path = os.joinPath(server.staticFileDir, request.uri.path)
+      let path = server.staticFileDir / request.uri.path
       # TODO: ensure path is inside staticFileDir
       if fileExists(path):
         filePath = path

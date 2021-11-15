@@ -3,13 +3,10 @@ from ./wavecorepkg/db/entities import nil
 from ./wavecorepkg/db/db_sqlite import nil
 from ./wavecorepkg/server import nil
 from ./wavecorepkg/db/vfs import nil
-from os import joinPath
+from os import `/`
 from osproc import nil
 from ./wavecorepkg/ed25519 import nil
-
-const
-  port = 3000
-  address = "http://localhost:" & $port
+import ./wavecorepkg/board
 
 const
   asciiArt =
@@ -154,46 +151,37 @@ fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in
 culpa qui officia deserunt mollit anim id est laborum.
     """
 
-let
-  staticFileDir = "tests".joinPath("bbs")
-  dbPath = staticFileDir.joinPath(server.dbFilename)
-
 when isMainModule:
   vfs.register()
   var s = server.initServer("localhost", port, staticFileDir)
   server.start(s)
   # create test db
-  discard osproc.execProcess("rm " & dbPath & "*")
-  discard osproc.execProcess("rm " & staticFileDir.joinPath("ansiwaves") & "/*")
-  var conn = db.open(dbPath)
+  discard osproc.execProcess("rm -r " & boardDir)
+  os.createDir(boardDir / ansiwavesDir)
+  var conn = db.open(boardDir / dbFilename)
   db.init(conn)
-  db_sqlite.close(conn)
-  let
-    sysopKeys = ed25519.initKeyPair()
-    sysop = entities.User(public_key: entities.initPublicKey(sysopKeys.public))
-  server.insertUser(s, sysop)
-  var p1 = entities.Post(public_key: sysop.public_key, content: entities.initContent(sysopKeys, asciiArt))
-  p1.content.sig = "root" # FIXME: this is just temporary
-  server.insertPost(s, p1)
+  let sysop = entities.User(public_key: sysopPublicKey, content: entities.initContent(sysopKeys, asciiArt))
+  server.insertUser(s, sysopPublicKey, sysop)
   let
     aliceKeys = ed25519.initKeyPair()
     bobKeys = ed25519.initKeyPair()
     alice = entities.User(public_key: entities.initPublicKey(aliceKeys.public))
     bob = entities.User(public_key: entities.initPublicKey(bobKeys.public))
-  server.insertUser(s, alice)
-  server.insertUser(s, bob)
-  let p2 = entities.Post(parent: p1.content.sig, public_key: bob.public_key, content: entities.initContent(bobKeys, "Hello, world...this is a lame comment\n\n" & loremIpsum))
-  server.insertPost(s, p2)
-  let p3 = entities.Post(parent: p1.content.sig, public_key: bob.public_key, content: entities.initContent(bobKeys, jabba))
-  server.insertPost(s, p3)
-  let p4 = entities.Post(parent: p3.content.sig, public_key: alice.public_key, content: entities.initContent(aliceKeys, "That ansi is\n" & fabulous))
-  server.insertPost(s, p4)
-  let p5 = entities.Post(parent: p3.content.sig, public_key: sysop.public_key, content: entities.initContent(sysopKeys, "The people demand more jabba"))
-  server.insertPost(s, p5)
-  let p6 = entities.Post(parent: p1.content.sig, public_key: bob.public_key, content: entities.initContent(bobKeys, hogan))
-  server.insertPost(s, p6)
-  server.insertPost(s, entities.Post(parent: p6.content.sig, public_key: alice.public_key, content: entities.initContent(aliceKeys, "I love hogan")))
-  server.insertPost(s, entities.Post(parent: p6.content.sig, public_key: alice.public_key, content: entities.initContent(aliceKeys, "The navajo teepees i mean")))
-  server.insertPost(s, entities.Post(parent: p6.content.sig, public_key: alice.public_key, content: entities.initContent(aliceKeys, "Acknowledge me plz")))
+  server.insertUser(s, sysopPublicKey, alice)
+  server.insertUser(s, sysopPublicKey, bob)
+  let p1 = entities.Post(parent: sysop.public_key, public_key: bob.public_key, content: entities.initContent(bobKeys, "Hello, world...this is a lame comment\n\n" & loremIpsum))
+  server.insertPost(s, sysopPublicKey, p1)
+  let p2 = entities.Post(parent: sysop.public_key, public_key: bob.public_key, content: entities.initContent(bobKeys, jabba))
+  server.insertPost(s, sysopPublicKey, p2)
+  let p3 = entities.Post(parent: p2.content.sig, public_key: alice.public_key, content: entities.initContent(aliceKeys, "That ansi is\n" & fabulous))
+  server.insertPost(s, sysopPublicKey, p3)
+  let p4 = entities.Post(parent: p2.content.sig, public_key: sysop.public_key, content: entities.initContent(sysopKeys, "The people demand more jabba"))
+  server.insertPost(s, sysopPublicKey, p4)
+  let p5 = entities.Post(parent: sysop.public_key, public_key: bob.public_key, content: entities.initContent(bobKeys, hogan))
+  server.insertPost(s, sysopPublicKey, p5)
+  server.insertPost(s, sysopPublicKey, entities.Post(parent: p5.content.sig, public_key: alice.public_key, content: entities.initContent(aliceKeys, "I love hogan")))
+  server.insertPost(s, sysopPublicKey, entities.Post(parent: p5.content.sig, public_key: alice.public_key, content: entities.initContent(aliceKeys, "The navajo teepees i mean")))
+  server.insertPost(s, sysopPublicKey, entities.Post(parent: p5.content.sig, public_key: alice.public_key, content: entities.initContent(aliceKeys, "Acknowledge me plz")))
   discard readLine(stdin)
+  db_sqlite.close(conn)
   server.stop(s)

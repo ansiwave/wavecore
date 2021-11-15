@@ -189,18 +189,24 @@ proc insertPost*(conn: PSqlite3, entity: Post, extraFn: proc (x: var Post, id: i
         ""
       else:
         # set the parent ids
-        let
-          parentId = selectPostExtras(conn, e.parent).post_id
-          parentParentIds = selectPostParentIds(conn, parentId)
-        if parentParentIds.len == 0:
-          $parentId
-        else:
-          parentParentIds & ", " & $parentId
+        try:
+          let
+            parentId = selectPostExtras(conn, e.parent).post_id
+            parentParentIds = selectPostParentIds(conn, parentId)
+          if parentParentIds.len == 0:
+            $parentId
+          else:
+            parentParentIds & ", " & $parentId
+        except Exception as ex:
+          "" # if the post is not replying to another post (it is top level)
     parentPublicKey =
       if e.parent == e.public_key:
         e.public_key
       elif e.parent != "":
-        selectPost(conn, e.parent).public_key
+        try:
+          selectPost(conn, e.parent).public_key
+        except Exception as ex:
+          "" # if the post is not replying to another post (it is top level)
       else:
         "" # only the root post can have an empty parent
   db.withStatement(conn, "INSERT INTO post (content, content_sig, content_sig_last, public_key, parent, parent_public_key, reply_count, score) VALUES (?, ?, ?, ?, ?, ?, 0, 0)", stmt):
