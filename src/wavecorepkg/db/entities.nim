@@ -153,15 +153,15 @@ proc selectUserExtras*(conn: PSqlite3, publicKey: string): tuple =
 proc selectPostParentIds(conn: PSqlite3, id: int64): string =
   const query =
     """
-      SELECT value AS parent_ids FROM post_search
-      WHERE post_id MATCH ? AND attribute MATCH 'parent_ids'
+      SELECT value AS parentids FROM post_search
+      WHERE post_id MATCH ? AND attribute MATCH 'parentids'
     """
   proc init(stmt: PStmt): tuple[parent_ids: string] =
     var cols = sqlite3.column_count(stmt)
     for col in 0 .. cols-1:
       let colName = $sqlite3.column_name(stmt, col)
       case colName:
-      of "parent_ids":
+      of "parentids":
         result.parent_ids = $sqlite3.column_text(stmt, col)
   db.select[tuple[parent_ids: string]](conn, init, query, id)[0].parent_ids
 
@@ -214,7 +214,7 @@ proc insertPost*(conn: PSqlite3, entity: Post, extraFn: proc (x: var Post, id: i
     if step(stmt) != SQLITE_DONE:
       db_sqlite.dbError(conn)
   db.withStatement(conn, "INSERT INTO post_search (post_id, user_id, attribute, value) VALUES (?, ?, ?, ?)", stmt):
-    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), id, userId, "parent_ids", parentIds)
+    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), id, userId, "parentids", parentIds)
     if step(stmt) != SQLITE_DONE:
       db_sqlite.dbError(conn)
   if e.parent != "":
@@ -229,7 +229,7 @@ proc insertPost*(conn: PSqlite3, entity: Post, extraFn: proc (x: var Post, id: i
     let score_query =
       """
       UPDATE post
-      SET score = (SELECT COUNT(DISTINCT user_id) FROM post_search WHERE attribute MATCH 'parent_ids' AND value MATCH post.post_id)
+      SET score = (SELECT COUNT(DISTINCT user_id) FROM post_search WHERE attribute MATCH 'parentids' AND value MATCH post.post_id)
       WHERE post_id IN ($1)
       """.format(parentIds)
     db_sqlite.exec(conn, sql score_query)
