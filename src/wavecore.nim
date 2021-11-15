@@ -165,8 +165,8 @@ when isMainModule:
   let
     aliceKeys = ed25519.initKeyPair()
     bobKeys = ed25519.initKeyPair()
-    alice = entities.User(public_key: entities.initPublicKey(aliceKeys.public))
-    bob = entities.User(public_key: entities.initPublicKey(bobKeys.public))
+    alice = entities.User(public_key: paths.encode(aliceKeys.public))
+    bob = entities.User(public_key: paths.encode(bobKeys.public))
   server.insertUser(s, paths.sysopPublicKey, alice)
   server.insertUser(s, paths.sysopPublicKey, bob)
   let p1 = entities.Post(parent: sysop.public_key, public_key: bob.public_key, content: entities.initContent(bobKeys, "Hello, world...this is a lame comment\n\n" & loremIpsum))

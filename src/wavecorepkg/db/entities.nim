@@ -5,7 +5,7 @@ from zippy import nil
 from sequtils import nil
 from strutils import format
 from ../ed25519 import nil
-from ../utils import nil
+from ../paths import nil
 
 type
   CompressedValue* = object
@@ -27,15 +27,9 @@ proc initCompressedValue*(uncompressed: string): CompressedValue =
   result.compressed = zippy.compress(uncompressed, dataFormat = zippy.dfZlib)
   result.uncompressed = uncompressed
 
-proc initPublicKey*(blob: ed25519.PublicKey): string =
-  utils.encode(blob)
-
-proc initSignature*(blob: ed25519.Signature): string =
-  utils.encode(blob)
-
 proc initContent*(keys: ed25519.KeyPair, content: string): Content =
   result.value = initCompressedValue(content)
-  result.sig = initSignature(ed25519.sign(keys, content))
+  result.sig = paths.encode(ed25519.sign(keys, content))
 
 proc initUser(stmt: PStmt): User =
   var cols = sqlite3.column_count(stmt)

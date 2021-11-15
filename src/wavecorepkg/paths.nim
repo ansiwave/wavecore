@@ -1,7 +1,7 @@
 from os import `/`
-from ./db/entities import nil
 from ./ed25519 import nil
-from ./utils import nil
+from base64 import nil
+from strutils import nil
 
 const
   port* = 3000
@@ -11,8 +11,17 @@ const
   ansiwavesDir* = "ansiwavez"
   boardsDir* = "boards"
 
+proc encode*[T](data: T): string =
+  result = base64.encode(data, safe = true)
+  var i = result.len - 1
+  while i >= 0 and result[i] == '=':
+    strutils.delete(result, i..i)
+    i -= 1
+
+export base64.decode
+
 when defined(emscripten):
-  const sysopPublicKey* = utils.encode(staticRead(".." / ".." / "pubkey"))
+  const sysopPublicKey* = encode(staticRead(".." / ".." / "pubkey"))
 else:
   let
     sysopKeys* = block:
@@ -29,7 +38,7 @@ else:
         writeFile(path, keys.private)
         writeFile(".." / "wavecore" / "pubkey", keys.public)
         keys
-    sysopPublicKey* = entities.initPublicKey(sysopKeys.public)
+    sysopPublicKey* = encode(sysopKeys.public)
 
 let
   boardDir* = staticFileDir / boardsDir / sysopPublicKey
