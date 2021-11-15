@@ -7,7 +7,7 @@ import httpcore
 from ./db import nil
 from ./db/entities import nil
 from ./db/db_sqlite import nil
-import ./board
+from ./paths import nil
 
 type
   State = object
@@ -52,19 +52,19 @@ proc initServer*(hostname: string, port: int, staticFileDir: string = ""): Serve
 
 proc insertUser*(server: Server, board: string, entity: entities.User) =
   assert server.staticFileDir != ""
-  let conn = db.open(server.staticFileDir / board / dbFilename)
+  let conn = db.open(server.staticFileDir / paths.boardsDir / board / paths.dbFilename)
   entities.insertUser(conn, entity,
     proc (x: var entities.User, id: int64) =
-      writeFile(server.staticFileDir / board / ansiwavesDir / $x.public_key & ".ansiwavez", x.content.value.compressed)
+      writeFile(server.staticFileDir / paths.boardsDir / board / paths.ansiwavesDir / $x.public_key & ".ansiwavez", x.content.value.compressed)
   )
   db_sqlite.close(conn)
 
 proc insertPost*(server: Server, board: string, entity: entities.Post) =
   assert server.staticFileDir != ""
-  let conn = db.open(server.staticFileDir / board / dbFilename)
+  let conn = db.open(server.staticFileDir / paths.boardsDir / board / paths.dbFilename)
   entities.insertPost(conn, entity,
     proc (x: var entities.Post, id: int64) =
-      writeFile(server.staticFileDir / board / ansiwavesDir / $x.content.sig & ".ansiwavez", x.content.value.compressed)
+      writeFile(server.staticFileDir / paths.boardsDir / board / paths.ansiwavesDir / $x.content.sig & ".ansiwavez", x.content.value.compressed)
   )
   db_sqlite.close(conn)
 

@@ -6,8 +6,10 @@ from base64 import nil
 const
   port* = 3000
   address* = "http://localhost:" & $port
+  staticFileDir* = "bbs"
   dbFilename* = "board.db"
   ansiwavesDir* = "ansiwavez"
+  boardsDir* = "boards"
 
 when defined(emscripten):
   const sysopPublicKey* = base64.encode(staticRead(".." / ".." / "pubkey"), safe = true)
@@ -30,5 +32,4 @@ else:
     sysopPublicKey* = entities.initPublicKey(sysopKeys.public)
 
 let
-  staticFileDir* = "bbs"
-  boardDir* = staticFileDir / sysopPublicKey
+  boardDir* = staticFileDir / boardsDir / sysopPublicKey

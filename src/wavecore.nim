@@ -6,7 +6,7 @@ from ./wavecorepkg/db/vfs import nil
 from os import `/`
 from osproc import nil
 from ./wavecorepkg/ed25519 import nil
-import ./wavecorepkg/board
+from ./wavecorepkg/paths import nil
 
 const
   asciiArt =
@@ -153,35 +153,35 @@ culpa qui officia deserunt mollit anim id est laborum.
 
 when isMainModule:
   vfs.register()
-  var s = server.initServer("localhost", port, staticFileDir)
+  var s = server.initServer("localhost", paths.port, paths.staticFileDir)
   server.start(s)
   # create test db
-  discard osproc.execProcess("rm -r " & boardDir)
-  os.createDir(boardDir / ansiwavesDir)
-  var conn = db.open(boardDir / dbFilename)
+  discard osproc.execProcess("rm -r " & paths.staticFileDir)
+  os.createDir(paths.boardDir / paths.ansiwavesDir)
+  var conn = db.open(paths.boardDir / paths.dbFilename)
   db.init(conn)
-  let sysop = entities.User(public_key: sysopPublicKey, content: entities.initContent(sysopKeys, asciiArt))
-  server.insertUser(s, sysopPublicKey, sysop)
+  let sysop = entities.User(public_key: paths.sysopPublicKey, content: entities.initContent(paths.sysopKeys, asciiArt))
+  server.insertUser(s, paths.sysopPublicKey, sysop)
   let
     aliceKeys = ed25519.initKeyPair()
     bobKeys = ed25519.initKeyPair()
     alice = entities.User(public_key: entities.initPublicKey(aliceKeys.public))
     bob = entities.User(public_key: entities.initPublicKey(bobKeys.public))
-  server.insertUser(s, sysopPublicKey, alice)
-  server.insertUser(s, sysopPublicKey, bob)
+  server.insertUser(s, paths.sysopPublicKey, alice)
+  server.insertUser(s, paths.sysopPublicKey, bob)
   let p1 = entities.Post(parent: sysop.public_key, public_key: bob.public_key, content: entities.initContent(bobKeys, "Hello, world...this is a lame comment\n\n" & loremIpsum))
-  server.insertPost(s, sysopPublicKey, p1)
+  server.insertPost(s, paths.sysopPublicKey, p1)
   let p2 = entities.Post(parent: sysop.public_key, public_key: bob.public_key, content: entities.initContent(bobKeys, jabba))
-  server.insertPost(s, sysopPublicKey, p2)
+  server.insertPost(s, paths.sysopPublicKey, p2)
   let p3 = entities.Post(parent: p2.content.sig, public_key: alice.public_key, content: entities.initContent(aliceKeys, "That ansi is\n" & fabulous))
-  server.insertPost(s, sysopPublicKey, p3)
-  let p4 = entities.Post(parent: p2.content.sig, public_key: sysop.public_key, content: entities.initContent(sysopKeys, "The people demand more jabba"))
-  server.insertPost(s, sysopPublicKey, p4)
+  server.insertPost(s, paths.sysopPublicKey, p3)
+  let p4 = entities.Post(parent: p2.content.sig, public_key: sysop.public_key, content: entities.initContent(paths.sysopKeys, "The people demand more jabba"))
+  server.insertPost(s, paths.sysopPublicKey, p4)
   let p5 = entities.Post(parent: sysop.public_key, public_key: bob.public_key, content: entities.initContent(bobKeys, hogan))
-  server.insertPost(s, sysopPublicKey, p5)
-  server.insertPost(s, sysopPublicKey, entities.Post(parent: p5.content.sig, public_key: alice.public_key, content: entities.initContent(aliceKeys, "I love hogan")))
-  server.insertPost(s, sysopPublicKey, entities.Post(parent: p5.content.sig, public_key: alice.public_key, content: entities.initContent(aliceKeys, "The navajo teepees i mean")))
-  server.insertPost(s, sysopPublicKey, entities.Post(parent: p5.content.sig, public_key: alice.public_key, content: entities.initContent(aliceKeys, "Acknowledge me plz")))
+  server.insertPost(s, paths.sysopPublicKey, p5)
+  server.insertPost(s, paths.sysopPublicKey, entities.Post(parent: p5.content.sig, public_key: alice.public_key, content: entities.initContent(aliceKeys, "I love hogan")))
+  server.insertPost(s, paths.sysopPublicKey, entities.Post(parent: p5.content.sig, public_key: alice.public_key, content: entities.initContent(aliceKeys, "The navajo teepees i mean")))
+  server.insertPost(s, paths.sysopPublicKey, entities.Post(parent: p5.content.sig, public_key: alice.public_key, content: entities.initContent(aliceKeys, "Acknowledge me plz")))
   discard readLine(stdin)
   db_sqlite.close(conn)
   server.stop(s)
