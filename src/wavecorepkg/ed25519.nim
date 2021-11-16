@@ -39,7 +39,11 @@ proc initKeyPair*(): KeyPair =
   ed25519_create_keypair(result.public.addr, result.private.addr, seed.addr)
 
 proc initKeyPair*(private: PrivateKey): KeyPair =
+  result.private = private
   ed25519_create_keypair_from_private_key(result.public.addr, private.unsafeAddr)
 
 proc sign*(keys: KeyPair, content: string): Signature =
   ed25519_sign(result.addr, content, content.len.csize_t, keys.public.unsafeAddr, keys.private.unsafeAddr)
+
+proc verify*(public: PublicKey, signature: Signature, content: string): bool =
+  1 == ed25519_verify(signature.unsafeAddr, content, content.len.csize_t, public.unsafeAddr)
