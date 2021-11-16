@@ -35,6 +35,7 @@ type
   Commands = Table[string, CommandMetadata]
   Context* = object
     commands: Commands
+    stringCommands*: HashSet[string]
     variables: Table[string, seq[Form]]
 
 proc extract*(lines: seq[string]): seq[CommandText] =
@@ -91,9 +92,6 @@ const
     "░", "▒", "▓", "▔", "▕", "▖", "▗", "▘", "▙", "▚", "▛", "▜", "▝", "▞", "▟",
   ].toHashSet
   operatorCommands = ["/,"].toHashSet
-  stringCommands = [ # commands that receive their args as a single string
-    "/head.sig", "/head.time", "/head.key", "/head.algo", "/head.parent", "/head.last-sig", "/head.board",
-  ].toHashSet
   commands = initCommands()
 
 proc initContext*(): Context =
@@ -178,7 +176,7 @@ proc parse*(context: var Context, command: CommandText): CommandTree =
   for ch in runes(command.text):
     let s = ch.toUTF8
     # if this is a string command, don't parse the args
-    if forms.len >= 2 and forms[0].kind == Operator and forms[1].kind == Symbol and (forms[0].name & forms[1].name) in stringCommands:
+    if forms.len >= 2 and forms[0].kind == Operator and forms[1].kind == Symbol and (forms[0].name & forms[1].name) in context.stringCommands:
       unparsedText &= s
       continue
     let c = s[0]
@@ -266,7 +264,7 @@ proc parse*(context: var Context, command: CommandText): CommandTree =
         newForms.add(forms[i])
       i.inc
   forms = newForms
-  if forms.len >= 1 and forms[0].kind == Symbol and forms[0].name in stringCommands:
+  if forms.len >= 1 and forms[0].kind == Symbol and forms[0].name in context.stringCommands:
     return CommandTree(kind: Valid, name: forms[0].name, args: @[Form(kind: Symbol, name: unparsedText)], line: command.line, skip: true)
   # do some error checking
   for form in forms:
@@ -297,8 +295,7 @@ proc parse*(context: var Context, command: CommandText): CommandTree =
   forms = newForms
   toCommandTree(context, forms, command)
 
-proc parse*(line: string): CommandTree =
-  var context: Context
+proc parse*(context: var Context, line: string): CommandTree =
   let ret = extract(@[line])
   if ret.len == 1:
     parse(context, ret[0])
@@ -355,9 +352,7 @@ proc toJson(form: Form, preserveNumberSigns: bool = false): JsonNode =
       result = JsonNode(kind: JInt, num: strutils.parseBiggestInt(form.name))
   of Command:
     var cmd: CommandMetadata
-    if form.tree.name in stringCommands: # string commands cannot contain music
-      return JsonNode(kind: JArray)
-    elif not getCommand(cmd, form.tree.name):
+    if not getCommand(cmd, form.tree.name):
       raise newException(Exception, "Command not found: " & form.tree.name)
     case cmd.kind:
     of Play:

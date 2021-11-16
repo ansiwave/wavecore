@@ -10,7 +10,7 @@ from ./db/db_sqlite import nil
 from ./paths import nil
 from ./ed25519 import nil
 from ./wavescript import nil
-import tables
+import tables, sets
 
 type
   State = object
@@ -90,18 +90,20 @@ proc ansiwavePost(server: Server, request: Request): string =
       doubleNewline = strutils.find(request.body, "\n\n")
     if newline == -1 or doubleNewline == -1:
       raise newException(BadRequestException, "Invalid request body")
+    var ctx = wavescript.initContext()
+    ctx.stringCommands = ["/head.sig", "/head.time", "/head.key", "/head.algo", "/head.parent", "/head.last-sig", "/head.board"].toHashSet
     let
       sigLine = request.body[0 ..< newline]
       headersAndContent = request.body[newline + 1 ..< request.body.len]
       headers = strutils.splitLines(request.body[newline + 1 ..< doubleNewline])
       content = request.body[newline + 1 ..< request.body.len]
-      sigCmd = wavescript.parse(sigLine)
+      sigCmd = wavescript.parse(ctx, sigLine)
     if sigCmd.kind != wavescript.Valid or sigCmd.name != "/head.sig":
       raise newException(BadRequestException, "Invalid first header: " & sigLine)
     #if sigCmd.args != 1 or not ed25519.verify()
     var cmds: Table[string, wavescript.CommandTree]
     for header in headers:
-      let cmd = wavescript.parse(header)
+      let cmd = wavescript.parse(ctx, header)
       if cmd.kind != wavescript.Valid:
         raise newException(BadRequestException, "Invalid header: " & header)
       cmds[cmd.name] = cmd
