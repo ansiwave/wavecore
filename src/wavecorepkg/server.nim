@@ -8,6 +8,9 @@ from ./db import nil
 from ./db/entities import nil
 from ./db/db_sqlite import nil
 from ./paths import nil
+from ./ed25519 import nil
+from ./wavescript import nil
+import tables
 
 type
   State = object
@@ -81,11 +84,41 @@ proc sendAction(server: Server, action: Action): bool =
   deallocShared(done)
 
 proc ansiwavePost(server: Server, request: Request): string =
-  echo request.body
   if request.body.len > 0:
-    ""
+    let
+      newline = strutils.find(request.body, "\n")
+      doubleNewline = strutils.find(request.body, "\n\n")
+    if newline == -1 or doubleNewline == -1:
+      raise newException(BadRequestException, "Invalid request body")
+    let
+      sigLine = request.body[0 ..< newline]
+      headersAndContent = request.body[newline + 1 ..< request.body.len]
+      headers = strutils.splitLines(request.body[newline + 1 ..< doubleNewline])
+      content = request.body[newline + 1 ..< request.body.len]
+      sigCmd = wavescript.parse(sigLine)
+    if sigCmd.kind != wavescript.Valid or sigCmd.name != "/head.sig":
+      raise newException(BadRequestException, "Invalid first header: " & sigLine)
+    #if sigCmd.args != 1 or not ed25519.verify()
+    var cmds: Table[string, wavescript.CommandTree]
+    for header in headers:
+      let cmd = wavescript.parse(header)
+      if cmd.kind != wavescript.Valid:
+        raise newException(BadRequestException, "Invalid header: " & header)
+      cmds[cmd.name] = cmd
+    let
+      keyStr = paths.decode(cmds["/head.key"].args[0].name)
+      sigStr = paths.decode(sigCmd.args[0].name)
+    var
+      pubKey: ed25519.PublicKey
+      sig: ed25519.Signature
+    doAssert keyStr.len == pubKey.len
+    copyMem(pubKey.addr, keyStr[0].unsafeAddr, keyStr.len)
+    doAssert sigStr.len == sig.len
+    copyMem(sig.addr, sigStr[0].unsafeAddr, sigStr.len)
+    if not ed25519.verify(pubKey, sig, content):
+      raise newException(BadRequestException, "Invalid signature")
   else:
-    raise newException(BadRequestException, "invalid request")
+    raise newException(BadRequestException, "Invalid request")
 
 proc handle(server: Server, client: Socket) =
   var headers, body: string

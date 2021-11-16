@@ -91,7 +91,9 @@ const
     "░", "▒", "▓", "▔", "▕", "▖", "▗", "▘", "▙", "▚", "▛", "▜", "▝", "▞", "▟",
   ].toHashSet
   operatorCommands = ["/,"].toHashSet
-  stringCommands = initHashSet[string]() # commands that receive their args as a single string
+  stringCommands = [ # commands that receive their args as a single string
+    "/head.sig", "/head.time", "/head.key", "/head.algo", "/head.parent", "/head.last-sig", "/head.board",
+  ].toHashSet
   commands = initCommands()
 
 proc initContext*(): Context =
@@ -173,12 +175,10 @@ proc parse*(context: var Context, command: CommandText): CommandTree =
   proc flush() =
     forms.add(form)
     form = Form(kind: Whitespace)
-  proc isStringCommand(): bool =
-    forms.len >= 2 and forms[0].kind == Operator and forms[1].kind == Symbol and (forms[0].name & forms[1].name) in stringCommands
   for ch in runes(command.text):
     let s = ch.toUTF8
     # if this is a string command, don't parse the args
-    if isStringCommand():
+    if forms.len >= 2 and forms[0].kind == Operator and forms[1].kind == Symbol and (forms[0].name & forms[1].name) in stringCommands:
       unparsedText &= s
       continue
     let c = s[0]
@@ -224,18 +224,6 @@ proc parse*(context: var Context, command: CommandText): CommandTree =
     of Command:
       discard
   flush()
-  if isStringCommand():
-    return CommandTree(kind: Valid, name: forms[0].name & forms[1].name, args: @[Form(kind: Symbol, name: unparsedText)], line: command.line, skip: true)
-  # do some error checking
-  for form in forms:
-    if form.kind in {Symbol, Number}:
-      let invalidIdx = strutils.find(form.name, invalidChars)
-      if invalidIdx >= 0:
-        return CommandTree(kind: Error, line: command.line, message: "$1 has an invalid character: $2".format(form.name, form.name[invalidIdx]))
-      if form.kind == Number:
-        let symbolIdx = strutils.find(form.name, symbolChars)
-        if symbolIdx >= 0:
-          return CommandTree(kind: Error, line: command.line, message: "$1 may not contain $2 because it is a number".format(form.name, form.name[symbolIdx]))
   # merge operators with adjacent tokens in some cases
   var
     newForms: seq[Form]
@@ -278,6 +266,18 @@ proc parse*(context: var Context, command: CommandText): CommandTree =
         newForms.add(forms[i])
       i.inc
   forms = newForms
+  if forms.len >= 1 and forms[0].kind == Symbol and forms[0].name in stringCommands:
+    return CommandTree(kind: Valid, name: forms[0].name, args: @[Form(kind: Symbol, name: unparsedText)], line: command.line, skip: true)
+  # do some error checking
+  for form in forms:
+    if form.kind in {Symbol, Number}:
+      let invalidIdx = strutils.find(form.name, invalidChars)
+      if invalidIdx >= 0:
+        return CommandTree(kind: Error, line: command.line, message: "$1 has an invalid character: $2".format(form.name, form.name[invalidIdx]))
+      if form.kind == Number:
+        let symbolIdx = strutils.find(form.name, symbolChars)
+        if symbolIdx >= 0:
+          return CommandTree(kind: Error, line: command.line, message: "$1 may not contain $2 because it is a number".format(form.name, form.name[symbolIdx]))
   # group operators with their operands
   newForms = @[]
   i = 0
@@ -296,6 +296,14 @@ proc parse*(context: var Context, command: CommandText): CommandTree =
       i.inc
   forms = newForms
   toCommandTree(context, forms, command)
+
+proc parse*(line: string): CommandTree =
+  var context: Context
+  let ret = extract(@[line])
+  if ret.len == 1:
+    parse(context, ret[0])
+  else:
+    CommandTree(kind: Error, message: "Parsing failed")
 
 proc parseOperatorCommands*(trees: seq[CommandTree]): seq[CommandTree] =
   var
