@@ -37,7 +37,7 @@ type
     commands: Commands
     variables: Table[string, seq[Form]]
 
-proc parse*(lines: seq[string]): seq[CommandText] =
+proc extract*(lines: seq[string]): seq[CommandText] =
   for i in 0 ..< lines.len:
     let line = lines[i]
     if line.len > 1:
