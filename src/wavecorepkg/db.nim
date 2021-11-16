@@ -2,7 +2,6 @@
 
 import ./db/sqlite3
 from ./db/db_sqlite import sql
-from sequtils import nil
 from bitops import nil
 import tables
 

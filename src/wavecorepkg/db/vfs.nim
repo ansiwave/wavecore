@@ -1,5 +1,4 @@
 import ./sqlite3
-from parseutils import nil
 from os import joinPath
 from strformat import fmt
 
