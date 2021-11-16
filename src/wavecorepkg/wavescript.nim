@@ -82,11 +82,11 @@ proc toStr(form: Form): string =
 
 const
   symbolChars = {'a'..'z', '#'}
-  operatorChars = {'/', '-', '+'}
+  operatorChars = {'/', '-', '+', '.'}
   operatorSingleChars = {','} # operator chars that can only exist on their own
   numberChars = {'0'..'9'}
   invalidChars = {'A'..'Z', '~', '`', '!', '@', '$', '%', '^', '&', '*', '(', ')', '{', '}',
-                  '[', ']', '_', '=', ':', ';', '<', '>', '.', '"', '\'', '|', '\\', '?'}
+                  '[', ']', '_', '=', ':', ';', '<', '>', '"', '\'', '|', '\\', '?'}
   whitespaceChars* = [
     " ", "▀", "▁", "▂", "▃", "▄", "▅", "▆", "▇", "█", "▉", "▊", "▋", "▌", "▍", "▎", "▏", "▐",
     "░", "▒", "▓", "▔", "▕", "▖", "▗", "▘", "▙", "▚", "▛", "▜", "▝", "▞", "▟",
@@ -169,17 +169,13 @@ proc parse*(context: var Context, command: CommandText): CommandTree =
   var
     forms: seq[Form]
     form = Form(kind: Whitespace)
-    unparsedText = ""
   proc flush() =
     forms.add(form)
     form = Form(kind: Whitespace)
   for ch in runes(command.text):
-    let s = ch.toUTF8
-    # if this is a string command, don't parse the args
-    if forms.len >= 2 and forms[0].kind == Operator and forms[1].kind == Symbol and (forms[0].name & forms[1].name) in context.stringCommands:
-      unparsedText &= s
-      continue
-    let c = s[0]
+    let
+      s = ch.toUTF8
+      c = s[0]
     case form.kind:
     of Whitespace:
       if c in operatorChars:
@@ -259,13 +255,33 @@ proc parse*(context: var Context, command: CommandText): CommandTree =
       else:
         newForms.add(Form(kind: Symbol, name: lastItem.name & forms[i].name))
         i.inc
+    # . with symbols on both sides should form a single symbol
+    elif forms[i].kind == Operator and
+        forms[i].name == "." and
+        (newForms.len > 0 and newForms[newForms.len-1].kind == Symbol) and
+        (i != forms.len - 1 and forms[i+1].kind == Symbol):
+      let lastItem = newForms.pop()
+      newForms.add(Form(kind: Symbol, name: lastItem.name & forms[i].name & forms[i+1].name))
+      i += 2
     else:
       if forms[i].kind != Whitespace:
         newForms.add(forms[i])
       i.inc
   forms = newForms
+  # if a string command, exit early
   if forms.len >= 1 and forms[0].kind == Symbol and forms[0].name in context.stringCommands:
-    return CommandTree(kind: Valid, name: forms[0].name, args: @[Form(kind: Symbol, name: unparsedText)], line: command.line, skip: true)
+    return CommandTree(
+      kind: Valid,
+      name: forms[0].name,
+      args:
+        if command.text.len > forms[0].name.len:
+          @[Form(kind: Symbol, name: command.text[forms[0].name.len+1 ..< command.text.len])]
+        else:
+          @[]
+      ,
+      line: command.line,
+      skip: true
+    )
   # do some error checking
   for form in forms:
     if form.kind in {Symbol, Number}:
@@ -273,9 +289,9 @@ proc parse*(context: var Context, command: CommandText): CommandTree =
       if invalidIdx >= 0:
         return CommandTree(kind: Error, line: command.line, message: "$1 has an invalid character: $2".format(form.name, form.name[invalidIdx]))
       if form.kind == Number:
-        let symbolIdx = strutils.find(form.name, symbolChars)
-        if symbolIdx >= 0:
-          return CommandTree(kind: Error, line: command.line, message: "$1 may not contain $2 because it is a number".format(form.name, form.name[symbolIdx]))
+        for ch in form.name:
+          if ch notin numberChars:
+            return CommandTree(kind: Error, line: command.line, message: "$1 may not contain $2 because it is a number".format(form.name, ch))
   # group operators with their operands
   newForms = @[]
   i = 0
