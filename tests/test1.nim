@@ -3,6 +3,7 @@ from ./wavecorepkg/client import nil
 from ./wavecorepkg/server import nil
 import json
 from ./wavecorepkg/ed25519 import nil
+from ./wavecorepkg/paths import nil
 
 const
   port = 3001
@@ -62,8 +63,8 @@ test "query users":
   let
     aliceKeys = ed25519.initKeyPair()
     bobKeys = ed25519.initKeyPair()
-    alice = User(public_key: entities.initPublicKey(aliceKeys.public), content: entities.initContent(aliceKeys, ""))
-    bob = User(public_key: entities.initPublicKey(bobKeys.public), content: entities.initContent(bobKeys, ""))
+    alice = User(public_key: paths.encode(aliceKeys.public), content: entities.initContent(aliceKeys, ""))
+    bob = User(public_key: paths.encode(bobKeys.public), content: entities.initContent(bobKeys, ""))
   entities.insertUser(conn, alice)
   entities.insertUser(conn, bob)
   check alice == entities.selectUser(conn, alice.public_key)
@@ -82,8 +83,8 @@ test "query users asynchronously":
     let
       aliceKeys = ed25519.initKeyPair()
       bobKeys = ed25519.initKeyPair()
-      alice = User(public_key: entities.initPublicKey(aliceKeys.public), content: entities.initContent(aliceKeys, ""))
-      bob = User(public_key: entities.initPublicKey(bobKeys.public), content: entities.initContent(bobKeys, ""))
+      alice = User(public_key: paths.encode(aliceKeys.public), content: entities.initContent(aliceKeys, ""))
+      bob = User(public_key: paths.encode(bobKeys.public), content: entities.initContent(bobKeys, ""))
     entities.insertUser(conn, alice)
     entities.insertUser(conn, bob)
     db_sqlite.close(conn)
@@ -109,8 +110,8 @@ test "query posts":
   let
     aliceKeys = ed25519.initKeyPair()
     bobKeys = ed25519.initKeyPair()
-    alice = User(public_key: entities.initPublicKey(aliceKeys.public), content: entities.initContent(aliceKeys, ""))
-    bob = User(public_key: entities.initPublicKey(bobKeys.public), content: entities.initContent(bobKeys, ""))
+    alice = User(public_key: paths.encode(aliceKeys.public), content: entities.initContent(aliceKeys, ""))
+    bob = User(public_key: paths.encode(bobKeys.public), content: entities.initContent(bobKeys, ""))
   entities.insertUser(conn, alice)
   entities.insertUser(conn, bob)
   var p1 = Post(public_key: alice.public_key, content: entities.initContent(aliceKeys, "Hello, i'm alice"))
@@ -143,8 +144,8 @@ test "query posts asynchronously":
     let
       aliceKeys = ed25519.initKeyPair()
       bobKeys = ed25519.initKeyPair()
-      alice = User(public_key: entities.initPublicKey(aliceKeys.public), content: entities.initContent(aliceKeys, ""))
-      bob = User(public_key: entities.initPublicKey(bobKeys.public), content: entities.initContent(bobKeys, ""))
+      alice = User(public_key: paths.encode(aliceKeys.public), content: entities.initContent(aliceKeys, ""))
+      bob = User(public_key: paths.encode(bobKeys.public), content: entities.initContent(bobKeys, ""))
     entities.insertUser(conn, alice)
     entities.insertUser(conn, bob)
     var p1 = Post(public_key: alice.public_key, content: entities.initContent(aliceKeys, "Hello, i'm alice"))
@@ -179,8 +180,8 @@ test "search posts":
   let
     aliceKeys = ed25519.initKeyPair()
     bobKeys = ed25519.initKeyPair()
-    alice = User(public_key: entities.initPublicKey(aliceKeys.public), content: entities.initContent(aliceKeys, ""))
-    bob = User(public_key: entities.initPublicKey(bobKeys.public), content: entities.initContent(bobKeys, ""))
+    alice = User(public_key: paths.encode(aliceKeys.public), content: entities.initContent(aliceKeys, ""))
+    bob = User(public_key: paths.encode(bobKeys.public), content: entities.initContent(bobKeys, ""))
   entities.insertUser(conn, alice)
   entities.insertUser(conn, bob)
   var p1 = Post(public_key: alice.public_key, content: entities.initContent(aliceKeys, "Hello, i'm alice"))
@@ -198,8 +199,8 @@ test "score":
   let
     aliceKeys = ed25519.initKeyPair()
     bobKeys = ed25519.initKeyPair()
-    alice = User(public_key: entities.initPublicKey(aliceKeys.public), content: entities.initContent(aliceKeys, ""))
-    bob = User(public_key: entities.initPublicKey(bobKeys.public), content: entities.initContent(bobKeys, ""))
+    alice = User(public_key: paths.encode(aliceKeys.public), content: entities.initContent(aliceKeys, ""))
+    bob = User(public_key: paths.encode(bobKeys.public), content: entities.initContent(bobKeys, ""))
   entities.insertUser(conn, alice)
   entities.insertUser(conn, bob)
   let p1 = Post(public_key: alice.public_key, content: entities.initContent(aliceKeys, "Hello, i'm alice"))
@@ -223,8 +224,8 @@ test "retrieve sqlite db via http":
     let
       aliceKeys = ed25519.initKeyPair()
       bobKeys = ed25519.initKeyPair()
-      alice = User(public_key: entities.initPublicKey(aliceKeys.public), content: entities.initContent(aliceKeys, ""))
-      bob = User(public_key: entities.initPublicKey(bobKeys.public), content: entities.initContent(bobKeys, ""))
+      alice = User(public_key: paths.encode(aliceKeys.public), content: entities.initContent(aliceKeys, ""))
+      bob = User(public_key: paths.encode(bobKeys.public), content: entities.initContent(bobKeys, ""))
     entities.insertUser(conn, alice)
     entities.insertUser(conn, bob)
     db_sqlite.close(conn)
