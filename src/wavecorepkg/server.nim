@@ -96,11 +96,10 @@ proc ansiwavePost(server: Server, request: Request): string =
       sigLine = request.body[0 ..< newline]
       headersAndContent = request.body[newline + 1 ..< request.body.len]
       headers = strutils.splitLines(request.body[newline + 1 ..< doubleNewline])
-      content = request.body[newline + 1 ..< request.body.len]
+      content = request.body[doubleNewLine + 2 ..< request.body.len]
       sigCmd = wavescript.parse(ctx, sigLine)
     if sigCmd.kind != wavescript.Valid or sigCmd.name != "/head.sig":
       raise newException(BadRequestException, "Invalid first header: " & sigLine)
-    #if sigCmd.args != 1 or not ed25519.verify()
     var cmds: Table[string, wavescript.CommandTree]
     for header in headers:
       let cmd = wavescript.parse(ctx, header)
@@ -117,7 +116,7 @@ proc ansiwavePost(server: Server, request: Request): string =
     copyMem(pubKey.addr, keyStr[0].unsafeAddr, keyStr.len)
     doAssert sigStr.len == sig.len
     copyMem(sig.addr, sigStr[0].unsafeAddr, sigStr.len)
-    if not ed25519.verify(pubKey, sig, content):
+    if not ed25519.verify(pubKey, sig, headersAndContent):
       raise newException(BadRequestException, "Invalid signature")
   else:
     raise newException(BadRequestException, "Invalid request")
