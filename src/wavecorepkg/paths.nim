@@ -6,10 +6,16 @@ from strutils import nil
 const
   port* = 3000
   address* = "http://localhost:" & $port
-  staticFileDir* = "bbs"
-  dbFilename* = "board.db"
-  ansiwavesDir* = "ansiwavez"
   boardsDir* = "boards"
+  ansiwavesDir* = "ansiwavez"
+  dbDir* = "db"
+  dbFilename* = "board.db"
+
+proc db*(board: string): string =
+  boardsDir / board / dbDir / dbFilename
+
+proc ansiwavez*(board: string, filename: string): string =
+  boardsDir / board / ansiwavesDir / filename & ".ansiwavez"
 
 proc encode*[T](data: T): string =
   result = base64.encode(data, safe = true)
@@ -39,6 +45,3 @@ else:
         writeFile(".." / "wavecore" / "pubkey", keys.public)
         keys
     sysopPublicKey* = encode(sysopKeys.public)
-
-let
-  boardDir* = staticFileDir / boardsDir / sysopPublicKey

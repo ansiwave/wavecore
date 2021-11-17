@@ -150,15 +150,17 @@ Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu
 fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in
 culpa qui officia deserunt mollit anim id est laborum.
     """
+  staticFileDir* = "bbs"
 
 when isMainModule:
   vfs.register()
-  var s = server.initServer("localhost", paths.port, paths.staticFileDir)
+  var s = server.initServer("localhost", paths.port, staticFileDir)
   server.start(s)
   # create test db
-  discard osproc.execProcess("rm -r " & paths.staticFileDir / paths.boardsDir)
-  os.createDir(paths.boardDir / paths.ansiwavesDir)
-  var conn = db.open(paths.boardDir / paths.dbFilename)
+  discard osproc.execProcess("rm -r " & staticFileDir / paths.boardsDir)
+  os.createDir(staticFileDir / paths.boardsDir / paths.sysopPublicKey / paths.ansiwavesDir)
+  os.createDir(staticFileDir / paths.boardsDir / paths.sysopPublicKey / paths.dbDir)
+  var conn = db.open(staticFileDir / paths.db(paths.sysopPublicKey))
   db.init(conn)
   let sysop = entities.User(public_key: paths.sysopPublicKey, content: entities.initContent(paths.sysopKeys, asciiArt))
   server.insertUser(s, paths.sysopPublicKey, sysop)
