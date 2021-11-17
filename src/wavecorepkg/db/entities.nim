@@ -172,6 +172,13 @@ proc selectPostChildren*(conn: PSqlite3, sig: string): seq[Post] =
   sequtils.toSeq(db.select[Post](conn, initPost, query, sig))
 
 proc insertPost*(conn: PSqlite3, entity: Post, extraFn: proc (x: var Post, id: int64) = nil) =
+  let userId =
+    try:
+      selectUserExtras(conn, entity.public_key).user_id
+    except Exception as ex:
+      # FIXME: don't automatically insert user
+      insertUser(conn, User(public_key: entity.public_key))
+      selectUserExtras(conn, entity.public_key).user_id
   db_sqlite.exec(conn, sql"BEGIN TRANSACTION")
   var
     e = entity
@@ -208,7 +215,6 @@ proc insertPost*(conn: PSqlite3, entity: Post, extraFn: proc (x: var Post, id: i
     if step(stmt) != SQLITE_DONE:
       db_sqlite.dbError(conn)
     id = sqlite3.last_insert_rowid(conn)
-  let userId = selectUserExtras(conn, e.public_key).user_id
   db.withStatement(conn, "INSERT INTO post_search (post_id, user_id, attribute, value) VALUES (?, ?, ?, ?)", stmt):
     db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), id, userId, "content", e.content.value.uncompressed)
     if step(stmt) != SQLITE_DONE:

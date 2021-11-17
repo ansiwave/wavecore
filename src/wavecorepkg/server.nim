@@ -15,13 +15,14 @@ import tables, sets
 type
   State = object
   ActionKind = enum
-    Stop, Test,
+    Stop, InsertPost,
   Action = object
     case kind: ActionKind
     of Stop:
       discard
-    of Test:
-      success: bool
+    of InsertPost:
+      board: string
+      post: entities.Post
     done: ptr Channel[bool]
   Server* = ref object
     hostname: string
@@ -85,6 +86,7 @@ proc sendAction(server: Server, action: Action): bool =
 
 proc ansiwavePost(server: Server, request: Request): string =
   if request.body.len > 0:
+    # parse the ansiwave
     let
       newline = strutils.find(request.body, "\n")
       doubleNewline = strutils.find(request.body, "\n\n")
@@ -109,26 +111,41 @@ proc ansiwavePost(server: Server, request: Request): string =
     for cmd in ctx.stringCommands:
       if not cmds.hasKey(cmd):
         raise newException(BadRequestException, "Required header not found: " & cmd)
-    if cmds["/head.board"].args[0].name != paths.encode(paths.decode(cmds["/head.board"].args[0].name)):
+
+    # check the board
+    let board = cmds["/head.board"].args[0].name
+    if board != paths.encode(paths.decode(board)):
       raise newException(BadRequestException, "Invalid value in /head.board")
-    if not os.dirExists(server.staticFileDir / paths.boardsDir / cmds["/head.board"].args[0].name):
+    if not os.dirExists(server.staticFileDir / paths.boardsDir / board):
       raise newException(BadRequestException, "Board does not exist")
+
+    # check the sig
     if cmds["/head.algo"].args[0].name != "ed25519":
       raise newException(BadRequestException, "Invalid value in /head.algo")
     let
-      keyStr = paths.decode(cmds["/head.key"].args[0].name)
-      sigStr = paths.decode(sigCmd.args[0].name)
+      keyBase64 = cmds["/head.key"].args[0].name
+      keyBin = paths.decode(keyBase64)
+      sigBase64 = sigCmd.args[0].name
+      sigBin = paths.decode(sigBase64)
     var
       pubKey: ed25519.PublicKey
       sig: ed25519.Signature
-    if keyStr.len != pubKey.len:
+    if keyBin.len != pubKey.len:
       raise newException(BadRequestException, "Invalid key length for /head.key")
-    copyMem(pubKey.addr, keyStr[0].unsafeAddr, keyStr.len)
-    if sigStr.len != sig.len:
+    copyMem(pubKey.addr, keyBin[0].unsafeAddr, keyBin.len)
+    if sigBin.len != sig.len:
       raise newException(BadRequestException, "Invalid key length for /head.sig")
-    copyMem(sig.addr, sigStr[0].unsafeAddr, sigStr.len)
+    copyMem(sig.addr, sigBin[0].unsafeAddr, sigBin.len)
     if not ed25519.verify(pubKey, sig, headersAndContent):
       raise newException(BadRequestException, "Invalid signature")
+
+    let post = entities.Post(
+      content: entities.Content(value: entities.initCompressedValue(request.body), sig: sigBase64),
+      public_key: keyBase64,
+      parent: cmds["/head.parent"].args[0].name,
+    )
+    if not sendAction(server, Action(kind: InsertPost, board: board, post: post)):
+      raise newException(Exception, "Failed to insert post")
   else:
     raise newException(BadRequestException, "Invalid request")
 
@@ -256,9 +273,10 @@ proc recvAction(server: Server) {.thread.} =
     case action.kind:
     of Stop:
       break
-    of Test:
-      if action.success:
-        resp = true
+    of InsertPost:
+      # FIXME: catch exceptions
+      insertPost(server, action.board, action.post)
+      resp = true
     action.done[].send(resp)
 
 proc initShared(server: var Server) =
