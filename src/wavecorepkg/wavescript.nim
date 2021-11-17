@@ -297,6 +297,7 @@ proc parse*(context: var Context, command: CommandText): CommandTree =
       kind: Valid,
       name: forms[0].name,
       args:
+        # FIXME: do a better job extracting the arg than this
         if command.text.len > forms[0].name.len:
           @[Form(kind: Symbol, name: command.text[forms[0].name.len+1 ..< command.text.len])]
         else:
