@@ -223,15 +223,8 @@ proc parse*(context: var Context, command: CommandText): CommandTree =
     newForms: seq[Form]
     i = 0
   while i < forms.len:
-    # / with whitespace or comma on the left and symbol/number/operator on the right should form a single symbol
-    if forms[i].kind == Operator and
-        forms[i].name == "/" and
-        (i == 0 or forms[i-1].kind == Whitespace or (forms[i-1].kind == Operator and forms[i-1].name == ",")) and
-        (i != forms.len - 1 and forms[i+1].kind in {Symbol, Number, Operator}):
-      newForms.add(Form(kind: Symbol, name: forms[i].name & forms[i+1].name))
-      i += 2
     # + and - with whitespace on the left and number on the right should form a single number
-    elif forms[i].kind == Operator and
+    if forms[i].kind == Operator and
         (forms[i].name == "+" or forms[i].name == "-") and
         (i == 0 or forms[i-1].kind == Whitespace) and
         (i != forms.len - 1 and forms[i+1].kind == Number):
@@ -255,8 +248,17 @@ proc parse*(context: var Context, command: CommandText): CommandTree =
       else:
         newForms.add(Form(kind: Symbol, name: lastItem.name & forms[i].name))
         i.inc
-    # . with symbols on both sides should form a single symbol
-    elif forms[i].kind == Operator and
+    elif forms[i].kind == Whitespace:
+      i.inc
+    else:
+      newForms.add(forms[i])
+      i.inc
+  forms = newForms
+  # . with symbols on both sides should form a single symbol
+  newForms = @[]
+  i = 0
+  while i < forms.len:
+    if forms[i].kind == Operator and
         forms[i].name == "." and
         (newForms.len > 0 and newForms[newForms.len-1].kind == Symbol) and
         (i != forms.len - 1 and forms[i+1].kind == Symbol):
@@ -264,8 +266,21 @@ proc parse*(context: var Context, command: CommandText): CommandTree =
       newForms.add(Form(kind: Symbol, name: lastItem.name & forms[i].name & forms[i+1].name))
       i += 2
     else:
-      if forms[i].kind != Whitespace:
-        newForms.add(forms[i])
+      newForms.add(forms[i])
+      i.inc
+  forms = newForms
+  # / with whitespace or comma on the left and symbol/number/operator on the right should form a single symbol
+  newForms = @[]
+  i = 0
+  while i < forms.len:
+    if forms[i].kind == Operator and
+        forms[i].name == "/" and
+        (i == 0 or forms[i-1].kind == Whitespace or (forms[i-1].kind == Operator and forms[i-1].name == ",")) and
+        (i != forms.len - 1 and forms[i+1].kind in {Symbol, Number, Operator}):
+      newForms.add(Form(kind: Symbol, name: forms[i].name & forms[i+1].name))
+      i += 2
+    else:
+      newForms.add(forms[i])
       i.inc
   forms = newForms
   # if a string command, exit early
