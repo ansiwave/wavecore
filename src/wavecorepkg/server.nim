@@ -109,6 +109,10 @@ proc ansiwavePost(server: Server, request: Request): string =
     for cmd in ctx.stringCommands:
       if not cmds.hasKey(cmd):
         raise newException(BadRequestException, "Required header not found: " & cmd)
+    if cmds["/head.board"].args[0].name != paths.encode(paths.decode(cmds["/head.board"].args[0].name)):
+      raise newException(BadRequestException, "Invalid value in /head.board")
+    if not os.dirExists(server.staticFileDir / paths.boardsDir / cmds["/head.board"].args[0].name):
+      raise newException(BadRequestException, "Board does not exist")
     if cmds["/head.algo"].args[0].name != "ed25519":
       raise newException(BadRequestException, "Invalid value in /head.algo")
     let
