@@ -101,20 +101,27 @@ proc ansiwavePost(server: Server, request: Request): string =
     if sigCmd.kind != wavescript.Valid or sigCmd.name != "/head.sig":
       raise newException(BadRequestException, "Invalid first header: " & sigLine)
     var cmds: Table[string, wavescript.CommandTree]
+    cmds[sigCmd.name] = sigCmd
     for header in headers:
       let cmd = wavescript.parse(ctx, header)
-      if cmd.kind != wavescript.Valid:
-        raise newException(BadRequestException, "Invalid header: " & header)
-      cmds[cmd.name] = cmd
+      if cmd.kind == wavescript.Valid:
+        cmds[cmd.name] = cmd
+    for cmd in ctx.stringCommands:
+      if not cmds.hasKey(cmd):
+        raise newException(BadRequestException, "Required header not found: " & cmd)
+    if cmds["/head.algo"].args[0].name != "ed25519":
+      raise newException(BadRequestException, "Invalid value in /head.algo")
     let
       keyStr = paths.decode(cmds["/head.key"].args[0].name)
       sigStr = paths.decode(sigCmd.args[0].name)
     var
       pubKey: ed25519.PublicKey
       sig: ed25519.Signature
-    doAssert keyStr.len == pubKey.len
+    if keyStr.len != pubKey.len:
+      raise newException(BadRequestException, "Invalid key length for /head.key")
     copyMem(pubKey.addr, keyStr[0].unsafeAddr, keyStr.len)
-    doAssert sigStr.len == sig.len
+    if sigStr.len != sig.len:
+      raise newException(BadRequestException, "Invalid key length for /head.sig")
     copyMem(sig.addr, sigStr[0].unsafeAddr, sigStr.len)
     if not ed25519.verify(pubKey, sig, headersAndContent):
       raise newException(BadRequestException, "Invalid signature")
