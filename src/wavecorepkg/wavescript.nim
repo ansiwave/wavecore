@@ -248,8 +248,6 @@ proc parse*(context: var Context, command: CommandText): CommandTree =
       else:
         newForms.add(Form(kind: Symbol, name: lastItem.name & forms[i].name))
         i.inc
-    elif forms[i].kind == Whitespace:
-      i.inc
     else:
       newForms.add(forms[i])
       i.inc
@@ -279,6 +277,16 @@ proc parse*(context: var Context, command: CommandText): CommandTree =
         (i != forms.len - 1 and forms[i+1].kind in {Symbol, Number, Operator}):
       newForms.add(Form(kind: Symbol, name: forms[i].name & forms[i+1].name))
       i += 2
+    else:
+      newForms.add(forms[i])
+      i.inc
+  forms = newForms
+  # remove whitespace
+  newForms = @[]
+  i = 0
+  while i < forms.len:
+    if forms[i].kind == Whitespace:
+      i.inc
     else:
       newForms.add(forms[i])
       i.inc
