@@ -79,6 +79,7 @@ proc wavecore_start_download(data_uri: cstring, filename: cstring) {.importc.}
 proc wavecore_localstorage_set(key: cstring, val: cstring): bool {.importc.}
 proc wavecore_localstorage_get(key: cstring): cstring {.importc.}
 proc wavecore_localstorage_remove(key: cstring) {.importc.}
+proc wavecore_localstorage_list(): cstring {.importc.}
 proc free(p: pointer) {.importc.}
 
 {.compile: "emscripten.c".}
@@ -132,6 +133,12 @@ proc localGet*(key: string): string =
 
 proc localRemove*(key: string) =
   wavecore_localstorage_remove(key)
+
+proc localList*(): seq[string] =
+  let val = wavecore_localstorage_list()
+  for item in parseJson($val):
+    result.add(item.str)
+  free(val)
 
 proc initChannelValue*[T](): ChannelValue[T] =
   result = ChannelValue[T](

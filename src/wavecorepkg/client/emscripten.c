@@ -114,3 +114,15 @@ EM_JS(void, wavecore_localstorage_remove, (const char* key), {
   window.localStorage.removeItem(UTF8ToString(key));
 });
 
+EM_JS(char*, wavecore_localstorage_list, (), {
+  var arr = [];
+  Object.keys(localStorage).forEach(function(key){
+    arr.push(key);
+  });
+  var json = JSON.stringify(arr);
+  var lengthBytes = lengthBytesUTF8(json)+1;
+  var stringOnWasmHeap = _malloc(lengthBytes);
+  stringToUTF8(json, stringOnWasmHeap, lengthBytes);
+  return stringOnWasmHeap;
+});
+
