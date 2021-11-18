@@ -21,7 +21,7 @@ EM_JS(char*, wavecore_fetch, (const char* url, const char* verb, const char* hea
   }
 
   var response = {
-    "body": "",
+    "body": btoa(binary),
     "code": request.status,
     "headers": {
       "Content-Length": request.getResponseHeader("Content-Length"),
@@ -29,9 +29,6 @@ EM_JS(char*, wavecore_fetch, (const char* url, const char* verb, const char* hea
       "Content-Type": request.getResponseHeader("Content-Type")
     }
   };
-  if (request.status === 200 || request.status == 206) {
-    response["body"] = btoa(binary);
-  }
 
   var json = JSON.stringify(response);
   var lengthBytes = lengthBytesUTF8(json)+1;

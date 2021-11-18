@@ -35,7 +35,7 @@ type
     of Valid:
       valid*: T
     of Error:
-      discard
+      error*: string
   ActionKind* = enum
     Stop, Fetch, QueryUser, QueryPost, QueryPostChildren,
   Action* = object
@@ -189,7 +189,7 @@ proc recvAction(data: pointer, size: cint) {.exportc.} =
           req.body = zippy.uncompress(cast[string](req.body), dataFormat = zippy.dfZlib)
         flatty.toFlatty(Result[Response](kind: Valid, valid: req))
       else:
-        flatty.toFlatty(Result[Response](kind: Error))
+        flatty.toFlatty(Result[Response](kind: Error, error: req.body))
     of QueryUser:
       try:
         let conn = db.open(action.dbFilename, true)
@@ -197,7 +197,7 @@ proc recvAction(data: pointer, size: cint) {.exportc.} =
         db_sqlite.close(conn)
         flatty.toFlatty(Result[entities.User](kind: Valid, valid: user))
       except Exception as ex:
-        flatty.toFlatty(Result[seq[entities.Post]](kind: Error))
+        flatty.toFlatty(Result[seq[entities.Post]](kind: Error, error: ex.msg))
     of QueryPost:
       try:
         let conn = db.open(action.dbFilename, true)
@@ -205,7 +205,7 @@ proc recvAction(data: pointer, size: cint) {.exportc.} =
         db_sqlite.close(conn)
         flatty.toFlatty(Result[entities.Post](kind: Valid, valid: post))
       except Exception as ex:
-        flatty.toFlatty(Result[seq[entities.Post]](kind: Error))
+        flatty.toFlatty(Result[seq[entities.Post]](kind: Error, error: ex.msg))
     of QueryPostChildren:
       try:
         let conn = db.open(action.dbFilename, true)
@@ -213,7 +213,7 @@ proc recvAction(data: pointer, size: cint) {.exportc.} =
         db_sqlite.close(conn)
         flatty.toFlatty(Result[seq[entities.Post]](kind: Valid, valid: posts))
       except Exception as ex:
-        flatty.toFlatty(Result[seq[entities.Post]](kind: Error))
+        flatty.toFlatty(Result[seq[entities.Post]](kind: Error, error: ex.msg))
   let data = flatty.toFlatty(WorkerResponse(data: res, channel: workerRequest.channel))
   emscripten_worker_respond(data, data.len.cint)
 
