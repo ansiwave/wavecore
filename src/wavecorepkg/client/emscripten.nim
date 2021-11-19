@@ -81,6 +81,7 @@ proc wavecore_localstorage_get(key: cstring): cstring {.importc.}
 proc wavecore_localstorage_remove(key: cstring) {.importc.}
 proc wavecore_localstorage_list(): cstring {.importc.}
 proc wavecore_play_audio(src: cstring) {.importc.}
+proc wavecore_stop_audio() {.importc.}
 proc free(p: pointer) {.importc.}
 
 {.compile: "emscripten.c".}
@@ -143,6 +144,9 @@ proc localList*(): seq[string] =
 
 proc playAudio*(src: string) =
   wavecore_play_audio(src)
+
+proc stopAudio*() =
+  wavecore_stop_audio()
 
 proc initChannelValue*[T](): ChannelValue[T] =
   result = ChannelValue[T](
