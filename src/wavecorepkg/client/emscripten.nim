@@ -80,6 +80,7 @@ proc wavecore_localstorage_set(key: cstring, val: cstring): bool {.importc.}
 proc wavecore_localstorage_get(key: cstring): cstring {.importc.}
 proc wavecore_localstorage_remove(key: cstring) {.importc.}
 proc wavecore_localstorage_list(): cstring {.importc.}
+proc wavecore_play_audio(src: cstring) {.importc.}
 proc free(p: pointer) {.importc.}
 
 {.compile: "emscripten.c".}
@@ -139,6 +140,9 @@ proc localList*(): seq[string] =
   for item in parseJson($val):
     result.add(item.str)
   free(val)
+
+proc playAudio*(src: string) =
+  wavecore_play_audio(src)
 
 proc initChannelValue*[T](): ChannelValue[T] =
   result = ChannelValue[T](

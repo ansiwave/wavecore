@@ -126,3 +126,10 @@ EM_JS(char*, wavecore_localstorage_list, (), {
   return stringOnWasmHeap;
 });
 
+EM_JS(void, wavecore_play_audio, (const char* src), {
+  try {
+    var audio = new Audio(UTF8ToString(src));
+    audio.play();
+  } catch (e) {}
+});
+
