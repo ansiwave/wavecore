@@ -313,9 +313,9 @@ proc parse*(context: var Context, command: CommandText): CommandTree =
       if invalidIdx >= 0:
         return CommandTree(kind: Error, line: command.line, message: "$1 has an invalid character: $2".format(form.name, form.name[invalidIdx]))
       if form.kind == Number:
-        for ch in form.name:
-          if ch notin numberChars:
-            return CommandTree(kind: Error, line: command.line, message: "$1 may not contain $2 because it is a number".format(form.name, ch))
+        let symbolIdx = strutils.find(form.name, symbolChars)
+        if symbolIdx >= 0:
+          return CommandTree(kind: Error, line: command.line, message: "$1 may not contain $2 because it is a number".format(form.name, form.name[symbolIdx]))
   # group operators with their operands
   newForms = @[]
   i = 0
