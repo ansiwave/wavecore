@@ -27,7 +27,9 @@ proc initCompressedValue*(uncompressed: string): CompressedValue =
   result.compressed = zippy.compress(uncompressed, dataFormat = zippy.dfZlib)
   result.uncompressed = uncompressed
 
-proc initContent*(keys: ed25519.KeyPair, content: string): Content =
+# not used in prod...only in tests
+proc initContent*(keys: ed25519.KeyPair, origContent: string): Content =
+  let content = "\n\n" & origContent # add two newlines to simulate where headers would've been
   result.value = initCompressedValue(content)
   result.sig = paths.encode(ed25519.sign(keys, content))
 
