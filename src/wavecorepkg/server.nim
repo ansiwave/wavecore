@@ -9,8 +9,8 @@ from ./db/entities import nil
 from ./db/db_sqlite import nil
 from ./paths import nil
 from ./ed25519 import nil
-from ./wavescript import nil
-import tables, sets
+from ./common import nil
+import tables
 
 type
   State = object
@@ -87,30 +87,11 @@ proc sendAction(server: Server, action: Action): bool =
 proc ansiwavePost(server: Server, request: Request): string =
   if request.body.len > 0:
     # parse the ansiwave
-    let
-      newline = strutils.find(request.body, "\n")
-      doubleNewline = strutils.find(request.body, "\n\n")
-    if newline == -1 or doubleNewline == -1:
-      raise newException(BadRequestException, "Invalid request body")
-    var ctx = wavescript.initContext()
-    ctx.stringCommands = ["/head.sig", "/head.time", "/head.key", "/head.algo", "/head.parent", "/head.last-sig", "/head.board"].toHashSet
-    let
-      sigLine = request.body[0 ..< newline]
-      headersAndContent = request.body[newline + 1 ..< request.body.len]
-      headers = strutils.splitLines(request.body[newline + 1 ..< doubleNewline])
-      content = request.body[doubleNewLine + 2 ..< request.body.len]
-      sigCmd = wavescript.parse(ctx, sigLine)
-    if sigCmd.kind != wavescript.Valid or sigCmd.name != "/head.sig":
-      raise newException(BadRequestException, "Invalid first header: " & sigLine)
-    var cmds: Table[string, wavescript.CommandTree]
-    cmds[sigCmd.name] = sigCmd
-    for header in headers:
-      let cmd = wavescript.parse(ctx, header)
-      if cmd.kind == wavescript.Valid:
-        cmds[cmd.name] = cmd
-    for cmd in ctx.stringCommands:
-      if not cmds.hasKey(cmd):
-        raise newException(BadRequestException, "Required header not found: " & cmd)
+    let (cmds, content) =
+      try:
+        common.parseAnsiwave(request.body)
+      except Exception as ex:
+        raise newException(BadRequestException, ex.msg)
 
     # check the board
     let board = cmds["/head.board"].args[0].name
@@ -125,7 +106,7 @@ proc ansiwavePost(server: Server, request: Request): string =
     let
       keyBase64 = cmds["/head.key"].args[0].name
       keyBin = paths.decode(keyBase64)
-      sigBase64 = sigCmd.args[0].name
+      sigBase64 = cmds["/head.sig"].args[0].name
       sigBin = paths.decode(sigBase64)
     var
       pubKey: ed25519.PublicKey
@@ -136,7 +117,7 @@ proc ansiwavePost(server: Server, request: Request): string =
     if sigBin.len != sig.len:
       raise newException(BadRequestException, "Invalid key length for /head.sig")
     copyMem(sig.addr, sigBin[0].unsafeAddr, sigBin.len)
-    if not ed25519.verify(pubKey, sig, headersAndContent):
+    if not ed25519.verify(pubKey, sig, content):
       raise newException(BadRequestException, "Invalid signature")
 
     let post = entities.Post(
