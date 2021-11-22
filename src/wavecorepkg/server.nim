@@ -94,19 +94,19 @@ proc ansiwavePost(server: Server, request: Request): string =
         raise newException(BadRequestException, ex.msg)
 
     # check the board
-    let board = cmds["/head.board"].args[0].name
+    let board = cmds["/head.board"]
     if board != paths.encode(paths.decode(board)):
       raise newException(BadRequestException, "Invalid value in /head.board")
     if not os.dirExists(server.staticFileDir / paths.boardsDir / board):
       raise newException(BadRequestException, "Board does not exist")
 
     # check the sig
-    if cmds["/head.algo"].args[0].name != "ed25519":
+    if cmds["/head.algo"] != "ed25519":
       raise newException(BadRequestException, "Invalid value in /head.algo")
     let
-      keyBase64 = cmds["/head.key"].args[0].name
+      keyBase64 = cmds["/head.key"]
       keyBin = paths.decode(keyBase64)
-      sigBase64 = cmds["/head.sig"].args[0].name
+      sigBase64 = cmds["/head.sig"]
       sigBin = paths.decode(sigBase64)
     var
       pubKey: ed25519.PublicKey
@@ -123,7 +123,7 @@ proc ansiwavePost(server: Server, request: Request): string =
     let post = entities.Post(
       content: entities.Content(value: entities.initCompressedValue(request.body), sig: sigBase64),
       public_key: keyBase64,
-      parent: cmds["/head.parent"].args[0].name,
+      parent: cmds["/head.parent"],
     )
     if not sendAction(server, Action(kind: InsertPost, board: board, post: post)):
       raise newException(Exception, "Failed to insert post")
