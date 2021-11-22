@@ -4,7 +4,7 @@ import tables, sets
 
 proc parseAnsiwave*(ansiwave: string): tuple[cmds: Table[string, string], content: string] =
   var ctx = wavescript.initContext()
-  ctx.stringCommands = ["/head.sig", "/head.time", "/head.key", "/head.algo", "/head.parent", "/head.last-sig", "/head.board"].toHashSet
+  ctx.stringCommands = ["/head.sig", "/head.time", "/head.key", "/head.algo", "/head.target", "/head.type", "/head.board"].toHashSet
   let
     newline = strutils.find(ansiwave, "\n")
     doubleNewline = strutils.find(ansiwave, "\n\n")

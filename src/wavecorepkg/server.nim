@@ -24,9 +24,8 @@ type
       board: string
       post: entities.Post
     of EditPost:
-      sig: string
-      lastSig: string
       content: entities.Content
+      target: string
     done: ptr Channel[bool]
   Server* = ref object
     hostname: string
@@ -76,8 +75,8 @@ proc insertPost*(server: Server, board: string, entity: entities.Post) =
   )
   db_sqlite.close(conn)
 
-proc editPost*(server: Server, sig: string, lastSig: string, content: entities.Content) =
-  echo sig
+proc editPost*(server: Server, target: string, content: entities.Content) =
+  echo target
 
 proc sendAction(server: Server, action: Action): bool =
   let done = cast[ptr Channel[bool]](
@@ -127,18 +126,21 @@ proc ansiwavePost(server: Server, request: Request): string =
     if not ed25519.verify(pubKey, sig, content):
       raise newException(BadRequestException, "Invalid signature")
 
-    if cmds["/head.last-sig"].len > 0:
-      let content = entities.Content(value: entities.initCompressedValue(request.body), sig: sigBase64)
-      if not sendAction(server, Action(kind: EditPost, sig: sigBase64, lastSig: cmds["/head.last-sig"], content: content)):
-        raise newException(Exception, "Failed to edit post")
-    else:
+    case cmds["/head.type"]:
+    of "new":
       let post = entities.Post(
         content: entities.Content(value: entities.initCompressedValue(request.body), sig: sigBase64),
         public_key: keyBase64,
-        parent: cmds["/head.parent"],
+        parent: cmds["/head.target"],
       )
       if not sendAction(server, Action(kind: InsertPost, board: board, post: post)):
         raise newException(Exception, "Failed to insert post")
+    of "edit":
+      let content = entities.Content(value: entities.initCompressedValue(request.body), sig: sigBase64)
+      if not sendAction(server, Action(kind: EditPost, target: cmds["/head.target"], content: content)):
+        raise newException(Exception, "Failed to edit post")
+    else:
+      raise newException(BadRequestException, "Invalid /head.type")
   else:
     raise newException(BadRequestException, "Invalid request")
 
@@ -271,7 +273,7 @@ proc recvAction(server: Server) {.thread.} =
       insertPost(server, action.board, action.post)
       resp = true
     of EditPost:
-      editPost(server, action.sig, action.lastSig, action.content)
+      editPost(server, action.target, action.content)
       resp = true
     action.done[].send(resp)
 
