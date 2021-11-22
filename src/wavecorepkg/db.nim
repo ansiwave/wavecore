@@ -38,7 +38,7 @@ proc init*(conn: PSqlite3) =
       ts DATETIME DEFAULT CURRENT_TIMESTAMP,
       content BLOB,
       content_sig TEXT UNIQUE,
-      content_sig_last TEXT,
+      content_sig_last TEXT UNIQUE,
       public_key TEXT,
       parent TEXT,
       parent_public_key TEXT,
@@ -47,6 +47,7 @@ proc init*(conn: PSqlite3) =
     )
   """
   db_sqlite.exec conn, sql"CREATE INDEX post_content_sig ON post(content_sig)"
+  db_sqlite.exec conn, sql"CREATE INDEX post_content_sig_last ON post(content_sig_last)"
   db_sqlite.exec conn, sql"CREATE INDEX post_public_key ON post(public_key)"
   db_sqlite.exec conn, sql"CREATE INDEX post_parent ON post(parent)"
   db_sqlite.exec conn, sql"CREATE INDEX post_parent_public_key ON post(parent_public_key)"
