@@ -93,7 +93,7 @@ proc sendAction(server: Server, action: Action): bool =
 proc ansiwavePost(server: Server, request: Request): string =
   if request.body.len > 0:
     # parse the ansiwave
-    let (cmds, content) =
+    let (cmds, headersAndContent, _) =
       try:
         common.parseAnsiwave(request.body)
       except Exception as ex:
@@ -123,7 +123,7 @@ proc ansiwavePost(server: Server, request: Request): string =
     if sigBin.len != sig.len:
       raise newException(BadRequestException, "Invalid key length for /head.sig")
     copyMem(sig.addr, sigBin[0].unsafeAddr, sigBin.len)
-    if not ed25519.verify(pubKey, sig, content):
+    if not ed25519.verify(pubKey, sig, headersAndContent):
       raise newException(BadRequestException, "Invalid signature")
 
     case cmds["/head.type"]:

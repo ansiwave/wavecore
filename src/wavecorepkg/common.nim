@@ -2,7 +2,7 @@ from ./wavescript import nil
 from strutils import nil
 import tables, sets
 
-proc parseAnsiwave*(ansiwave: string): tuple[cmds: Table[string, string], content: string] =
+proc parseAnsiwave*(ansiwave: string): tuple[cmds: Table[string, string], headersAndContent: string, content: string] =
   var ctx = wavescript.initContext()
   ctx.stringCommands = ["/head.sig", "/head.time", "/head.key", "/head.algo", "/head.target", "/head.type", "/head.board"].toHashSet
   let
@@ -25,4 +25,5 @@ proc parseAnsiwave*(ansiwave: string): tuple[cmds: Table[string, string], conten
   for cmd in ctx.stringCommands:
     if not result.cmds.hasKey(cmd):
       raise newException(Exception, "Required header not found: " & cmd)
-  result.content = ansiwave[newline + 1 ..< ansiwave.len]
+  result.headersAndContent = ansiwave[newline + 1 ..< ansiwave.len]
+  result.content = content
