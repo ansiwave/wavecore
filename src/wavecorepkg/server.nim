@@ -15,7 +15,7 @@ import tables
 type
   State = object
   ActionKind = enum
-    Stop, InsertPost,
+    Stop, InsertPost, EditPost,
   Action = object
     case kind: ActionKind
     of Stop:
@@ -23,6 +23,10 @@ type
     of InsertPost:
       board: string
       post: entities.Post
+    of EditPost:
+      sig: string
+      lastSig: string
+      content: entities.Content
     done: ptr Channel[bool]
   Server* = ref object
     hostname: string
@@ -72,6 +76,9 @@ proc insertPost*(server: Server, board: string, entity: entities.Post) =
   )
   db_sqlite.close(conn)
 
+proc editPost*(server: Server, sig: string, lastSig: string, content: entities.Content) =
+  echo sig
+
 proc sendAction(server: Server, action: Action): bool =
   let done = cast[ptr Channel[bool]](
     allocShared0(sizeof(Channel[bool]))
@@ -120,13 +127,18 @@ proc ansiwavePost(server: Server, request: Request): string =
     if not ed25519.verify(pubKey, sig, content):
       raise newException(BadRequestException, "Invalid signature")
 
-    let post = entities.Post(
-      content: entities.Content(value: entities.initCompressedValue(request.body), sig: sigBase64),
-      public_key: keyBase64,
-      parent: cmds["/head.parent"],
-    )
-    if not sendAction(server, Action(kind: InsertPost, board: board, post: post)):
-      raise newException(Exception, "Failed to insert post")
+    if cmds["/head.last-sig"].len > 0:
+      let content = entities.Content(value: entities.initCompressedValue(request.body), sig: sigBase64)
+      if not sendAction(server, Action(kind: EditPost, sig: sigBase64, lastSig: cmds["/head.last-sig"], content: content)):
+        raise newException(Exception, "Failed to edit post")
+    else:
+      let post = entities.Post(
+        content: entities.Content(value: entities.initCompressedValue(request.body), sig: sigBase64),
+        public_key: keyBase64,
+        parent: cmds["/head.parent"],
+      )
+      if not sendAction(server, Action(kind: InsertPost, board: board, post: post)):
+        raise newException(Exception, "Failed to insert post")
   else:
     raise newException(BadRequestException, "Invalid request")
 
@@ -248,6 +260,7 @@ proc listen(server: Server) {.thread.} =
 
 proc recvAction(server: Server) {.thread.} =
   server.stateReady[].send(true)
+  # FIXME: catch exceptions
   while true:
     let action = server.action[].recv()
     var resp = false
@@ -255,8 +268,10 @@ proc recvAction(server: Server) {.thread.} =
     of Stop:
       break
     of InsertPost:
-      # FIXME: catch exceptions
       insertPost(server, action.board, action.post)
+      resp = true
+    of EditPost:
+      editPost(server, action.sig, action.lastSig, action.content)
       resp = true
     action.done[].send(resp)
 
