@@ -281,12 +281,18 @@ proc recvAction(server: Server) {.thread.} =
     of Stop:
       break
     of InsertPost:
-      {.cast(gcsafe).}:
-        insertPost(server, action.board, action.post)
-      resp = true
+      try:
+        {.cast(gcsafe).}:
+          insertPost(server, action.board, action.post)
+        resp = true
+      except Exception as ex:
+        resp = false
     of EditPost:
-      editPost(server, action.board, action.content, action.key)
-      resp = true
+      try:
+        editPost(server, action.board, action.content, action.key)
+        resp = true
+      except Exception as ex:
+        resp = false
     action.done[].send(resp)
 
 proc initShared(server: var Server) =
