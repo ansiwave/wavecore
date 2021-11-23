@@ -137,24 +137,18 @@ proc insertPost*(conn: PSqlite3, entity: Post, extraFn: proc (x: var Post, id: i
         ""
       else:
         # set the parent ids
-        try:
-          let
-            parentId = selectPostExtras(conn, e.parent).post_id
-            parentParentIds = selectPostParentIds(conn, parentId)
-          if parentParentIds.len == 0:
-            $parentId
-          else:
-            parentParentIds & ", " & $parentId
-        except Exception as ex:
-          "" # if the post is not replying to another post (it is top level)
+        let
+          parentId = selectPostExtras(conn, e.parent).post_id
+          parentParentIds = selectPostParentIds(conn, parentId)
+        if parentParentIds.len == 0:
+          $parentId
+        else:
+          parentParentIds & ", " & $parentId
     parentPublicKey =
       if e.parent == e.public_key:
         e.public_key
       elif e.parent != "":
-        try:
-          selectPost(conn, e.parent).public_key
-        except Exception as ex:
-          "" # if the post is not replying to another post (it is top level)
+        selectPost(conn, e.parent).public_key
       else:
         "" # only the root post can have an empty parent
     # posts without a parent are considered "top level" (their sig is the user's public key)
