@@ -61,7 +61,7 @@ proc insertUser*(server: Server, board: string, entity: entities.User, content: 
   assert server.staticFileDir != ""
   let conn = db.open(server.staticFileDir / paths.db(board))
   entities.insertUser(conn, entity, content,
-    proc (x: entities.User, id: int64) =
+    proc (x: entities.User) =
       writeFile(server.staticFileDir / paths.ansiwavez(board, x.public_key), content.value.compressed)
   )
   db_sqlite.close(conn)
@@ -75,8 +75,8 @@ proc insertPost*(server: Server, board: string, entity: entities.Post) =
   except Exception as ex:
     insertUser(server, board, entities.User(public_key: entity.public_key), entities.Content())
   entities.insertPost(conn, entity,
-    proc (x: entities.Post, id: int64) =
-      writeFile(server.staticFileDir / paths.ansiwavez(board, x.content.sig), x.content.value.compressed)
+    proc (x: entities.Post, sig: string) =
+      writeFile(server.staticFileDir / paths.ansiwavez(board, sig), x.content.value.compressed)
   )
   db_sqlite.close(conn)
 

@@ -144,7 +144,7 @@ proc selectUserExtras*(conn: PSqlite3, publicKey: string): User =
   #  echo x
   db.select[User](conn, initUser, query, publicKey)[0]
 
-proc insertPost*(conn: PSqlite3, entity: Post, extraFn: proc (x: Post, id: int64) = nil) =
+proc insertPost*(conn: PSqlite3, entity: Post, extraFn: proc (x: Post, sig: string) = nil) =
   db_sqlite.exec(conn, sql"BEGIN TRANSACTION")
 
   var
@@ -186,7 +186,7 @@ proc insertPost*(conn: PSqlite3, entity: Post, extraFn: proc (x: Post, id: int64
     id = sqlite3.last_insert_rowid(conn)
 
   if extraFn != nil:
-    extraFn(e, id)
+    extraFn(e, sig)
 
   let userId = selectUserExtras(conn, entity.public_key).user_id
 
@@ -261,7 +261,7 @@ proc editPost*(conn: PSqlite3, content: Content, key: string, extraFn: proc (x: 
 
   db_sqlite.exec(conn, sql"COMMIT")
 
-proc insertUser*(conn: PSqlite3, entity: User, content: Content, extraFn: proc (x: User, id: int64) = nil) =
+proc insertUser*(conn: PSqlite3, entity: User, content: Content, extraFn: proc (x: User) = nil) =
   let p =
     proc () =
       var
@@ -274,12 +274,12 @@ proc insertUser*(conn: PSqlite3, entity: User, content: Content, extraFn: proc (
           db_sqlite.dbError(conn)
         id = sqlite3.last_insert_rowid(conn)
       if extraFn != nil:
-        extraFn(e, id)
+        extraFn(e)
   if content.sig == "":
     p()
   else:
     insertPost(conn, Post(content: content, public_key: entity.public_key),
-      proc (x: Post, id: int64) =
+      proc (x: Post, sig: string) =
         p()
     )
 
