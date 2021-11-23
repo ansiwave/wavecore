@@ -15,7 +15,6 @@ type
     value*: CompressedValue
     sig*: string
   User* = object
-    content*: Content
     public_key*: string
   Post* = object
     content*: Content
@@ -32,53 +31,6 @@ proc initContent*(keys: ed25519.KeyPair, origContent: string): Content =
   let content = "\n\n" & origContent # add two newlines to simulate where headers would've been
   result.value = initCompressedValue(content)
   result.sig = paths.encode(ed25519.sign(keys, content))
-
-proc initUser(stmt: PStmt): User =
-  var cols = sqlite3.column_count(stmt)
-  for col in 0 .. cols-1:
-    let colName = $sqlite3.column_name(stmt, col)
-    case colName:
-    of "content":
-      let
-        compressed = sqlite3.column_blob(stmt, col)
-        compressedLen = sqlite3.column_bytes(stmt, col)
-      if compressedLen > 0:
-        var s = newSeq[uint8](compressedLen)
-        copyMem(s[0].addr, compressed, compressedLen)
-        result.content.value = CompressedValue(compressed: cast[string](s), uncompressed: zippy.uncompress(cast[string](s), dataFormat = zippy.dfZlib))
-    of "content_sig":
-      result.content.sig = $sqlite3.column_text(stmt, col)
-    of "public_key":
-      result.public_key = $sqlite3.column_text(stmt, col)
-
-proc selectUser*(conn: PSqlite3, publicKey: string): User =
-  const query =
-    """
-      SELECT content, content_sig, public_key FROM user
-      WHERE public_key = ?
-    """
-  #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), publicKey):
-  #  echo x
-  db.select[User](conn, initUser, query, publicKey)[0]
-
-proc insertUser*(conn: PSqlite3, entity: User, extraFn: proc (x: var User, id: int64) = nil) =
-  db_sqlite.exec(conn, sql"BEGIN TRANSACTION")
-  var
-    e = entity
-    stmt: PStmt
-    id: int64
-  db.withStatement(conn, "INSERT INTO user (content, content_sig, public_key, public_key_algo) VALUES (?, ?, ?, ?)", stmt):
-    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), entity.content.value.compressed, entity.content.sig, entity.publicKey, "ed25519")
-    if step(stmt) != SQLITE_DONE:
-      db_sqlite.dbError(conn)
-    id = sqlite3.last_insert_rowid(conn)
-  db.withStatement(conn, "INSERT INTO user_search (user_id, attribute, value) VALUES (?, ?, ?)", stmt):
-    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), id, "content", entity.content.value.uncompressed)
-    if step(stmt) != SQLITE_DONE:
-      db_sqlite.dbError(conn)
-  if extraFn != nil:
-    extraFn(e, id)
-  db_sqlite.exec(conn, sql"COMMIT")
 
 proc initPost(stmt: PStmt): Post =
   var cols = sqlite3.column_count(stmt)
@@ -174,13 +126,6 @@ proc selectPostChildren*(conn: PSqlite3, sig: string): seq[Post] =
   sequtils.toSeq(db.select[Post](conn, initPost, query, sig))
 
 proc insertPost*(conn: PSqlite3, entity: Post, extraFn: proc (x: var Post, id: int64) = nil) =
-  let userId =
-    try:
-      selectUserExtras(conn, entity.public_key).user_id
-    except Exception as ex:
-      # FIXME: don't automatically insert user
-      insertUser(conn, User(public_key: entity.public_key))
-      selectUserExtras(conn, entity.public_key).user_id
   db_sqlite.exec(conn, sql"BEGIN TRANSACTION")
   var
     e = entity
@@ -212,11 +157,20 @@ proc insertPost*(conn: PSqlite3, entity: Post, extraFn: proc (x: var Post, id: i
           "" # if the post is not replying to another post (it is top level)
       else:
         "" # only the root post can have an empty parent
+    # posts without a parent are considered "top level" (their sig is the user's public key)
+    sig =
+      if e.parent == "":
+        e.public_key
+      else:
+        e.content.sig
   db.withStatement(conn, "INSERT INTO post (content, content_sig, content_sig_last, public_key, parent, parent_public_key, reply_count, score) VALUES (?, ?, ?, ?, ?, ?, 0, 0)", stmt):
-    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), e.content.value.compressed, e.content.sig, e.content.sig, e.public_key, e.parent, parentPublicKey)
+    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), e.content.value.compressed, sig, e.content.sig, e.public_key, e.parent, parentPublicKey)
     if step(stmt) != SQLITE_DONE:
       db_sqlite.dbError(conn)
     id = sqlite3.last_insert_rowid(conn)
+  if extraFn != nil:
+    extraFn(e, id)
+  let userId = selectUserExtras(conn, entity.public_key).user_id
   db.withStatement(conn, "INSERT INTO post_search (post_id, user_id, attribute, value) VALUES (?, ?, ?, ?)", stmt):
     db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), id, userId, "content", e.content.value.uncompressed)
     if step(stmt) != SQLITE_DONE:
@@ -241,8 +195,6 @@ proc insertPost*(conn: PSqlite3, entity: Post, extraFn: proc (x: var Post, id: i
       WHERE post_id IN ($1)
       """.format(parentIds)
     db_sqlite.exec(conn, sql score_query)
-  if extraFn != nil:
-    extraFn(e, id)
   db_sqlite.exec(conn, sql"COMMIT")
 
 proc searchPosts*(conn: PSqlite3, term: string): seq[Post] =
@@ -254,4 +206,38 @@ proc searchPosts*(conn: PSqlite3, term: string): seq[Post] =
   #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), term):
   #  echo x
   sequtils.toSeq(db.select[Post](conn, initPost, query, term))
+
+proc initUser(stmt: PStmt): User =
+  var cols = sqlite3.column_count(stmt)
+  for col in 0 .. cols-1:
+    let colName = $sqlite3.column_name(stmt, col)
+    case colName:
+    of "public_key":
+      result.public_key = $sqlite3.column_text(stmt, col)
+
+proc selectUser*(conn: PSqlite3, publicKey: string): User =
+  const query =
+    """
+      SELECT public_key FROM user
+      WHERE public_key = ?
+    """
+  #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), publicKey):
+  #  echo x
+  db.select[User](conn, initUser, query, publicKey)[0]
+
+proc insertUser*(conn: PSqlite3, entity: User, content: Content, extraFn: proc (x: var User, id: int64) = nil) =
+  insertPost(conn, Post(content: content, public_key: entity.public_key),
+    proc (x: var Post, id: int64) =
+      var
+        e = entity
+        stmt: PStmt
+        id: int64
+      db.withStatement(conn, "INSERT INTO user (public_key, public_key_algo) VALUES (?, ?)", stmt):
+        db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), entity.publicKey, "ed25519")
+        if step(stmt) != SQLITE_DONE:
+          db_sqlite.dbError(conn)
+        id = sqlite3.last_insert_rowid(conn)
+      if extraFn != nil:
+        extraFn(e, id)
+  )
 

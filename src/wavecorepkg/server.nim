@@ -57,12 +57,12 @@ const
 proc initServer*(hostname: string, port: int, staticFileDir: string = ""): Server =
   Server(hostname: hostname, port: port, staticFileDir: staticFileDir)
 
-proc insertUser*(server: Server, board: string, entity: entities.User) =
+proc insertUser*(server: Server, board: string, entity: entities.User, content: entities.Content) =
   assert server.staticFileDir != ""
   let conn = db.open(server.staticFileDir / paths.db(board))
-  entities.insertUser(conn, entity,
+  entities.insertUser(conn, entity, content,
     proc (x: var entities.User, id: int64) =
-      writeFile(server.staticFileDir / paths.ansiwavez(board, $x.public_key), x.content.value.compressed)
+      writeFile(server.staticFileDir / paths.ansiwavez(board, $x.public_key), content.value.compressed)
   )
   db_sqlite.close(conn)
 
