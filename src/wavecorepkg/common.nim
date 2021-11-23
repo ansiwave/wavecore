@@ -1,6 +1,27 @@
 from ./wavescript import nil
+from ./paths import nil
+from ./ed25519 import nil
 from strutils import nil
 import tables, sets
+from times import nil
+
+proc headers*(pubKey: string, target: string, isNew: bool): string =
+  strutils.join(
+    [
+      "/head.key " & pubKey,
+      "/head.algo ed25519",
+      "/head.target " & target,
+      "/head.type " & (if isNew: "new" else: "edit"),
+      "/head.board " & paths.sysopPublicKey,
+    ],
+    "\n",
+  )
+
+proc sign*(keyPair: ed25519.KeyPair, headers: string, content: string): tuple[body: string, sig: string] =
+  result.body = "/head.time " & $times.toUnix(times.getTime()) & "\n"
+  result.body &= headers & "\n\n" & content
+  result.sig = paths.encode(ed25519.sign(keyPair, result.body))
+  result.body = "/head.sig " & result.sig & "\n" & result.body
 
 proc parseAnsiwave*(ansiwave: string): tuple[cmds: Table[string, string], headersAndContent: string, content: string] =
   var ctx = wavescript.initContext()
