@@ -213,6 +213,28 @@ test "score":
   check 2 == entities.selectPostExtras(conn, p1.content.sig).score
   db_sqlite.close(conn)
 
+test "edit post":
+  let conn = db.open(":memory:")
+  db.init(conn)
+  let
+    aliceKeys = ed25519.initKeyPair()
+    bobKeys = ed25519.initKeyPair()
+    alice = User(public_key: paths.encode(aliceKeys.public))
+    bob = User(public_key: paths.encode(bobKeys.public))
+  entities.insertUser(conn, alice, entities.initContent(aliceKeys, ""))
+  entities.insertUser(conn, bob, entities.initContent(bobKeys, ""))
+  let p1 = Post(parent: alice.public_key, public_key: alice.public_key, content: entities.initContent(aliceKeys, "I like turtles"))
+  entities.insertPost(conn, p1)
+  let newText = "I hate turtles"
+  var newContent = entities.initContent(aliceKeys, newText)
+  newContent.sig_last = p1.content.sig
+  entities.editPost(conn, newContent, alice.public_key)
+  check entities.searchPosts(conn, "like").len == 0
+  check entities.searchPosts(conn, "hate").len == 1
+  expect Exception:
+    entities.editPost(conn, newContent, bob.public_key)
+  db_sqlite.close(conn)
+
 test "retrieve sqlite db via http":
   var s = server.initServer("localhost", port, ".")
   server.start(s)

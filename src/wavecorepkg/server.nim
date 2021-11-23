@@ -21,11 +21,11 @@ type
     of Stop:
       discard
     of InsertPost:
-      board: string
       post: entities.Post
     of EditPost:
       content: entities.Content
-      target: string
+      key: string
+    board: string
     done: ptr Channel[bool]
   Server* = ref object
     hostname: string
@@ -61,8 +61,8 @@ proc insertUser*(server: Server, board: string, entity: entities.User, content: 
   assert server.staticFileDir != ""
   let conn = db.open(server.staticFileDir / paths.db(board))
   entities.insertUser(conn, entity, content,
-    proc (x: var entities.User, id: int64) =
-      writeFile(server.staticFileDir / paths.ansiwavez(board, $x.public_key), content.value.compressed)
+    proc (x: entities.User, id: int64) =
+      writeFile(server.staticFileDir / paths.ansiwavez(board, x.public_key), content.value.compressed)
   )
   db_sqlite.close(conn)
 
@@ -75,13 +75,19 @@ proc insertPost*(server: Server, board: string, entity: entities.Post) =
   except Exception as ex:
     insertUser(server, board, entities.User(public_key: entity.public_key), entities.Content())
   entities.insertPost(conn, entity,
-    proc (x: var entities.Post, id: int64) =
-      writeFile(server.staticFileDir / paths.ansiwavez(board, $x.content.sig), x.content.value.compressed)
+    proc (x: entities.Post, id: int64) =
+      writeFile(server.staticFileDir / paths.ansiwavez(board, x.content.sig), x.content.value.compressed)
   )
   db_sqlite.close(conn)
 
-proc editPost*(server: Server, target: string, content: entities.Content) =
-  echo target
+proc editPost*(server: Server, board: string, content: entities.Content, key: string) =
+  assert server.staticFileDir != ""
+  let conn = db.open(server.staticFileDir / paths.db(board))
+  entities.editPost(conn, content, key,
+    proc (x: entities.Post) =
+      writeFile(server.staticFileDir / paths.ansiwavez(board, x.content.sig), x.content.value.compressed)
+  )
+  db_sqlite.close(conn)
 
 proc sendAction(server: Server, action: Action): bool =
   let done = cast[ptr Channel[bool]](
@@ -141,8 +147,8 @@ proc ansiwavePost(server: Server, request: Request): string =
       if not sendAction(server, Action(kind: InsertPost, board: board, post: post)):
         raise newException(Exception, "Failed to insert post")
     of "edit":
-      let content = entities.Content(value: entities.initCompressedValue(request.body), sig: sigBase64)
-      if not sendAction(server, Action(kind: EditPost, target: cmds["/head.target"], content: content)):
+      let content = entities.Content(value: entities.initCompressedValue(request.body), sig: sigBase64, sig_last: cmds["/head.target"])
+      if not sendAction(server, Action(kind: EditPost, board: board, content: content, key: cmds["/head.key"])):
         raise newException(Exception, "Failed to edit post")
     else:
       raise newException(BadRequestException, "Invalid /head.type")
@@ -279,7 +285,7 @@ proc recvAction(server: Server) {.thread.} =
         insertPost(server, action.board, action.post)
       resp = true
     of EditPost:
-      editPost(server, action.target, action.content)
+      editPost(server, action.board, action.content, action.key)
       resp = true
     action.done[].send(resp)
 
