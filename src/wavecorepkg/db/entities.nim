@@ -226,8 +226,8 @@ proc selectUser*(conn: PSqlite3, publicKey: string): User =
   db.select[User](conn, initUser, query, publicKey)[0]
 
 proc insertUser*(conn: PSqlite3, entity: User, content: Content, extraFn: proc (x: var User, id: int64) = nil) =
-  insertPost(conn, Post(content: content, public_key: entity.public_key),
-    proc (x: var Post, id: int64) =
+  let p =
+    proc () =
       var
         e = entity
         stmt: PStmt
@@ -239,5 +239,11 @@ proc insertUser*(conn: PSqlite3, entity: User, content: Content, extraFn: proc (
         id = sqlite3.last_insert_rowid(conn)
       if extraFn != nil:
         extraFn(e, id)
-  )
+  if content.sig == "":
+    p()
+  else:
+    insertPost(conn, Post(content: content, public_key: entity.public_key),
+      proc (x: var Post, id: int64) =
+        p()
+    )
 

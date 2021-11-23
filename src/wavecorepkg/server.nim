@@ -69,6 +69,11 @@ proc insertUser*(server: Server, board: string, entity: entities.User, content: 
 proc insertPost*(server: Server, board: string, entity: entities.Post) =
   assert server.staticFileDir != ""
   let conn = db.open(server.staticFileDir / paths.db(board))
+  # if user doesn't exist in db, insert it
+  try:
+    discard entities.selectUser(conn, entity.public_key)
+  except Exception as ex:
+    insertUser(server, board, entities.User(public_key: entity.public_key), entities.Content())
   entities.insertPost(conn, entity,
     proc (x: var entities.Post, id: int64) =
       writeFile(server.staticFileDir / paths.ansiwavez(board, $x.content.sig), x.content.value.compressed)
@@ -270,7 +275,8 @@ proc recvAction(server: Server) {.thread.} =
     of Stop:
       break
     of InsertPost:
-      insertPost(server, action.board, action.post)
+      {.cast(gcsafe).}:
+        insertPost(server, action.board, action.post)
       resp = true
     of EditPost:
       editPost(server, action.target, action.content)
