@@ -172,6 +172,8 @@ proc insertPost*(conn: PSqlite3, entity: Post, extraFn: proc (x: Post, sig: stri
     parentIds =
       if e.parent == "":
         ""
+      elif e.parent == e.public_key:
+        ""
       else:
         # set the parent ids
         let
