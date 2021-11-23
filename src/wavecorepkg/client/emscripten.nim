@@ -199,12 +199,15 @@ proc recvAction(data: pointer, size: cint) {.exportc.} =
       return
     of Fetch:
       var req = fetch(action.request)
-      if req.code == 200:
-        if strutils.endsWith(action.request.url.path, ".ansiwavez"):
-          req.body = zippy.uncompress(cast[string](req.body), dataFormat = zippy.dfZlib)
-        flatty.toFlatty(Result[Response](kind: Valid, valid: req))
-      else:
-        flatty.toFlatty(Result[Response](kind: Error, error: req.body))
+      try:
+        if req.code == 200:
+          if strutils.endsWith(action.request.url.path, ".ansiwavez"):
+            req.body = zippy.uncompress(cast[string](req.body), dataFormat = zippy.dfZlib)
+          flatty.toFlatty(Result[Response](kind: Valid, valid: req))
+        else:
+          flatty.toFlatty(Result[Response](kind: Error, error: req.body))
+      except Exception as ex:
+        flatty.toFlatty(Result[Response](kind: Error, error: ex.msg))
     of QueryUser:
       try:
         let conn = db.open(action.dbFilename, true)
