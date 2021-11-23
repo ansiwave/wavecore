@@ -235,6 +235,21 @@ test "edit post":
     entities.editPost(conn, newContent, bob.public_key)
   db_sqlite.close(conn)
 
+test "post to blog":
+  let conn = db.open(":memory:")
+  db.init(conn)
+  let
+    aliceKeys = ed25519.initKeyPair()
+    bobKeys = ed25519.initKeyPair()
+    alice = User(public_key: paths.encode(aliceKeys.public))
+    bob = User(public_key: paths.encode(bobKeys.public))
+  entities.insertUser(conn, alice, entities.initContent(aliceKeys, ""))
+  entities.insertUser(conn, bob, entities.initContent(bobKeys, ""))
+  entities.insertPost(conn, Post(parent: alice.public_key, public_key: alice.public_key, content: entities.initContent(aliceKeys, "My first blog post")))
+  expect Exception:
+    entities.insertPost(conn, Post(parent: alice.public_key, public_key: bob.public_key, content: entities.initContent(bobKeys, "I shouldn't be able to post here")))
+  db_sqlite.close(conn)
+
 test "retrieve sqlite db via http":
   var s = server.initServer("localhost", port, ".")
   server.start(s)

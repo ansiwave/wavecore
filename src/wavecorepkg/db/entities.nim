@@ -75,7 +75,11 @@ proc selectPost*(conn: PSqlite3, sig: string): Post =
     """
   #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), sig):
   #  echo x
-  db.select[Post](conn, initPost, query, sig)[0]
+  let ret = db.select[Post](conn, initPost, query, sig)
+  if ret.len == 1:
+    ret[0]
+  else:
+    raise newException(Exception, "Can't select post")
 
 proc selectPostExtras*(conn: PSqlite3, sig: string): Post =
   const query =
@@ -85,7 +89,11 @@ proc selectPostExtras*(conn: PSqlite3, sig: string): Post =
     """
   #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), sig):
   #  echo x
-  db.select[Post](conn, initPost, query, sig)[0]
+  let ret = db.select[Post](conn, initPost, query, sig)
+  if ret.len == 1:
+    ret[0]
+  else:
+    raise newException(Exception, "Can't select post")
 
 proc selectPostParentIds(conn: PSqlite3, id: int64): string =
   const query =
@@ -132,7 +140,11 @@ proc selectUser*(conn: PSqlite3, publicKey: string): User =
     """
   #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), publicKey):
   #  echo x
-  db.select[User](conn, initUser, query, publicKey)[0]
+  let ret = db.select[User](conn, initUser, query, publicKey)
+  if ret.len == 1:
+    ret[0]
+  else:
+    raise newException(Exception, "Can't select user")
 
 proc selectUserExtras*(conn: PSqlite3, publicKey: string): User =
   const query =
@@ -142,7 +154,11 @@ proc selectUserExtras*(conn: PSqlite3, publicKey: string): User =
     """
   #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), publicKey):
   #  echo x
-  db.select[User](conn, initUser, query, publicKey)[0]
+  let ret = db.select[User](conn, initUser, query, publicKey)
+  if ret.len == 1:
+    ret[0]
+  else:
+    raise newException(Exception, "Can't select user")
 
 proc insertPost*(conn: PSqlite3, entity: Post, extraFn: proc (x: Post, sig: string) = nil) =
   db_sqlite.exec(conn, sql"BEGIN TRANSACTION")
@@ -166,12 +182,19 @@ proc insertPost*(conn: PSqlite3, entity: Post, extraFn: proc (x: Post, sig: stri
         else:
           parentParentIds & ", " & $parentId
     parentPublicKey =
-      if e.parent == e.public_key:
+      if e.parent == "":
+        ""
+      elif e.parent == e.public_key:
         e.public_key
-      elif e.parent != "":
-        selectPost(conn, e.parent).public_key
       else:
-        "" # only the root post can have an empty parent
+        let parentPost = selectPost(conn, e.parent)
+        # posts that reply to a root post (i.e. a user's banner)
+        # may only come from the user themself.
+        # they would've hit the first branch in the conditional
+        # so at this point we can just throw an exception if necessary.
+        if parentPost.parent == "":
+          raise newException(Exception, "Posting here is not allowed")
+        parentPost.public_key
     # posts without a parent are considered "top level" (their sig is the user's public key)
     sig =
       if e.parent == "":
@@ -239,7 +262,11 @@ proc editPost*(conn: PSqlite3, content: Content, key: string, extraFn: proc (x: 
         SELECT post_id, content, content_sig, content_sig_last, public_key, parent, reply_count, score FROM post
         WHERE content_sig_last = ?
       """
-    db.select[Post](conn, initPost, query, sig)[0]
+    let ret = db.select[Post](conn, initPost, query, sig)
+    if ret.len == 1:
+      ret[0]
+    else:
+      raise newException(Exception, "Can't edit post (maybe you're editing an old version?)")
 
   let post = selectPostByLastSig(conn, content.sig_last)
 
