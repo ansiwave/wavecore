@@ -140,7 +140,8 @@ proc initThreads(client: var Client) =
 
 proc deinitThreads(client: var Client) =
   client.action[].send(Action(kind: Stop))
-  client.requestThread.joinThread()
+  # FIXME: why can't i do this after updating puppy from 1.0.3 to 1.4.0?
+  #client.requestThread.joinThread()
 
 proc start*(client: var Client) =
   initShared(client)
