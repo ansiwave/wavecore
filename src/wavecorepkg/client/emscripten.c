@@ -128,14 +128,21 @@ EM_JS(char*, wavecore_localstorage_list, (), {
 
 EM_JS(void, wavecore_play_audio, (const char* src), {
   try {
+    wavecoreAudio.pause();
+  } catch (e) {}
+  try {
     wavecoreAudio = new Audio(UTF8ToString(src));
     wavecoreAudio.play();
-  } catch (e) {}
+  } catch (e) {
+    console.error(e);
+  }
 });
 
 EM_JS(void, wavecore_stop_audio, (), {
   try {
     wavecoreAudio.pause();
-  } catch (e) {}
+  } catch (e) {
+    console.error(e);
+  }
 });
 
