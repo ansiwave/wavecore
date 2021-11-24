@@ -51,6 +51,7 @@ import ./wavecorepkg/db/entities
 import ./wavecorepkg/db/vfs
 from ./wavecorepkg/db/db_sqlite import nil
 from os import nil
+import sets
 
 const dbFilename = "test.db"
 vfs.readUrl = "http://localhost:" & $port & "/" & dbFilename
@@ -129,6 +130,7 @@ test "query posts":
   check 3 == entities.selectPost(conn, p1.content.sig).reply_count
   check @[p4, p3] == entities.selectPostChildren(conn, p2.content.sig)
   check 2 == entities.selectPost(conn, p2.content.sig).reply_count
+  check [p1, p3, p4].toHashSet == entities.selectUserPosts(conn, alice.public_key).toHashSet
   db_sqlite.close(conn)
 
 test "query posts asynchronously":
@@ -164,10 +166,13 @@ test "query posts asynchronously":
     var response2 = client.queryPostChildren(c, dbFilename, p2.content.sig)
     client.get(response2, true)
     check response2.value.valid == @[p4, p3]
-    # query something invalid
-    var response3 = client.queryPost(c, dbFilename, "yo")
+    var response3 = client.queryUserPosts(c, dbFilename, alice.public_key)
     client.get(response3, true)
-    check response3.value.kind == client.Error
+    check response3.value.valid.toHashSet == [p4, p3, p1].toHashSet
+    # query something invalid
+    var response4 = client.queryPost(c, dbFilename, "yo")
+    client.get(response4, true)
+    check response4.value.kind == client.Error
   finally:
     os.removeFile(dbFilename)
     server.stop(s)

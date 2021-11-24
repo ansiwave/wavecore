@@ -72,3 +72,7 @@ proc queryPostChildren*(client: Client, filename: string, sig: string): ChannelV
   result = initChannelValue[seq[entities.Post]]()
   sendPostChildrenQuery(client, filename, sig, result.chan)
 
+proc queryUserPosts*(client: Client, filename: string, publicKey: string): ChannelValue[seq[entities.Post]] =
+  result = initChannelValue[seq[entities.Post]]()
+  sendUserPostsQuery(client, filename, publicKey, result.chan)
+

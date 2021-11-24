@@ -122,6 +122,18 @@ proc selectPostChildren*(conn: PSqlite3, sig: string): seq[Post] =
   #  echo x
   sequtils.toSeq(db.select[Post](conn, initPost, query, sig))
 
+proc selectUserPosts*(conn: PSqlite3, publicKey: string): seq[Post] =
+  const query =
+    """
+      SELECT content, content_sig, content_sig_last, public_key, parent, reply_count FROM post
+      WHERE public_key = ? AND parent != ''
+      ORDER BY ts DESC
+      LIMIT 10
+    """
+  #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), publicKey):
+  #  echo x
+  sequtils.toSeq(db.select[Post](conn, initPost, query, publicKey))
+
 proc initUser(stmt: PStmt): User =
   var cols = sqlite3.column_count(stmt)
   for col in 0 .. cols-1:

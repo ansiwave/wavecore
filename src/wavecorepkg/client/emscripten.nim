@@ -37,7 +37,7 @@ type
     of Error:
       error*: string
   ActionKind* = enum
-    Stop, Fetch, QueryUser, QueryPost, QueryPostChildren,
+    Stop, Fetch, QueryUser, QueryPost, QueryPostChildren, QueryUserPosts,
   Action* = object
     case kind*: ActionKind
     of Stop:
@@ -50,6 +50,8 @@ type
       postSig*: string
     of QueryPostChildren:
       postParentSig*: string
+    of QueryUserPosts:
+      userPostsPublicKey*: string
     dbFilename*: string
   WorkerRequest = object
     action: Action
@@ -187,6 +189,9 @@ proc sendPostQuery*(client: Client, filename: string, sig: string, chan: Channel
 proc sendPostChildrenQuery*(client: Client, filename: string, sig: string, chan: ChannelRef) =
   sendAction(client, Action(kind: QueryPostChildren, dbFilename: filename, postParentSig: sig), chan)
 
+proc sendUserPostsQuery*(client: Client, filename: string, publicKey: string, chan: ChannelRef) =
+  sendAction(client, Action(kind: QueryUserPosts, dbFilename: filename, userPostsPublicKey: publicKey), chan)
+
 proc recvAction(data: pointer, size: cint) {.exportc.} =
   var input = newString(size)
   copyMem(input[0].addr, data, size)
@@ -228,6 +233,14 @@ proc recvAction(data: pointer, size: cint) {.exportc.} =
       try:
         let conn = db.open(action.dbFilename, true)
         let posts = entities.selectPostChildren(conn, action.postParentSig)
+        db_sqlite.close(conn)
+        flatty.toFlatty(Result[seq[entities.Post]](kind: Valid, valid: posts))
+      except Exception as ex:
+        flatty.toFlatty(Result[seq[entities.Post]](kind: Error, error: ex.msg))
+    of QueryUserPosts:
+      try:
+        let conn = db.open(action.dbFilename, true)
+        let posts = entities.selectUserPosts(conn, action.userPostsPublicKey)
         db_sqlite.close(conn)
         flatty.toFlatty(Result[seq[entities.Post]](kind: Valid, valid: posts))
       except Exception as ex:

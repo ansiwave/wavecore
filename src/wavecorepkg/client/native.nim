@@ -18,7 +18,7 @@ type
     of Error:
       error*: string
   ActionKind* = enum
-    Stop, Fetch, QueryUser, QueryPost, QueryPostChildren,
+    Stop, Fetch, QueryUser, QueryPost, QueryPostChildren, QueryUserPosts,
   Action* = object
     case kind*: ActionKind
     of Stop:
@@ -35,6 +35,9 @@ type
     of QueryPostChildren:
       postParentSig*: string
       postChildrenResponse*: ChannelRef[Result[seq[entities.Post]]]
+    of QueryUserPosts:
+      userPostsPublicKey*: string
+      userPostsResponse*: ChannelRef[Result[seq[entities.Post]]]
     dbFilename*: string
   Client* = ref object
     address*: string
@@ -85,6 +88,9 @@ proc sendPostQuery*(client: Client, filename: string, sig: string, chan: Channel
 proc sendPostChildrenQuery*(client: Client, filename: string, sig: string, chan: ChannelRef) =
   sendAction(client, Action(kind: QueryPostChildren, dbFilename: filename, postParentSig: sig, postChildrenResponse: chan))
 
+proc sendUserPostsQuery*(client: Client, filename: string, publicKey: string, chan: ChannelRef) =
+  sendAction(client, Action(kind: QueryUserPosts, dbFilename: filename, userPostsPublicKey: publicKey, userPostsResponse: chan))
+
 proc recvAction(client: Client) {.thread.} =
   while true:
     let action = client.action[].recv()
@@ -124,6 +130,13 @@ proc recvAction(client: Client) {.thread.} =
         db_sqlite.close(conn)
       except Exception as ex:
         action.postChildrenResponse[].send(Result[seq[entities.Post]](kind: Error, error: ex.msg))
+    of QueryUserPosts:
+      try:
+        let conn = db.open(action.dbFilename, true)
+        action.userPostsResponse[].send(Result[seq[entities.Post]](kind: Valid, valid: entities.selectUserPosts(conn, action.userPostsPublicKey)))
+        db_sqlite.close(conn)
+      except Exception as ex:
+        action.userPostsResponse[].send(Result[seq[entities.Post]](kind: Error, error: ex.msg))
 
 proc initShared(client: var Client) =
   client.action = cast[ChannelRef[Action]](
