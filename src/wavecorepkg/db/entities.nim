@@ -37,6 +37,12 @@ proc initContent*(keys: ed25519.KeyPair, origContent: string): Content =
   result.sig = paths.encode(ed25519.sign(keys, content))
   result.sig_last = result.sig
 
+# not used in prod...only in tests
+proc initContent*(content: tuple[body: string, sig: string]): Content =
+  result.value = initCompressedValue(content.body)
+  result.sig = content.sig
+  result.sig_last = content.sig
+
 proc initPost(stmt: PStmt): Post =
   var cols = sqlite3.column_count(stmt)
   for col in 0 .. cols-1:

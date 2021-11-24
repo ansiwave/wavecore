@@ -7,6 +7,7 @@ from os import `/`
 from osproc import nil
 from ./wavecorepkg/ed25519 import nil
 from ./wavecorepkg/paths import nil
+from ./wavecorepkg/common import nil
 
 const
   asciiArt =
@@ -163,29 +164,30 @@ when isMainModule:
   var conn = db.open(staticFileDir / paths.db(paths.sysopPublicKey))
   db.init(conn)
   let sysop = entities.User(public_key: paths.sysopPublicKey)
-  server.insertUser(s, paths.sysopPublicKey, sysop, entities.initContent(paths.sysopKeys, asciiArt))
-  let subboard = entities.Post(parent: sysop.public_key, public_key: sysop.public_key, content: entities.initContent(paths.sysopKeys, "General Discussion"))
+  server.insertUser(s, paths.sysopPublicKey, sysop, entities.initContent(common.signWithHeaders(paths.sysopKeys, asciiArt, "", true)))
+  let subboard = entities.Post(parent: sysop.public_key, public_key: sysop.public_key, content: entities.initContent(common.signWithHeaders(paths.sysopKeys, "General Discussion", sysop.public_key, true)))
   server.insertPost(s, paths.sysopPublicKey, subboard)
   let
     aliceKeys = ed25519.initKeyPair()
     bobKeys = ed25519.initKeyPair()
     alice = entities.User(public_key: paths.encode(aliceKeys.public))
     bob = entities.User(public_key: paths.encode(bobKeys.public))
-  server.insertUser(s, paths.sysopPublicKey, alice, entities.initContent(aliceKeys, ""))
-  server.insertUser(s, paths.sysopPublicKey, bob, entities.initContent(bobKeys, ""))
-  let p1 = entities.Post(parent: subboard.content.sig, public_key: bob.public_key, content: entities.initContent(bobKeys, "Hello, world...this is a lame comment\n\n" & loremIpsum))
+  server.insertUser(s, paths.sysopPublicKey, alice, entities.initContent(common.signWithHeaders(aliceKeys, "Hi i'm alice", "", true)))
+  server.insertUser(s, paths.sysopPublicKey, bob, entities.initContent(common.signWithHeaders(bobKeys, "Hi i'm bob", "", true)))
+  let p1 = entities.Post(parent: subboard.content.sig, public_key: bob.public_key, content: entities.initContent(common.signWithHeaders(bobKeys, "Hello, world...this is a lame comment\n\n" & loremIpsum, subboard.content.sig, true)))
   server.insertPost(s, paths.sysopPublicKey, p1)
-  let p2 = entities.Post(parent: subboard.content.sig, public_key: bob.public_key, content: entities.initContent(bobKeys, jabba))
+  let p2 = entities.Post(parent: subboard.content.sig, public_key: bob.public_key, content: entities.initContent(common.signWithHeaders(bobKeys, jabba, subboard.content.sig, true)))
   server.insertPost(s, paths.sysopPublicKey, p2)
-  let p3 = entities.Post(parent: p2.content.sig, public_key: alice.public_key, content: entities.initContent(aliceKeys, "That ansi is\n" & fabulous))
+  let p3 = entities.Post(parent: p2.content.sig, public_key: alice.public_key, content: entities.initContent(common.signWithHeaders(aliceKeys, "That ansi is\n" & fabulous, p2.content.sig, true)))
   server.insertPost(s, paths.sysopPublicKey, p3)
-  let p4 = entities.Post(parent: p2.content.sig, public_key: sysop.public_key, content: entities.initContent(paths.sysopKeys, "The people demand more jabba"))
+  let p4 = entities.Post(parent: p2.content.sig, public_key: sysop.public_key, content: entities.initContent(common.signWithHeaders(paths.sysopKeys, "The people demand more jabba", p2.content.sig, true)))
   server.insertPost(s, paths.sysopPublicKey, p4)
-  let p5 = entities.Post(parent: subboard.content.sig, public_key: bob.public_key, content: entities.initContent(bobKeys, hogan))
+  let p5 = entities.Post(parent: subboard.content.sig, public_key: bob.public_key, content: entities.initContent(common.signWithHeaders(bobKeys, hogan, subboard.content.sig, true)))
   server.insertPost(s, paths.sysopPublicKey, p5)
-  server.insertPost(s, paths.sysopPublicKey, entities.Post(parent: p5.content.sig, public_key: alice.public_key, content: entities.initContent(aliceKeys, "I love hogan")))
-  server.insertPost(s, paths.sysopPublicKey, entities.Post(parent: p5.content.sig, public_key: alice.public_key, content: entities.initContent(aliceKeys, "The navajo teepees i mean")))
-  server.insertPost(s, paths.sysopPublicKey, entities.Post(parent: p5.content.sig, public_key: alice.public_key, content: entities.initContent(aliceKeys, "Acknowledge me plz")))
+  server.insertPost(s, paths.sysopPublicKey, entities.Post(parent: p5.content.sig, public_key: alice.public_key, content: entities.initContent(common.signWithHeaders(aliceKeys, "I love hogan", p2.content.sig, true))))
+  server.insertPost(s, paths.sysopPublicKey, entities.Post(parent: p5.content.sig, public_key: alice.public_key, content: entities.initContent(common.signWithHeaders(aliceKeys, "The navajo teepees i mean", p5.content.sig, true))))
+  server.insertPost(s, paths.sysopPublicKey, entities.Post(parent: p5.content.sig, public_key: alice.public_key, content: entities.initContent(common.signWithHeaders(aliceKeys, "Acknowledge me plz", p5.content.sig, true))))
   discard readLine(stdin)
   db_sqlite.close(conn)
   server.stop(s)
+

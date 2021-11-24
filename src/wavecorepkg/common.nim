@@ -23,6 +23,9 @@ proc sign*(keyPair: ed25519.KeyPair, headers: string, content: string): tuple[bo
   result.sig = paths.encode(ed25519.sign(keyPair, result.body))
   result.body = "/head.sig " & result.sig & "\n" & result.body
 
+proc signWithHeaders*(keyPair: ed25519.KeyPair, content: string, target: string, isNew: bool): tuple[body: string, sig: string] =
+  sign(keyPair, headers(paths.encode(keyPair.public), target, isNew), content)
+
 proc parseAnsiwave*(ansiwave: string): tuple[cmds: Table[string, string], headersAndContent: string, content: string] =
   var ctx = wavescript.initContext()
   ctx.stringCommands = ["/head.sig", "/head.time", "/head.key", "/head.algo", "/head.target", "/head.type", "/head.board"].toHashSet
