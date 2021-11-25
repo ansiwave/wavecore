@@ -4,6 +4,7 @@ from ./ed25519 import nil
 from strutils import nil
 import tables, sets
 from times import nil
+from unicode import nil
 
 proc headers*(pubKey: string, target: string, isNew: bool): string =
   strutils.join(
@@ -27,6 +28,9 @@ proc signWithHeaders*(keyPair: ed25519.KeyPair, content: string, target: string,
   sign(keyPair, headers(paths.encode(keyPair.public), target, isNew), content)
 
 proc parseAnsiwave*(ansiwave: string): tuple[cmds: Table[string, string], headersAndContent: string, content: string] =
+  let col = unicode.validateUtf8(ansiwave)
+  if col != -1:
+    raise newException(Exception, "Invalid UTF8 data")
   var ctx = wavescript.initContext()
   ctx.stringCommands = ["/head.sig", "/head.time", "/head.key", "/head.algo", "/head.target", "/head.type", "/head.board"].toHashSet
   let
