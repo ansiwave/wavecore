@@ -122,6 +122,8 @@ test "query posts":
   entities.insertPost(conn, p3)
   var p4 = Post(parent: p2.content.sig, public_key: alice.public_key, content: entities.initContent(aliceKeys, "How are you?"))
   entities.insertPost(conn, p4)
+  expect Exception:
+    entities.insertPost(conn, Post(parent: "invalid parent", public_key: alice.public_key, content: entities.initContent(aliceKeys, "How are you?")))
   p1 = entities.selectPost(conn, p1.content.sig)
   p2 = entities.selectPost(conn, p2.content.sig)
   p3 = entities.selectPost(conn, p3.content.sig)
