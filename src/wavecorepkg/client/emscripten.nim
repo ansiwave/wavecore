@@ -84,6 +84,8 @@ proc wavecore_localstorage_remove(key: cstring) {.importc.}
 proc wavecore_localstorage_list(): cstring {.importc.}
 proc wavecore_play_audio(src: cstring) {.importc.}
 proc wavecore_stop_audio() {.importc.}
+proc wavecore_get_hash(): cstring {.importc.}
+proc wavecore_set_hash(hash: cstring) {.importc.}
 proc free(p: pointer) {.importc.}
 
 {.compile: "emscripten.c".}
@@ -156,6 +158,14 @@ proc initChannelValue*[T](): ChannelValue[T] =
       allocShared0(sizeof(Channel))
     )
   )
+
+proc getHash*(): string =
+  let hash = wavecore_get_hash()
+  result = $hash
+  free(hash)
+
+proc setHash*(hash: string) =
+  wavecore_set_hash(hash)
 
 proc get*[T](cv: var ChannelValue[T]) =
   if not cv.ready:
