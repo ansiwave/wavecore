@@ -86,6 +86,7 @@ proc wavecore_play_audio(src: cstring) {.importc.}
 proc wavecore_stop_audio() {.importc.}
 proc wavecore_get_hash(): cstring {.importc.}
 proc wavecore_set_hash(hash: cstring) {.importc.}
+proc wavecore_open_new_tab(url: cstring) {.importc.}
 proc free(p: pointer) {.importc.}
 
 {.compile: "emscripten.c".}
@@ -166,6 +167,9 @@ proc getHash*(): string =
 
 proc setHash*(hash: string) =
   wavecore_set_hash(hash)
+
+proc openNewTab*(url: string) =
+  wavecore_open_new_tab(url)
 
 proc get*[T](cv: var ChannelValue[T]) =
   if not cv.ready:

@@ -158,3 +158,7 @@ EM_JS(void, wavecore_set_hash, (const char* hash), {
   window.location.hash = UTF8ToString(hash);
 });
 
+EM_JS(void, wavecore_open_new_tab, (const char* url), {
+  window.open(UTF8ToString(url), "_blank");
+});
+
