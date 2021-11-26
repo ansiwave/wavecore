@@ -39,6 +39,7 @@ type
       userPostsPublicKey*: string
       userPostsResponse*: ChannelRef[Result[seq[entities.Post]]]
     dbFilename*: string
+    offset: int
   Client* = ref object
     address*: string
     requestThread*: Thread[Client]
@@ -85,11 +86,11 @@ proc sendUserQuery*(client: Client, filename: string, publicKey: string, chan: C
 proc sendPostQuery*(client: Client, filename: string, sig: string, chan: ChannelRef) =
   sendAction(client, Action(kind: QueryPost, dbFilename: filename, postSig: sig, postResponse: chan))
 
-proc sendPostChildrenQuery*(client: Client, filename: string, sig: string, chan: ChannelRef) =
-  sendAction(client, Action(kind: QueryPostChildren, dbFilename: filename, postParentSig: sig, postChildrenResponse: chan))
+proc sendPostChildrenQuery*(client: Client, filename: string, sig: string, offset: int, chan: ChannelRef) =
+  sendAction(client, Action(kind: QueryPostChildren, dbFilename: filename, postParentSig: sig, offset: offset, postChildrenResponse: chan))
 
-proc sendUserPostsQuery*(client: Client, filename: string, publicKey: string, chan: ChannelRef) =
-  sendAction(client, Action(kind: QueryUserPosts, dbFilename: filename, userPostsPublicKey: publicKey, userPostsResponse: chan))
+proc sendUserPostsQuery*(client: Client, filename: string, publicKey: string, offset: int, chan: ChannelRef) =
+  sendAction(client, Action(kind: QueryUserPosts, dbFilename: filename, userPostsPublicKey: publicKey, offset: offset, userPostsResponse: chan))
 
 proc recvAction(client: Client) {.thread.} =
   while true:
@@ -126,14 +127,14 @@ proc recvAction(client: Client) {.thread.} =
     of QueryPostChildren:
       try:
         let conn = db.open(action.dbFilename, true)
-        action.postChildrenResponse[].send(Result[seq[entities.Post]](kind: Valid, valid: entities.selectPostChildren(conn, action.postParentSig)))
+        action.postChildrenResponse[].send(Result[seq[entities.Post]](kind: Valid, valid: entities.selectPostChildren(conn, action.postParentSig, action.offset)))
         db_sqlite.close(conn)
       except Exception as ex:
         action.postChildrenResponse[].send(Result[seq[entities.Post]](kind: Error, error: ex.msg))
     of QueryUserPosts:
       try:
         let conn = db.open(action.dbFilename, true)
-        action.userPostsResponse[].send(Result[seq[entities.Post]](kind: Valid, valid: entities.selectUserPosts(conn, action.userPostsPublicKey)))
+        action.userPostsResponse[].send(Result[seq[entities.Post]](kind: Valid, valid: entities.selectUserPosts(conn, action.userPostsPublicKey, action.offset)))
         db_sqlite.close(conn)
       except Exception as ex:
         action.userPostsResponse[].send(Result[seq[entities.Post]](kind: Error, error: ex.msg))

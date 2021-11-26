@@ -53,6 +53,7 @@ type
     of QueryUserPosts:
       userPostsPublicKey*: string
     dbFilename*: string
+    offset: int
   WorkerRequest = object
     action: Action
     channel: int64
@@ -200,11 +201,11 @@ proc sendUserQuery*(client: Client, filename: string, publicKey: string, chan: C
 proc sendPostQuery*(client: Client, filename: string, sig: string, chan: ChannelRef) =
   sendAction(client, Action(kind: QueryPost, dbFilename: filename, postSig: sig), chan)
 
-proc sendPostChildrenQuery*(client: Client, filename: string, sig: string, chan: ChannelRef) =
-  sendAction(client, Action(kind: QueryPostChildren, dbFilename: filename, postParentSig: sig), chan)
+proc sendPostChildrenQuery*(client: Client, filename: string, sig: string, offset: int, chan: ChannelRef) =
+  sendAction(client, Action(kind: QueryPostChildren, dbFilename: filename, offset: offset, postParentSig: sig), chan)
 
-proc sendUserPostsQuery*(client: Client, filename: string, publicKey: string, chan: ChannelRef) =
-  sendAction(client, Action(kind: QueryUserPosts, dbFilename: filename, userPostsPublicKey: publicKey), chan)
+proc sendUserPostsQuery*(client: Client, filename: string, publicKey: string, offset: int, chan: ChannelRef) =
+  sendAction(client, Action(kind: QueryUserPosts, dbFilename: filename, offset: offset, userPostsPublicKey: publicKey), chan)
 
 proc recvAction(data: pointer, size: cint) {.exportc.} =
   var input = newString(size)
@@ -246,7 +247,7 @@ proc recvAction(data: pointer, size: cint) {.exportc.} =
     of QueryPostChildren:
       try:
         let conn = db.open(action.dbFilename, true)
-        let posts = entities.selectPostChildren(conn, action.postParentSig)
+        let posts = entities.selectPostChildren(conn, action.postParentSig, action.offset)
         db_sqlite.close(conn)
         flatty.toFlatty(Result[seq[entities.Post]](kind: Valid, valid: posts))
       except Exception as ex:
@@ -254,7 +255,7 @@ proc recvAction(data: pointer, size: cint) {.exportc.} =
     of QueryUserPosts:
       try:
         let conn = db.open(action.dbFilename, true)
-        let posts = entities.selectUserPosts(conn, action.userPostsPublicKey)
+        let posts = entities.selectUserPosts(conn, action.userPostsPublicKey, action.offset)
         db_sqlite.close(conn)
         flatty.toFlatty(Result[seq[entities.Post]](kind: Valid, valid: posts))
       except Exception as ex:
