@@ -26,6 +26,8 @@ type
     reply_count*: int64
     score*: int64
 
+const limit* = 10
+
 proc initCompressedValue*(uncompressed: string): CompressedValue =
   result.compressed = zippy.compress(uncompressed, dataFormat = zippy.dfZlib)
   result.uncompressed = uncompressed
@@ -122,8 +124,8 @@ proc selectPostChildren*(conn: PSqlite3, sig: string): seq[Post] =
       SELECT content, content_sig, content_sig_last, public_key, parent, reply_count FROM post
       WHERE parent = ?
       ORDER BY score DESC
-      LIMIT 10
-    """
+      LIMIT $1
+    """.format(limit)
   #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), sig):
   #  echo x
   sequtils.toSeq(db.select[Post](conn, initPost, query, sig))
@@ -134,8 +136,8 @@ proc selectUserPosts*(conn: PSqlite3, publicKey: string): seq[Post] =
       SELECT content, content_sig, content_sig_last, public_key, parent, reply_count FROM post
       WHERE public_key = ? AND parent != ''
       ORDER BY ts DESC
-      LIMIT 10
-    """
+      LIMIT $1
+    """.format(limit)
   #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), publicKey):
   #  echo x
   sequtils.toSeq(db.select[Post](conn, initPost, query, publicKey))
@@ -266,7 +268,8 @@ proc searchPosts*(conn: PSqlite3, term: string): seq[Post] =
     """
       SELECT content, content_sig, content_sig_last, public_key, parent, reply_count FROM post
       WHERE post_id IN (SELECT post_id FROM post_search WHERE attribute MATCH 'content' AND value MATCH ? ORDER BY rank)
-    """
+      LIMIT $1
+    """.format(limit)
   #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), term):
   #  echo x
   sequtils.toSeq(db.select[Post](conn, initPost, query, term))
