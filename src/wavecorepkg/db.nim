@@ -23,17 +23,17 @@ proc init*(conn: PSqlite3) =
   db_sqlite.exec conn, sql"""
     CREATE TABLE user (
       user_id INTEGER PRIMARY KEY AUTOINCREMENT,
-      ts DATETIME DEFAULT CURRENT_TIMESTAMP,
+      ts INTEGER,
       public_key TEXT UNIQUE,
       public_key_algo TEXT
-    )
+    ) STRICT
   """
   db_sqlite.exec conn, sql"CREATE INDEX user_public_key ON user(public_key)"
   db_sqlite.exec conn, sql"CREATE VIRTUAL TABLE user_search USING fts5 (user_id, attribute, value, value_unindexed UNINDEXED)"
   db_sqlite.exec conn, sql"""
     CREATE TABLE post (
       post_id INTEGER PRIMARY KEY AUTOINCREMENT,
-      ts DATETIME DEFAULT CURRENT_TIMESTAMP,
+      ts INTEGER,
       content BLOB,
       content_sig TEXT UNIQUE,
       content_sig_last TEXT UNIQUE,
@@ -42,7 +42,7 @@ proc init*(conn: PSqlite3) =
       parent_public_key TEXT,
       reply_count INTEGER,
       score INTEGER
-    )
+    ) STRICT
   """
   db_sqlite.exec conn, sql"CREATE INDEX post_content_sig ON post(content_sig)"
   db_sqlite.exec conn, sql"CREATE INDEX post_content_sig_last ON post(content_sig_last)"

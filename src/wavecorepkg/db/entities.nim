@@ -6,10 +6,11 @@ from sequtils import nil
 from strutils import format
 from ../ed25519 import nil
 from ../paths import nil
+from times import nil
 
 type
   CompressedValue* = object
-    compressed*: string
+    compressed*: seq[uint8]
     uncompressed*: string
   Content* = object
     value*: CompressedValue
@@ -29,7 +30,7 @@ type
 const limit* = 10
 
 proc initCompressedValue*(uncompressed: string): CompressedValue =
-  result.compressed = zippy.compress(uncompressed, dataFormat = zippy.dfZlib)
+  result.compressed = cast[seq[uint8]](zippy.compress(uncompressed, dataFormat = zippy.dfZlib))
   result.uncompressed = uncompressed
 
 # not used in prod...only in tests
@@ -59,7 +60,7 @@ proc initPost(stmt: PStmt): Post =
       if compressedLen > 0:
         var s = newSeq[uint8](compressedLen)
         copyMem(s[0].addr, compressed, compressedLen)
-        result.content.value = CompressedValue(compressed: cast[string](s), uncompressed: zippy.uncompress(cast[string](s), dataFormat = zippy.dfZlib))
+        result.content.value = CompressedValue(compressed: s, uncompressed: zippy.uncompress(cast[string](s), dataFormat = zippy.dfZlib))
     of "content_sig":
       result.content.sig = $sqlite3.column_text(stmt, col)
     of "content_sig_last":
@@ -224,8 +225,8 @@ proc insertPost*(conn: PSqlite3, entity: Post, extraFn: proc (x: Post, sig: stri
       else:
         e.content.sig
 
-  db.withStatement(conn, "INSERT INTO post (content, content_sig, content_sig_last, public_key, parent, parent_public_key, reply_count, score) VALUES (?, ?, ?, ?, ?, ?, 0, 0)", stmt):
-    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), e.content.value.compressed, sig, e.content.sig, e.public_key, e.parent, parentPublicKey)
+  db.withStatement(conn, "INSERT INTO post (ts, content, content_sig, content_sig_last, public_key, parent, parent_public_key, reply_count, score) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0)", stmt):
+    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), times.toUnix(times.getTime()), e.content.value.compressed, sig, e.content.sig, e.public_key, e.parent, parentPublicKey)
     if step(stmt) != SQLITE_DONE:
       db_sqlite.dbError(conn)
     id = sqlite3.last_insert_rowid(conn)
@@ -321,8 +322,8 @@ proc insertUser*(conn: PSqlite3, entity: User, content: Content, extraFn: proc (
         e = entity
         stmt: PStmt
         id: int64
-      db.withStatement(conn, "INSERT INTO user (public_key, public_key_algo) VALUES (?, ?)", stmt):
-        db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), entity.publicKey, "ed25519")
+      db.withStatement(conn, "INSERT INTO user (ts, public_key, public_key_algo) VALUES (?, ?, ?)", stmt):
+        db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), times.toUnix(times.getTime()), entity.publicKey, "ed25519")
         if step(stmt) != SQLITE_DONE:
           db_sqlite.dbError(conn)
         id = sqlite3.last_insert_rowid(conn)
