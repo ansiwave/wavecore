@@ -16,27 +16,24 @@ const
   Valid* = ResultKind.Valid
   Error* = ResultKind.Error
 
-proc initClient*(address: string): Client =
-  Client(address: address)
+proc initClient*(address: string, postAddress: string = address): Client =
+  Client(address: address, postAddress: postAddress)
 
-proc initUrl(client: Client; endpoint: string): string =
-  "$1/$2".format(client.address, endpoint)
+proc initUrl(address: string; endpoint: string): string =
+  "$1/$2".format(address, endpoint)
 
-proc request*(client: Client, endpoint: string, data: string, verb: string): string =
-  let url: string = client.initUrl(endpoint)
+proc request*(url: string, data: string, verb: string): string =
   let response: Response = fetch(Request(url: urlly.parseUrl(url), verb: verb, body: data))
   if response.code != 200:
     raise newException(ClientException, "Error code " & $response.code & ": " & response.body)
   return response.body
 
 proc post*(client: Client, endpoint: string, data: string): string =
-  request(client, endpoint, data, "post")
-
-proc put*(client: Client, endpoint: string, data: string): string =
-  request(client, endpoint, data, "put")
+  let url = initUrl(client.postAddress, endpoint)
+  request(url, data, "post")
 
 proc get*(client: Client, endpoint: string, range: (int, int) = (0, 0)): string =
-  let url: string = client.initUrl(endpoint)
+  let url = initUrl(client.address, endpoint)
   var headers: seq[Header] = @[]
   if range != (0, 0):
     headers.add(Header(key: "Range", value: "range=$1-$2".format(range[0], range[1])))
@@ -46,7 +43,7 @@ proc get*(client: Client, endpoint: string, range: (int, int) = (0, 0)): string 
   return response.body
 
 proc query*(client: Client, endpoint: string, range: (int, int) = (0, 0)): ChannelValue[Response] =
-  let url: string = client.initUrl(endpoint)
+  let url = initUrl(client.address, endpoint)
   var headers: seq[Header] = @[]
   if range != (0, 0):
     headers.add(Header(key: "Range", value: "range=$1-$2".format(range[0], range[1])))
@@ -55,7 +52,7 @@ proc query*(client: Client, endpoint: string, range: (int, int) = (0, 0)): Chann
   sendFetch(client, request, result.chan)
 
 proc submit*(client: Client, endpoint: string, body: string): ChannelValue[Response] =
-  let url: string = client.initUrl(endpoint)
+  let url = initUrl(client.postAddress, endpoint)
   let request = Request(url: urlly.parseUrl(url), verb: "post", body: body)
   result = initChannelValue[Response]()
   sendFetch(client, request, result.chan)

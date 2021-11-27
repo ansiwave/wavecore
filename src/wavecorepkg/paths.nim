@@ -4,7 +4,16 @@ from strutils import nil
 
 const
   port* = 3000
-  address* = "http://localhost:" & $port
+  address* =
+    when defined(emscripten):
+      ""
+    else:
+      "http://localhost:" & $port
+  postAddress* =
+    when defined(release):
+      "http://test.ansiwave.net"
+    else:
+      address
   boardsDir* = "boards"
   ansiwavesDir* = "ansiwavez"
   dbDir* = "db"

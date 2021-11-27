@@ -62,6 +62,7 @@ type
     channel: int64
   Client* = ref object
     address*: string
+    postAddress*: string
     worker: cint
   ChannelValue*[T] = object
     chan*: ChannelRef

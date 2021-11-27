@@ -42,6 +42,7 @@ type
     offset: int
   Client* = ref object
     address*: string
+    postAddress*: string
     requestThread*: Thread[Client]
     action*: ChannelRef[Action]
   ChannelValue*[T] = object
