@@ -101,7 +101,7 @@ proc sendAction(server: Server, action: Action): bool =
   done[].close()
   deallocShared(done)
 
-proc ansiwavePost(server: Server, request: Request): string =
+proc ansiwavePost(server: Server, request: Request, headers: var string, body: var string) =
   if request.body.len > 0:
     # parse the ansiwave
     let (cmds, headersAndContent, _) =
@@ -155,6 +155,42 @@ proc ansiwavePost(server: Server, request: Request): string =
   else:
     raise newException(BadRequestException, "Invalid request")
 
+  body = ""
+  headers = "HTTP/1.1 200 OK\r\LContent-Length: " & $body.len
+
+proc handleStatic(server: Server, request: Request, headers: var string, body: var string): bool =
+  var filePath = ""
+  if request.reqMethod == httpcore.HttpGet and server.staticFileDir != "":
+    let path = server.staticFileDir / request.uri.path
+    # TODO: ensure path is inside staticFileDir
+    if fileExists(path):
+      filePath = path
+    else:
+      raise newException(NotFoundException, "Not found: " & request.uri.path)
+  if filePath != "":
+    let contentType =
+      case os.splitFile(filePath).ext:
+      of ".html": "text/html"
+      of ".js": "text/javascript"
+      of ".wasm": "application/wasm"
+      else: "text/plain"
+    body = readFile(filePath)
+    if request.headers.hasKey("Range"):
+      let range = strutils.split(strutils.split(request.headers["Range"], '=')[1], '-')
+      var first, last: int
+      discard parseutils.parseSaturatedNatural(range[0], first)
+      discard parseutils.parseSaturatedNatural(range[1], last)
+      if first <= last and last < body.len:
+        let contentRange = "bytes " & $range[0] & "-" & $range[1] & "/" & $body.len
+        body = body[first .. last]
+        headers = "HTTP/1.1 206 OK\r\LContent-Length: " & $body.len & "\r\LContent-Range: " & contentRange & "\r\LContent-Type: " & contentType
+      else:
+        raise newException(BadRequestException, "Bad Request. Invalid Range.")
+    else:
+      headers = "HTTP/1.1 200 OK\r\LContent-Length: " & $body.len & "\r\LContent-Type: " & contentType
+    return true
+  return false
+
 proc handle(server: Server, client: Socket) =
   var headers, body: string
   try:
@@ -193,43 +229,16 @@ proc handle(server: Server, client: Socket) =
       else:
         # TODO: max content length
         request.body = client.recv(contentLength)
-    # static file requests
-    var filePath = ""
-    if request.reqMethod == httpcore.HttpGet and server.staticFileDir != "":
-      let path = server.staticFileDir / request.uri.path
-      # TODO: ensure path is inside staticFileDir
-      if fileExists(path):
-        filePath = path
-    if filePath != "":
-      let contentType =
-        case os.splitFile(filePath).ext:
-        of ".html": "text/html"
-        of ".js": "text/javascript"
-        of ".wasm": "application/wasm"
-        else: "text/plain"
-      body = readFile(filePath)
-      if request.headers.hasKey("Range"):
-        let range = strutils.split(strutils.split(request.headers["Range"], '=')[1], '-')
-        var first, last: int
-        discard parseutils.parseSaturatedNatural(range[0], first)
-        discard parseutils.parseSaturatedNatural(range[1], last)
-        if first <= last and last < body.len:
-          let contentRange = "bytes " & $range[0] & "-" & $range[1] & "/" & $body.len
-          body = body[first .. last]
-          headers = "HTTP/1.1 206 OK\r\LContent-Length: " & $body.len & "\r\LContent-Range: " & contentRange & "\r\LContent-Type: " & contentType
-        else:
-          raise newException(BadRequestException, "Bad Request. Invalid Range.")
-      else:
-        headers = "HTTP/1.1 200 OK\r\LContent-Length: " & $body.len & "\r\LContent-Type: " & contentType
-    # REST api
+    # handle requests
+    let dispatch = (reqMethod: request.reqMethod, path: request.uri.path)
+    if dispatch == (httpcore.HttpPost, "/ansiwave"):
+      ansiwavePost(server, request, headers, body)
     else:
-      let dispatch = (reqMethod: request.reqMethod, path: request.uri.path)
-      body =
-        if dispatch == (httpcore.HttpPost, "/ansiwave"):
-          ansiwavePost(server, request)
-        else:
+      when not defined(release):
+        if not handleStatic(server, request, headers, body):
           raise newException(NotFoundException, "Unhandled request: " & $dispatch)
-      headers = "HTTP/1.1 200 OK\r\LContent-Length: " & $body.len
+      else:
+        raise newException(NotFoundException, "Unhandled request: " & $dispatch)
   except BadRequestException as ex:
     headers = "HTTP/1.1 400 Bad Request"
     body = ex.msg
