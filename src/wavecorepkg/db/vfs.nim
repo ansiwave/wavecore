@@ -101,7 +101,10 @@ let customMethods = sqlite3_io_methods(
       var res = fetch(Request(
         url: urlly.parseUrl(readUrl & suffix),
         verb: "get",
-        headers: @[Header(key: "Range", value: "bytes=" & $firstByte & "-" & $lastByte)]
+        headers: @[
+          Header(key: "Range", value: "bytes=" & $firstByte & "-" & $lastByte),
+          Header(key: "Cache-Control", value: "no-store"),
+        ]
       ))
       if res.code == 206:
         assert res.body.len == amt
@@ -120,6 +123,9 @@ let customMethods = sqlite3_io_methods(
     let res = fetch(Request(
       url: urlly.parseUrl(readUrl & "/../" & manifestFile),
       verb: "get",
+      headers: @[
+        Header(key: "Cache-Control", value: "no-store"),
+      ]
     ))
     if res.code == 200:
       try:
