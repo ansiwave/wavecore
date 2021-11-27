@@ -1,5 +1,4 @@
 from os import `/`
-from ./ed25519 import nil
 from base64 import nil
 from strutils import nil
 
@@ -10,6 +9,7 @@ const
   ansiwavesDir* = "ansiwavez"
   dbDir* = "db"
   dbFilename* = "board.db"
+  sysopPublicKey* = "Q8BTY324cY7nl5kce6ctEfk8IRIrtsM8NfKL29B-3UE"
 
 proc db*(board: string): string =
   boardsDir / board / dbDir / dbFilename
@@ -25,23 +25,3 @@ proc encode*[T](data: T): string =
     i -= 1
 
 export base64.decode
-
-when defined(emscripten):
-  const sysopPublicKey* = encode(staticRead(".." / ".." / "pubkey"))
-else:
-  let
-    sysopKeys* = block:
-      let path = ".." / "wavecore" / "privkey"
-      if os.fileExists(path):
-        echo "Using existing sysop key"
-        let privKeyStr = readFile(path)
-        var privKey: ed25519.PrivateKey
-        copyMem(privKey.addr, privKeyStr[0].unsafeAddr, privKeyStr.len)
-        ed25519.initKeyPair(privkey)
-      else:
-        echo "Creating new sysop key"
-        let keys = ed25519.initKeyPair()
-        writeFile(path, keys.private)
-        writeFile(".." / "wavecore" / "pubkey", keys.public)
-        keys
-    sysopPublicKey* = encode(sysopKeys.public)

@@ -151,7 +151,25 @@ Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu
 fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in
 culpa qui officia deserunt mollit anim id est laborum.
     """
-  staticFileDir* = "bbs"
+  staticFileDir = "bbs"
+
+let
+  sysopKeys = block:
+    let path = "privkey"
+    if os.fileExists(path):
+      echo "Using existing sysop key"
+      let privKeyStr = readFile(path)
+      var privKey: ed25519.PrivateKey
+      copyMem(privKey.addr, privKeyStr[0].unsafeAddr, privKeyStr.len)
+      ed25519.initKeyPair(privkey)
+    else:
+      echo "Creating new sysop key"
+      let keys = ed25519.initKeyPair()
+      writeFile(path, keys.private)
+      writeFile("pubkey", keys.public)
+      keys
+
+assert paths.sysopPublicKey == paths.encode(sysopKeys.public)
 
 when isMainModule:
   vfs.register()
@@ -164,8 +182,8 @@ when isMainModule:
   var conn = db.open(staticFileDir / paths.db(paths.sysopPublicKey))
   db.init(conn)
   let sysop = entities.User(public_key: paths.sysopPublicKey)
-  server.insertUser(s, paths.sysopPublicKey, sysop, entities.initContent(common.signWithHeaders(paths.sysopKeys, asciiArt, "", true)))
-  let subboard = entities.Post(parent: sysop.public_key, public_key: sysop.public_key, content: entities.initContent(common.signWithHeaders(paths.sysopKeys, "General Discussion", sysop.public_key, true)))
+  server.insertUser(s, paths.sysopPublicKey, sysop, entities.initContent(common.signWithHeaders(sysopKeys, asciiArt, "", true)))
+  let subboard = entities.Post(parent: sysop.public_key, public_key: sysop.public_key, content: entities.initContent(common.signWithHeaders(sysopKeys, "General Discussion", sysop.public_key, true)))
   server.insertPost(s, paths.sysopPublicKey, subboard)
   let
     aliceKeys = ed25519.initKeyPair()
@@ -180,7 +198,7 @@ when isMainModule:
   server.insertPost(s, paths.sysopPublicKey, p2)
   let p3 = entities.Post(parent: p2.content.sig, public_key: alice.public_key, content: entities.initContent(common.signWithHeaders(aliceKeys, "That ansi is\n" & fabulous, p2.content.sig, true)))
   server.insertPost(s, paths.sysopPublicKey, p3)
-  let p4 = entities.Post(parent: p2.content.sig, public_key: sysop.public_key, content: entities.initContent(common.signWithHeaders(paths.sysopKeys, "The people demand more jabba", p2.content.sig, true)))
+  let p4 = entities.Post(parent: p2.content.sig, public_key: sysop.public_key, content: entities.initContent(common.signWithHeaders(sysopKeys, "The people demand more jabba", p2.content.sig, true)))
   server.insertPost(s, paths.sysopPublicKey, p4)
   let p5 = entities.Post(parent: subboard.content.sig, public_key: bob.public_key, content: entities.initContent(common.signWithHeaders(bobKeys, hogan, subboard.content.sig, true)))
   server.insertPost(s, paths.sysopPublicKey, p5)
