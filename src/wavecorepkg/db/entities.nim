@@ -277,9 +277,9 @@ proc editPost*(conn: PSqlite3, content: Content, key: string, extraFn: proc (x: 
   var stmt: PStmt
 
   let sigLast =
-    # if the content sig_last is blank, this is the first time they've edited their banner
+    # if the content sig_last is same as the public key, this is the first time they've edited their banner
     # so insert it into the db
-    if content.sig_last == "":
+    if content.sig_last == key:
       insertPost(conn, Post(content: content, public_key: key))
       content.sig
     else:
