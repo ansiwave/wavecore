@@ -40,10 +40,10 @@ proc initContent*(keys: ed25519.KeyPair, origContent: string): Content =
   result.sig_last = result.sig
 
 # not used in prod...only in tests
-proc initContent*(content: tuple[body: string, sig: string]): Content =
+proc initContent*(content: tuple[body: string, sig: string], sigLast: string = content.sig): Content =
   result.value = initCompressedValue(content.body)
   result.sig = content.sig
-  result.sig_last = content.sig
+  result.sig_last = sigLast
 
 proc initPost(stmt: PStmt): Post =
   var cols = sqlite3.column_count(stmt)
@@ -183,8 +183,6 @@ proc selectUserExtras*(conn: PSqlite3, publicKey: string): User =
     raise newException(Exception, "Can't select user")
 
 proc insertPost*(conn: PSqlite3, entity: Post, extraFn: proc (x: Post, sig: string) = nil) =
-  db_sqlite.exec(conn, sql"BEGIN TRANSACTION")
-
   var
     e = entity
     stmt: PStmt
@@ -263,8 +261,6 @@ proc insertPost*(conn: PSqlite3, entity: Post, extraFn: proc (x: Post, sig: stri
       """.format(parentIds)
     db_sqlite.exec(conn, sql score_query)
 
-  db_sqlite.exec(conn, sql"COMMIT")
-
 proc searchPosts*(conn: PSqlite3, term: string): seq[Post] =
   const query =
     """
@@ -277,9 +273,16 @@ proc searchPosts*(conn: PSqlite3, term: string): seq[Post] =
   sequtils.toSeq(db.select[Post](conn, initPost, query, term))
 
 proc editPost*(conn: PSqlite3, content: Content, key: string, extraFn: proc (x: Post) = nil) =
-  db_sqlite.exec(conn, sql"BEGIN TRANSACTION")
-
   var stmt: PStmt
+
+  let sigLast =
+    # if the content sig_last is blank, this is the first time they've edited their banner
+    # so insert it into the db
+    if content.sig_last == "":
+      insertPost(conn, Post(content: content, public_key: key))
+      content.sig
+    else:
+      content.sig_last
 
   proc selectPostByLastSig(conn: PSqlite3, sig: string): Post =
     const query =
@@ -293,7 +296,7 @@ proc editPost*(conn: PSqlite3, content: Content, key: string, extraFn: proc (x: 
     else:
       raise newException(Exception, "Can't edit post (maybe you're editing an old version?)")
 
-  let post = selectPostByLastSig(conn, content.sig_last)
+  let post = selectPostByLastSig(conn, sigLast)
 
   if post.public_key != key:
     raise newException(Exception, "Cannot edit this post")
@@ -310,8 +313,6 @@ proc editPost*(conn: PSqlite3, content: Content, key: string, extraFn: proc (x: 
 
   if extraFn != nil:
     extraFn(selectPost(conn, post.content.sig))
-
-  db_sqlite.exec(conn, sql"COMMIT")
 
 proc insertUser*(conn: PSqlite3, entity: User, content: Content, extraFn: proc (x: User) = nil) =
   let p =

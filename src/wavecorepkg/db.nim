@@ -61,6 +61,13 @@ template withStatement*(conn: PSqlite3, query: string, stmt: PStmt, body: untype
     if finalize(stmt) != SQLITE_OK:
       db_sqlite.dbError(conn)
 
+template withTransaction*(conn: PSqlite3, body: untyped) =
+  db_sqlite.exec(conn, sql"BEGIN TRANSACTION")
+  try:
+    body
+  finally:
+    db_sqlite.exec(conn, sql"COMMIT")
+
 proc select*[T](conn: PSqlite3, init: proc (stmt: PStmt): T, query: string, args: varargs[string, `$`]): seq[T] =
   var stmt: PStmt
   withStatement(conn, query, stmt):
