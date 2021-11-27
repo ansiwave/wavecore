@@ -166,7 +166,6 @@ let
       echo "Creating new sysop key"
       let keys = ed25519.initKeyPair()
       writeFile(path, keys.private)
-      writeFile("pubkey", keys.public)
       keys
 
 assert paths.sysopPublicKey == paths.encode(sysopKeys.public)
