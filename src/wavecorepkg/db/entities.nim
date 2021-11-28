@@ -191,12 +191,13 @@ proc insertPost*(conn: PSqlite3, entity: Post, extraFn: proc (x: Post, sig: stri
 
   let
     parentIds =
+      # top level
       if e.parent == "":
         ""
+      # reply to top level
       elif e.parent == e.public_key:
         ""
       else:
-        # set the parent ids
         let
           parentId = selectPostExtras(conn, e.parent).post_id
           parentParentIds = selectPostParentIds(conn, parentId)
@@ -205,15 +206,17 @@ proc insertPost*(conn: PSqlite3, entity: Post, extraFn: proc (x: Post, sig: stri
         else:
           parentParentIds & ", " & $parentId
     parentPublicKey =
+      # top level
       if e.parent == "":
         ""
+      # reply to top level
       elif e.parent == e.public_key:
         e.public_key
       else:
         let parentPost = selectPost(conn, e.parent)
-        # posts that reply to a root post (i.e. a user's banner)
+        # posts that reply to a top level post (i.e. a user's banner)
         # may only come from the user themself.
-        # they would've hit the first branch in the conditional
+        # they would've hit the second branch in this conditional
         # so at this point we can just throw an exception if necessary.
         if parentPost.parent == "":
           raise newException(Exception, "Posting here is not allowed")
