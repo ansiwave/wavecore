@@ -315,25 +315,14 @@ proc editPost*(conn: PSqlite3, content: Content, key: string, extraFn: proc (x: 
   if extraFn != nil:
     extraFn(selectPost(conn, post.content.sig))
 
-proc insertUser*(conn: PSqlite3, entity: User, content: Content, extraFn: proc (x: User) = nil) =
-  let p =
-    proc () =
-      var
-        e = entity
-        stmt: PStmt
-        id: int64
-      db.withStatement(conn, "INSERT INTO user (ts, public_key, public_key_algo) VALUES (?, ?, ?)", stmt):
-        db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), times.toUnix(times.getTime()), entity.publicKey, "ed25519")
-        if step(stmt) != SQLITE_DONE:
-          db_sqlite.dbError(conn)
-        id = sqlite3.last_insert_rowid(conn)
-      if extraFn != nil:
-        extraFn(e)
-  if content.sig == "":
-    p()
-  else:
-    insertPost(conn, Post(content: content, public_key: entity.public_key),
-      proc (x: Post, sig: string) =
-        p()
-    )
+proc insertUser*(conn: PSqlite3, entity: User, extraFn: proc (x: User) = nil) =
+  var
+    e = entity
+    stmt: PStmt
+  db.withStatement(conn, "INSERT INTO user (ts, public_key, public_key_algo) VALUES (?, ?, ?)", stmt):
+    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), times.toUnix(times.getTime()), entity.publicKey, "ed25519")
+    if step(stmt) != SQLITE_DONE:
+      db_sqlite.dbError(conn)
+  if extraFn != nil:
+    extraFn(e)
 
