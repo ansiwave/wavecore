@@ -8,7 +8,6 @@ from base64 import nil
 from zippy import nil
 
 from ../db import nil
-from ../db/db_sqlite import nil
 from ../db/entities import nil
 
 type
@@ -231,34 +230,38 @@ proc recvAction(data: pointer, size: cint) {.exportc.} =
         flatty.toFlatty(Result[Response](kind: Error, error: ex.msg))
     of QueryUser:
       try:
-        let conn = db.open(action.dbFilename, true)
-        let user = entities.selectUser(conn, action.publicKey)
-        db_sqlite.close(conn)
-        flatty.toFlatty(Result[entities.User](kind: Valid, valid: user))
+        var s: string
+        db.withOpen(conn, action.dbFilename, true):
+          let user = entities.selectUser(conn, action.publicKey)
+          s = flatty.toFlatty(Result[entities.User](kind: Valid, valid: user))
+        s
       except Exception as ex:
         flatty.toFlatty(Result[seq[entities.Post]](kind: Error, error: ex.msg))
     of QueryPost:
       try:
-        let conn = db.open(action.dbFilename, true)
-        let post = entities.selectPost(conn, action.postSig)
-        db_sqlite.close(conn)
-        flatty.toFlatty(Result[entities.Post](kind: Valid, valid: post))
+        var s: string
+        db.withOpen(conn, action.dbFilename, true):
+          let post = entities.selectPost(conn, action.postSig)
+          s = flatty.toFlatty(Result[entities.Post](kind: Valid, valid: post))
+        s
       except Exception as ex:
         flatty.toFlatty(Result[seq[entities.Post]](kind: Error, error: ex.msg))
     of QueryPostChildren:
       try:
-        let conn = db.open(action.dbFilename, true)
-        let posts = entities.selectPostChildren(conn, action.postParentSig, action.offset)
-        db_sqlite.close(conn)
-        flatty.toFlatty(Result[seq[entities.Post]](kind: Valid, valid: posts))
+        var s: string
+        db.withOpen(conn, action.dbFilename, true):
+          let posts = entities.selectPostChildren(conn, action.postParentSig, action.offset)
+          s = flatty.toFlatty(Result[seq[entities.Post]](kind: Valid, valid: posts))
+        s
       except Exception as ex:
         flatty.toFlatty(Result[seq[entities.Post]](kind: Error, error: ex.msg))
     of QueryUserPosts:
       try:
-        let conn = db.open(action.dbFilename, true)
-        let posts = entities.selectUserPosts(conn, action.userPostsPublicKey, action.offset)
-        db_sqlite.close(conn)
-        flatty.toFlatty(Result[seq[entities.Post]](kind: Valid, valid: posts))
+        var s: string
+        db.withOpen(conn, action.dbFilename, true):
+          let posts = entities.selectUserPosts(conn, action.userPostsPublicKey, action.offset)
+          s = flatty.toFlatty(Result[seq[entities.Post]](kind: Valid, valid: posts))
+        s
       except Exception as ex:
         flatty.toFlatty(Result[seq[entities.Post]](kind: Error, error: ex.msg))
   let data = flatty.toFlatty(WorkerResponse(data: res, channel: workerRequest.channel))

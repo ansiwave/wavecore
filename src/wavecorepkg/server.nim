@@ -6,7 +6,6 @@ from os import `/`
 import httpcore
 from ./db import nil
 from ./db/entities import nil
-from ./db/db_sqlite import nil
 from ./paths import nil
 from ./ed25519 import nil
 from ./common import nil
@@ -59,33 +58,31 @@ proc initServer*(hostname: string, port: int, staticFileDir: string = ""): Serve
 
 proc insertPost*(server: Server, board: string, entity: entities.Post) =
   assert server.staticFileDir != ""
-  let conn = db.open(server.staticFileDir / paths.db(board))
-  db.withTransaction(conn):
-    # if user doesn't exist in db, insert it
-    try:
-      discard entities.selectUser(conn, entity.public_key)
-    except Exception as ex:
-      entities.insertUser(conn, entities.User(public_key: entity.public_key))
-    entities.insertPost(conn, entity,
-      proc (x: entities.Post, sig: string) =
-        writeFile(server.staticFileDir / paths.ansiwavez(board, sig), x.content.value.compressed)
-    )
-  db_sqlite.close(conn)
+  db.withOpen(conn, server.staticFileDir / paths.db(board), false):
+    db.withTransaction(conn):
+      # if user doesn't exist in db, insert it
+      try:
+        discard entities.selectUser(conn, entity.public_key)
+      except Exception as ex:
+        entities.insertUser(conn, entities.User(public_key: entity.public_key))
+      entities.insertPost(conn, entity,
+        proc (x: entities.Post, sig: string) =
+          writeFile(server.staticFileDir / paths.ansiwavez(board, sig), x.content.value.compressed)
+      )
 
 proc editPost*(server: Server, board: string, content: entities.Content, key: string) =
   assert server.staticFileDir != ""
-  let conn = db.open(server.staticFileDir / paths.db(board))
-  db.withTransaction(conn):
-    # if user doesn't exist in db, insert it
-    try:
-      discard entities.selectUser(conn, key)
-    except Exception as ex:
-      entities.insertUser(conn, entities.User(public_key: key))
-    entities.editPost(conn, content, key,
-      proc (x: entities.Post) =
-        writeFile(server.staticFileDir / paths.ansiwavez(board, x.content.sig), x.content.value.compressed)
-    )
-  db_sqlite.close(conn)
+  db.withOpen(conn, server.staticFileDir / paths.db(board), false):
+    db.withTransaction(conn):
+      # if user doesn't exist in db, insert it
+      try:
+        discard entities.selectUser(conn, key)
+      except Exception as ex:
+        entities.insertUser(conn, entities.User(public_key: key))
+      entities.editPost(conn, content, key,
+        proc (x: entities.Post) =
+          writeFile(server.staticFileDir / paths.ansiwavez(board, x.content.sig), x.content.value.compressed)
+      )
 
 proc sendAction(server: Server, action: Action): bool =
   let done = cast[ptr Channel[bool]](

@@ -4,7 +4,6 @@ from urlly import nil
 from strutils import nil
 
 from ../db import nil
-from ../db/db_sqlite import nil
 from ../db/entities import nil
 
 type
@@ -113,30 +112,26 @@ proc recvAction(client: Client) {.thread.} =
         action.response[].send(Result[Response](kind: Error, error: ex.msg))
     of QueryUser:
       try:
-        let conn = db.open(action.dbFilename, true)
-        action.userResponse[].send(Result[entities.User](kind: Valid, valid: entities.selectUser(conn, action.publicKey)))
-        db_sqlite.close(conn)
+        db.withOpen(conn, action.dbFilename, true):
+          action.userResponse[].send(Result[entities.User](kind: Valid, valid: entities.selectUser(conn, action.publicKey)))
       except Exception as ex:
         action.userResponse[].send(Result[entities.User](kind: Error, error: ex.msg))
     of QueryPost:
       try:
-        let conn = db.open(action.dbFilename, true)
-        action.postResponse[].send(Result[entities.Post](kind: Valid, valid: entities.selectPost(conn, action.postSig)))
-        db_sqlite.close(conn)
+        db.withOpen(conn, action.dbFilename, true):
+          action.postResponse[].send(Result[entities.Post](kind: Valid, valid: entities.selectPost(conn, action.postSig)))
       except Exception as ex:
         action.postResponse[].send(Result[entities.Post](kind: Error, error: ex.msg))
     of QueryPostChildren:
       try:
-        let conn = db.open(action.dbFilename, true)
-        action.postChildrenResponse[].send(Result[seq[entities.Post]](kind: Valid, valid: entities.selectPostChildren(conn, action.postParentSig, action.offset)))
-        db_sqlite.close(conn)
+        db.withOpen(conn, action.dbFilename, true):
+          action.postChildrenResponse[].send(Result[seq[entities.Post]](kind: Valid, valid: entities.selectPostChildren(conn, action.postParentSig, action.offset)))
       except Exception as ex:
         action.postChildrenResponse[].send(Result[seq[entities.Post]](kind: Error, error: ex.msg))
     of QueryUserPosts:
       try:
-        let conn = db.open(action.dbFilename, true)
-        action.userPostsResponse[].send(Result[seq[entities.Post]](kind: Valid, valid: entities.selectUserPosts(conn, action.userPostsPublicKey, action.offset)))
-        db_sqlite.close(conn)
+        db.withOpen(conn, action.dbFilename, true):
+          action.userPostsResponse[].send(Result[seq[entities.Post]](kind: Valid, valid: entities.selectUserPosts(conn, action.userPostsPublicKey, action.offset)))
       except Exception as ex:
         action.userPostsResponse[].send(Result[seq[entities.Post]](kind: Error, error: ex.msg))
 

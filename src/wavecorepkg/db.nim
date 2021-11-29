@@ -5,22 +5,6 @@ from ./db/db_sqlite import sql
 from bitops import nil
 import tables
 
-template withStatement*(conn: PSqlite3, query: string, stmt: PStmt, body: untyped) =
-  try:
-    if prepare_v2(conn, query, query.len.cint, stmt, nil) != SQLITE_OK:
-      db_sqlite.dbError(conn)
-    body
-  finally:
-    if finalize(stmt) != SQLITE_OK:
-      db_sqlite.dbError(conn)
-
-template withTransaction*(conn: PSqlite3, body: untyped) =
-  db_sqlite.exec(conn, sql"BEGIN TRANSACTION")
-  try:
-    body
-  finally:
-    db_sqlite.exec(conn, sql"COMMIT")
-
 const
   SQLITE_OPEN_READONLY = 1
   SQLITE_OPEN_READWRITE = 2
@@ -34,6 +18,27 @@ proc open*(filename: string, http: bool = false): PSqlite3 =
     vfs: cstring = if http: "http".cstring else: "multiplex".cstring
   if sqlite3_open_v2(filename, result, flags, vfs) != SQLITE_OK:
     db_sqlite.dbError(result)
+
+template withOpen*(conn: untyped, filename: string, http: bool, body: untyped) =
+  let conn = open(filename, http)
+  try:
+    body
+  finally:
+    db_sqlite.close(conn)
+
+template withTransaction*(conn: PSqlite3, body: untyped) =
+  db_sqlite.exec(conn, sql"BEGIN TRANSACTION")
+  body
+  db_sqlite.exec(conn, sql"COMMIT")
+
+template withStatement*(conn: PSqlite3, query: string, stmt: PStmt, body: untyped) =
+  try:
+    if prepare_v2(conn, query, query.len.cint, stmt, nil) != SQLITE_OK:
+      db_sqlite.dbError(conn)
+    body
+  finally:
+    if finalize(stmt) != SQLITE_OK:
+      db_sqlite.dbError(conn)
 
 proc init*(conn: PSqlite3) =
   withTransaction(conn):
