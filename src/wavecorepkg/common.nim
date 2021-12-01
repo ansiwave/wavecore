@@ -4,7 +4,7 @@ from ./ed25519 import nil
 from strutils import nil
 import tables, sets
 from times import nil
-from unicode import nil
+import unicode
 
 proc headers*(pubKey: string, target: string, isNew: bool): string =
   strutils.join(
@@ -55,3 +55,60 @@ proc parseAnsiwave*(ansiwave: string): tuple[cmds: Table[string, string], header
       raise newException(Exception, "Required header not found: " & cmd)
   result.headersAndContent = ansiwave[newline + 1 ..< ansiwave.len]
   result.content = content
+
+const
+  codeTerminators* = {'c', 'f', 'h', 'l', 'm', 's', 't', 'u',
+                      'A', 'B', 'C', 'D', 'E', 'F', 'G',
+                      'H', 'J', 'K', 'N', 'O', 'P', 'S',
+                      'T', 'X', '\\', ']', '^', '_'}
+
+proc parseCode(codes: var seq[string], ch: Rune): bool =
+  proc terminated(s: string): bool =
+    if s.len > 0:
+      let lastChar = s[s.len - 1]
+      return codeTerminators.contains(lastChar)
+    else:
+      return false
+  let s = $ch
+  if s == "\e":
+    codes.add(s)
+    return true
+  elif codes.len > 0 and not codes[codes.len - 1].terminated:
+    codes[codes.len - 1] &= s
+    return true
+  return false
+
+proc stripCodes*(line: seq[Rune]): seq[Rune] =
+  var codes: seq[string]
+  for ch in line:
+    if parseCode(codes, ch):
+      continue
+    result.add(ch)
+
+proc stripUnsearchableText*(content: string): string =
+  let idx = strutils.find(content, "\n\n")
+  if idx == -1: # this should never happen
+    return ""
+  else:
+    let body = content[idx + 2 ..< content.len] # remove headers
+    var newLines: seq[string]
+    for line in strutils.splitLines(body):
+      var
+        chars = stripCodes(line.toRunes) # remove escape codes
+        newLine: seq[string]
+      # replace ansi block chars with spaces
+      for ch in chars:
+        let s = $ch
+        if s in wavescript.whitespaceChars:
+          newLine.add(" ")
+        else:
+          newLine.add(s)
+      # delete trailing spaces in each line
+      for i in countdown(newLine.len-1, 0):
+        if newLine[i] == " ":
+          newLine.delete(i)
+        else:
+          break
+      newLines.add(strutils.join(newLine))
+    return strutils.join(newLines, "\n")
+

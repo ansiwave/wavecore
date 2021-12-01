@@ -7,6 +7,7 @@ from strutils import format
 from ../ed25519 import nil
 from ../paths import nil
 from times import nil
+from ../common import nil
 
 type
   CompressedValue* = object
@@ -240,7 +241,7 @@ proc insertPost*(conn: PSqlite3, entity: Post, extraFn: proc (x: Post, sig: stri
   let userId = selectUserExtras(conn, entity.public_key).user_id
 
   db.withStatement(conn, "INSERT INTO post_search (post_id, user_id, attribute, value) VALUES (?, ?, ?, ?)", stmt):
-    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), id, userId, "content", e.content.value.uncompressed)
+    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), id, userId, "content", common.stripUnsearchableText(e.content.value.uncompressed))
     if step(stmt) != SQLITE_DONE:
       db_sqlite.dbError(conn)
   db.withStatement(conn, "INSERT INTO post_search (post_id, user_id, attribute, value) VALUES (?, ?, ?, ?)", stmt):
@@ -312,7 +313,7 @@ proc editPost*(conn: PSqlite3, content: Content, key: string, extraFn: proc (x: 
       db_sqlite.dbError(conn)
 
   db.withStatement(conn, "UPDATE post_search SET value = ? WHERE post_id MATCH ? AND attribute MATCH 'content'", stmt):
-    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), content.value.compressed, post.post_id)
+    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), common.stripUnsearchableText(content.value.uncompressed), post.post_id)
     if step(stmt) != SQLITE_DONE:
       db_sqlite.dbError(conn)
 
