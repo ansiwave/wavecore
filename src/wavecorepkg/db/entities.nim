@@ -265,13 +265,14 @@ proc insertPost*(conn: PSqlite3, entity: Post, extraFn: proc (x: Post, sig: stri
       """.format(parentIds)
     db_sqlite.exec(conn, sql score_query)
 
-proc searchPosts*(conn: PSqlite3, term: string): seq[Post] =
-  const query =
+proc searchPosts*(conn: PSqlite3, term: string, offset: int = 0): seq[Post] =
+  let query =
     """
       SELECT content, content_sig, content_sig_last, public_key, parent, reply_count FROM post
       WHERE post_id IN (SELECT post_id FROM post_search WHERE attribute MATCH 'content' AND value MATCH ? ORDER BY rank)
       LIMIT $1
-    """.format(limit)
+      OFFSET $2
+    """.format(limit, offset)
   #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), term):
   #  echo x
   sequtils.toSeq(db.select[Post](conn, initPost, query, term))
