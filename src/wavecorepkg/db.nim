@@ -40,44 +40,6 @@ template withStatement*(conn: PSqlite3, query: string, stmt: PStmt, body: untype
     if finalize(stmt) != SQLITE_OK:
       db_sqlite.dbError(conn)
 
-proc init*(conn: PSqlite3) =
-  withTransaction(conn):
-    db_sqlite.exec conn, sql"""
-      CREATE TABLE user (
-        user_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        ts INTEGER,
-        public_key TEXT UNIQUE,
-        public_key_algo TEXT
-      ) STRICT
-    """
-    db_sqlite.exec conn, sql"CREATE INDEX user_public_key ON user(public_key)"
-    db_sqlite.exec conn, sql"CREATE INDEX user_public_key_ts ON user(public_key, ts)"
-    db_sqlite.exec conn, sql"CREATE VIRTUAL TABLE user_search USING fts5 (user_id, attribute, value, value_unindexed UNINDEXED)"
-    db_sqlite.exec conn, sql"""
-      CREATE TABLE post (
-        post_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        ts INTEGER,
-        content BLOB,
-        content_sig TEXT UNIQUE,
-        content_sig_last TEXT UNIQUE,
-        public_key TEXT,
-        parent TEXT,
-        parent_public_key TEXT,
-        reply_count INTEGER,
-        score INTEGER
-      ) STRICT
-    """
-    db_sqlite.exec conn, sql"CREATE INDEX post_content_sig ON post(content_sig)"
-    db_sqlite.exec conn, sql"CREATE INDEX post_content_sig_last ON post(content_sig_last)"
-    db_sqlite.exec conn, sql"CREATE INDEX post_public_key ON post(public_key)"
-    db_sqlite.exec conn, sql"CREATE INDEX post_public_key_ts ON post(public_key, ts)"
-    db_sqlite.exec conn, sql"CREATE INDEX post_parent ON post(parent)"
-    db_sqlite.exec conn, sql"CREATE INDEX post_parent_ts ON post(parent, ts)"
-    db_sqlite.exec conn, sql"CREATE INDEX post_parent_score ON post(parent, score)"
-    db_sqlite.exec conn, sql"CREATE INDEX post_parent_public_key ON post(parent_public_key)"
-    db_sqlite.exec conn, sql"CREATE INDEX post_parent_public_key_ts ON post(parent_public_key, ts)"
-    db_sqlite.exec conn, sql"CREATE VIRTUAL TABLE post_search USING fts5 (post_id, user_id, attribute, value, value_unindexed UNINDEXED)"
-
 proc select*[T](conn: PSqlite3, init: proc (stmt: PStmt): T, query: string, args: varargs[string, `$`]): seq[T] =
   var stmt: PStmt
   withStatement(conn, query, stmt):
@@ -85,4 +47,58 @@ proc select*[T](conn: PSqlite3, init: proc (stmt: PStmt): T, query: string, args
       db_sqlite.bindParam(db_sqlite.SqlPrepared(stmt), i+1, args[i])
     while step(stmt) == SQLITE_ROW:
       result.add(init(stmt))
+
+proc init*(conn: PSqlite3) =
+  var version =
+    select[tuple[version: int]](
+      conn,
+      proc (stmt: PStmt): tuple[version: int] =
+        var cols = sqlite3.column_count(stmt)
+        for col in 0 .. cols-1:
+          let colName = $sqlite3.column_name(stmt, col)
+          case colName:
+          of "user_version":
+            result.version = sqlite3.column_int(stmt, col)
+      ,
+      "PRAGMA user_version"
+    )[0].version
+  withTransaction(conn):
+    if version == 0:
+      db_sqlite.exec conn, sql"""
+        CREATE TABLE user (
+          user_id INTEGER PRIMARY KEY AUTOINCREMENT,
+          ts INTEGER,
+          public_key TEXT UNIQUE,
+          public_key_algo TEXT
+        ) STRICT
+      """
+      db_sqlite.exec conn, sql"CREATE INDEX user_public_key ON user(public_key)"
+      db_sqlite.exec conn, sql"CREATE INDEX user_public_key_ts ON user(public_key, ts)"
+      db_sqlite.exec conn, sql"CREATE VIRTUAL TABLE user_search USING fts5 (user_id, attribute, value, value_unindexed UNINDEXED)"
+      db_sqlite.exec conn, sql"""
+        CREATE TABLE post (
+          post_id INTEGER PRIMARY KEY AUTOINCREMENT,
+          ts INTEGER,
+          content BLOB,
+          content_sig TEXT UNIQUE,
+          content_sig_last TEXT UNIQUE,
+          public_key TEXT,
+          parent TEXT,
+          parent_public_key TEXT,
+          reply_count INTEGER,
+          score INTEGER
+        ) STRICT
+      """
+      db_sqlite.exec conn, sql"CREATE INDEX post_content_sig ON post(content_sig)"
+      db_sqlite.exec conn, sql"CREATE INDEX post_content_sig_last ON post(content_sig_last)"
+      db_sqlite.exec conn, sql"CREATE INDEX post_public_key ON post(public_key)"
+      db_sqlite.exec conn, sql"CREATE INDEX post_public_key_ts ON post(public_key, ts)"
+      db_sqlite.exec conn, sql"CREATE INDEX post_parent ON post(parent)"
+      db_sqlite.exec conn, sql"CREATE INDEX post_parent_ts ON post(parent, ts)"
+      db_sqlite.exec conn, sql"CREATE INDEX post_parent_score ON post(parent, score)"
+      db_sqlite.exec conn, sql"CREATE INDEX post_parent_public_key ON post(parent_public_key)"
+      db_sqlite.exec conn, sql"CREATE INDEX post_parent_public_key_ts ON post(parent_public_key, ts)"
+      db_sqlite.exec conn, sql"CREATE VIRTUAL TABLE post_search USING fts5 (post_id, user_id, attribute, value, value_unindexed UNINDEXED)"
+      version += 1
+      db_sqlite.exec conn, sql("PRAGMA user_version = " & $version)
 
