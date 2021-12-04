@@ -178,8 +178,8 @@ when isMainModule:
   discard osproc.execProcess("rm -r " & staticFileDir / paths.boardsDir)
   os.createDir(staticFileDir / paths.boardsDir / paths.sysopPublicKey / paths.ansiwavesDir)
   os.createDir(staticFileDir / paths.boardsDir / paths.sysopPublicKey / paths.dbDir)
-  var conn = db.open(staticFileDir / paths.db(paths.sysopPublicKey))
-  db.init(conn)
+  db.withOpen(conn, staticFileDir / paths.db(paths.sysopPublicKey), false):
+    db.init(conn)
   let sysop = entities.User(public_key: paths.sysopPublicKey)
   server.editPost(s, paths.sysopPublicKey, entities.initContent(common.signWithHeaders(sysopKeys, asciiArt, sysop.public_key, false), sysop.public_key), sysop.public_key)
   let subboard = entities.Post(parent: sysop.public_key, public_key: sysop.public_key, content: entities.initContent(common.signWithHeaders(sysopKeys, "General Discussion", sysop.public_key, true)))
@@ -205,6 +205,5 @@ when isMainModule:
   server.insertPost(s, paths.sysopPublicKey, entities.Post(parent: p5.content.sig, public_key: alice.public_key, content: entities.initContent(common.signWithHeaders(aliceKeys, "The navajo teepees i mean", p5.content.sig, true))))
   server.insertPost(s, paths.sysopPublicKey, entities.Post(parent: p5.content.sig, public_key: alice.public_key, content: entities.initContent(common.signWithHeaders(aliceKeys, "Acknowledge me plz", p5.content.sig, true))))
   discard readLine(stdin)
-  db_sqlite.close(conn)
   server.stop(s)
 
