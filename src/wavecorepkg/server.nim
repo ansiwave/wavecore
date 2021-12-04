@@ -52,6 +52,8 @@ const
     else:
       100
   recvTimeout = 2000
+  maxContentLength = 200000
+  maxHeaderCount = 100
 
 proc initServer*(hostname: string, port: int, staticFileDir: string = ""): Server =
   Server(hostname: hostname, port: port, staticFileDir: staticFileDir)
@@ -157,7 +159,6 @@ proc handleStatic(server: Server, request: Request, headers: var string, body: v
   var filePath = ""
   if request.reqMethod == httpcore.HttpGet and server.staticFileDir != "":
     let path = server.staticFileDir / request.uri.path
-    # TODO: ensure path is inside staticFileDir
     if fileExists(path):
       filePath = path
     else:
@@ -208,8 +209,12 @@ proc handle(server: Server, client: Socket) =
     # uri
     request.uri = uri.parseUri(parts[1])
     # headers
+    var headerCount = 0
     while true:
-      # TODO: max number of headers
+      if headerCount > maxHeaderCount:
+        raise newException(BadRequestException, "Too many headers")
+      else:
+        headerCount += 1
       var line = ""
       client.readLine(line, recvTimeout)
       if line == "\c\L":
@@ -220,9 +225,10 @@ proc handle(server: Server, client: Socket) =
     if httpcore.hasKey(request.headers, "Content-Length"):
       var contentLength = 0
       if parseutils.parseSaturatedNatural(request.headers["Content-Length"], contentLength) == 0:
-        raise newException(BadRequestException, "Bad Request. Invalid Content-Length.")
+        raise newException(BadRequestException, "Invalid Content-Length")
+      elif contentLength > maxContentLength:
+        raise newException(BadRequestException, "The Content-Length is too large")
       else:
-        # TODO: max content length
         request.body = client.recv(contentLength)
     # handle requests
     let dispatch = (reqMethod: request.reqMethod, path: request.uri.path)

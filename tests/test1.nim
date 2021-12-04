@@ -1,9 +1,12 @@
 import unittest
+from strutils import nil
+import json
+
 from ./wavecorepkg/client import nil
 from ./wavecorepkg/server import nil
-import json
 from ./wavecorepkg/ed25519 import nil
 from ./wavecorepkg/paths import nil
+from ./wavecorepkg/common import nil
 
 const
   port = 3001
@@ -51,12 +54,17 @@ import ./wavecorepkg/db/entities
 import ./wavecorepkg/db/vfs
 from os import `/`
 import sets
+from osproc import nil
 
-const
+let
+  sysopKeys = ed25519.initKeyPair()
+  sysopPublicKey = paths.encode(sysopKeys.public)
   bbsDir = "bbstest"
-  dbDirs = paths.db(paths.sysopPublicKey)
+  dbDirs = paths.db(sysopPublicKey)
   dbPath = bbsDir / dbDirs
-os.createDir(os.parentDir(dbPath))
+discard osproc.execProcess("rm -r " & bbsDir)
+os.createDir(bbsDir / paths.boardsDir / sysopPublicKey / paths.ansiwavesDir)
+os.createDir(bbsDir / paths.boardsDir / sysopPublicKey / paths.dbDir)
 
 vfs.readUrl = "http://localhost:" & $port & "/" & dbDirs
 vfs.register()
@@ -283,6 +291,37 @@ test "retrieve sqlite db via http":
   finally:
     os.removeFile(dbPath)
     server.stop(s)
+
+test "submit an ansiwave":
+  var s = server.initServer("localhost", port, bbsDir)
+  server.start(s)
+  var c = client.initClient(address)
+  client.start(c)
+  try:
+    # create test db
+    var subboard: Post
+    db.withOpen(conn, dbPath, false):
+      db.init(conn)
+      let sysop = entities.User(public_key: sysopPublicKey)
+      server.editPost(s, sysopPublicKey, entities.initContent(common.signWithHeaders(sysopKeys, "Welcome to my BBS", sysop.public_key, false), sysop.public_key), sysop.public_key)
+      subboard = entities.Post(parent: sysop.public_key, public_key: sysop.public_key, content: entities.initContent(common.signWithHeaders(sysopKeys, "General Discussion", sysop.public_key, true)))
+      server.insertPost(s, sysopPublicKey, subboard)
+    let aliceKeys = ed25519.initKeyPair()
+    block:
+      let (body, sig) = common.signWithHeaders(aliceKeys, "Hi i'm alice", subboard.content.sig, true, sysopPublicKey)
+      var res = client.submit(c, "ansiwave", body)
+      client.get(res, true)
+      check res.value.kind == client.Valid
+    block:
+      const hulk = staticRead("hulk.ansiwave")
+      let (body, sig) = common.signWithHeaders(aliceKeys, strutils.repeat(hulk, 15), subboard.content.sig, true, sysopPublicKey)
+      var res = client.submit(c, "ansiwave", body)
+      client.get(res, true)
+      check res.value.kind == client.Error
+  finally:
+    os.removeFile(dbPath)
+    server.stop(s)
+    client.stop(c)
 
 test "ed25519":
   var

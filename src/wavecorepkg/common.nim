@@ -6,14 +6,14 @@ import tables, sets
 from times import nil
 import unicode
 
-proc headers*(pubKey: string, target: string, isNew: bool): string =
+proc headers*(pubKey: string, target: string, isNew: bool, board: string = paths.sysopPublicKey): string =
   strutils.join(
     [
       "/head.key " & pubKey,
       "/head.algo ed25519",
       "/head.target " & target,
       "/head.type " & (if isNew: "new" else: "edit"),
-      "/head.board " & paths.sysopPublicKey,
+      "/head.board " & board,
     ],
     "\n",
   )
@@ -24,8 +24,8 @@ proc sign*(keyPair: ed25519.KeyPair, headers: string, content: string): tuple[bo
   result.sig = paths.encode(ed25519.sign(keyPair, result.body))
   result.body = "/head.sig " & result.sig & "\n" & result.body
 
-proc signWithHeaders*(keyPair: ed25519.KeyPair, content: string, target: string, isNew: bool): tuple[body: string, sig: string] =
-  sign(keyPair, headers(paths.encode(keyPair.public), target, isNew), content)
+proc signWithHeaders*(keyPair: ed25519.KeyPair, content: string, target: string, isNew: bool, board: string = paths.sysopPublicKey): tuple[body: string, sig: string] =
+  sign(keyPair, headers(paths.encode(keyPair.public), target, isNew, board), content)
 
 proc parseAnsiwave*(ansiwave: string): tuple[cmds: Table[string, string], headersAndContent: string, content: string] =
   let col = unicode.validateUtf8(ansiwave)
