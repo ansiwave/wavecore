@@ -1,2 +1,3 @@
 --threads:on
 --define:staticSqlite
+--define:multiplexSqlite

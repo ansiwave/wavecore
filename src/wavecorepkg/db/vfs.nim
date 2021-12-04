@@ -5,15 +5,17 @@ from strformat import fmt
 import ../client
 from urlly import nil
 import bitops
-
-const chunkSize = bitand(102400 + 0xffff, bitnot 0xffff)
-{.passC: "-DSQLITE_MULTIPLEX_CHUNK_SIZE=" & $chunkSize.}
-{.compile: "sqlite3_multiplex.c".}
-
 import json
-const manifestFile = "manifest.json"
 
-proc sqlite3_multiplex_initialize(zOrigVfsName: cstring, makeDefault: cint): cint {.cdecl, importc.}
+const
+  chunkSize = bitand(102400 + 0xffff, bitnot 0xffff)
+  manifestFile = "manifest.json"
+
+when defined(multiplexSqlite):
+  {.passC: "-DSQLITE_MULTIPLEX_CHUNK_SIZE=" & $chunkSize.}
+  {.compile: "sqlite3_multiplex.c".}
+
+  proc sqlite3_multiplex_initialize(zOrigVfsName: cstring, makeDefault: cint): cint {.cdecl, importc.}
 
 type
   sqlite3_vfs* {.bycopy.} = object
@@ -187,10 +189,12 @@ let httpVfs = sqlite3_vfs(
 proc sqlite3_vfs_register(vfs: ptr sqlite3_vfs, makeDflt: cint): cint {.cdecl, importc.}
 
 proc register*() =
-  assert SQLITE_OK == sqlite3_multiplex_initialize(nil, 0)
-  assert SQLITE_OK == sqlite3_vfs_register(httpVfs.unsafeAddr, 0)
+  when defined(multiplexSqlite):
+    doAssert SQLITE_OK == sqlite3_multiplex_initialize(nil, 0)
+  doAssert SQLITE_OK == sqlite3_vfs_register(httpVfs.unsafeAddr, 0)
 
-proc wavecore_save_manifest(fileName: cstring, fileSize: int64): cint {.cdecl, exportc.} =
-  writeFile(os.parentDir($fileName).joinPath(manifestFile), $ %* {"total-size": fileSize, "chunk-size": chunkSize})
-  0
+when defined(multiplexSqlite):
+  proc wavecore_save_manifest(fileName: cstring, fileSize: int64): cint {.cdecl, exportc.} =
+    writeFile(os.parentDir($fileName).joinPath(manifestFile), $ %* {"total-size": fileSize, "chunk-size": chunkSize})
+    0
 
