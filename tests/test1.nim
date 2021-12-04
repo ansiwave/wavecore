@@ -49,11 +49,16 @@ test "Request static file asynchronously":
 import ./wavecorepkg/db
 import ./wavecorepkg/db/entities
 import ./wavecorepkg/db/vfs
-from os import nil
+from os import `/`
 import sets
 
-const dbFilename = "test.db"
-vfs.readUrl = "http://localhost:" & $port & "/" & dbFilename
+const
+  bbsDir = "bbstest"
+  dbDirs = paths.db(paths.sysopPublicKey)
+  dbPath = bbsDir / dbDirs
+os.createDir(os.parentDir(dbPath))
+
+vfs.readUrl = "http://localhost:" & $port & "/" & dbDirs
 vfs.register()
 
 test "query users":
@@ -70,7 +75,7 @@ test "query users":
     check bob == entities.selectUser(conn, bob.public_key)
 
 test "query users asynchronously":
-  var s = server.initServer("localhost", port, ".")
+  var s = server.initServer("localhost", port, bbsDir)
   server.start(s)
   var c = client.initClient(address)
   client.start(c)
@@ -78,7 +83,7 @@ test "query users asynchronously":
     var
       alice, bob: User
     # create test db
-    db.withOpen(conn, dbFilename, false):
+    db.withOpen(conn, dbPath, false):
       db.init(conn)
       let
         aliceKeys = ed25519.initKeyPair()
@@ -88,18 +93,18 @@ test "query users asynchronously":
       entities.insertUser(conn, alice)
       entities.insertUser(conn, bob)
     # query db over http
-    var response = client.queryUser(c, dbFilename, alice.publicKey)
+    var response = client.queryUser(c, dbPath, alice.publicKey)
     client.get(response, true)
     check response.value.valid == alice
-    var response2 = client.queryUser(c, dbFilename, bob.publicKey)
+    var response2 = client.queryUser(c, dbPath, bob.publicKey)
     client.get(response2, true)
     check response2.value.valid == bob
     # query something invalid
-    var response3 = client.queryUser(c, dbFilename, "STUFF")
+    var response3 = client.queryUser(c, dbPath, "STUFF")
     client.get(response3, true)
     check response3.value.kind == client.Error
   finally:
-    os.removeFile(dbFilename)
+    os.removeFile(dbPath)
     server.stop(s)
     client.stop(c)
 
@@ -134,7 +139,7 @@ test "query posts":
     check [p1, p3, p4].toHashSet == entities.selectUserPosts(conn, alice.public_key).toHashSet
 
 test "query posts asynchronously":
-  var s = server.initServer("localhost", port, ".")
+  var s = server.initServer("localhost", port, bbsDir)
   server.start(s)
   var c = client.initClient(address)
   client.start(c)
@@ -143,7 +148,7 @@ test "query posts asynchronously":
       alice, bob: User
       p1, p2, p3, p4: Post
     # create test db
-    db.withOpen(conn, dbFilename, false):
+    db.withOpen(conn, dbPath, false):
       db.init(conn)
       let
         aliceKeys = ed25519.initKeyPair()
@@ -162,21 +167,21 @@ test "query posts asynchronously":
       entities.insertPost(conn, p4)
       p1 = entities.selectPost(conn, p1.content.sig)
     # query db over http
-    var response = client.queryPost(c, dbFilename, p1.content.sig)
+    var response = client.queryPost(c, dbPath, p1.content.sig)
     client.get(response, true)
     check response.value.valid == p1
-    var response2 = client.queryPostChildren(c, dbFilename, p2.content.sig)
+    var response2 = client.queryPostChildren(c, dbPath, p2.content.sig)
     client.get(response2, true)
     check response2.value.valid == @[p4, p3]
-    var response3 = client.queryUserPosts(c, dbFilename, alice.public_key)
+    var response3 = client.queryUserPosts(c, dbPath, alice.public_key)
     client.get(response3, true)
     check response3.value.valid.toHashSet == [p4, p3, p1].toHashSet
     # query something invalid
-    var response4 = client.queryPost(c, dbFilename, "yo")
+    var response4 = client.queryPost(c, dbPath, "yo")
     client.get(response4, true)
     check response4.value.kind == client.Error
   finally:
-    os.removeFile(dbFilename)
+    os.removeFile(dbPath)
     server.stop(s)
     client.stop(c)
 
@@ -254,12 +259,12 @@ test "post to blog":
       entities.insertPost(conn, Post(parent: alice.public_key, public_key: bob.public_key, content: entities.initContent(bobKeys, "I shouldn't be able to post here")))
 
 test "retrieve sqlite db via http":
-  var s = server.initServer("localhost", port, ".")
+  var s = server.initServer("localhost", port, bbsDir)
   server.start(s)
   try:
     var alice, bob: User
     # create test db
-    db.withOpen(conn, dbFilename, false):
+    db.withOpen(conn, dbPath, false):
       db.init(conn)
       let
         aliceKeys = ed25519.initKeyPair()
@@ -269,14 +274,14 @@ test "retrieve sqlite db via http":
       entities.insertUser(conn, alice)
       entities.insertUser(conn, bob)
     # re-open db, but this time all reads happen over http
-    db.withOpen(conn, dbFilename, true):
+    db.withOpen(conn, dbPath, true):
       let
         alice2 = entities.selectUser(conn, alice.public_key)
         bob2 = entities.selectUser(conn, bob.public_key)
       check alice == alice2
       check bob == bob2
   finally:
-    os.removeFile(dbFilename)
+    os.removeFile(dbPath)
     server.stop(s)
 
 test "ed25519":
