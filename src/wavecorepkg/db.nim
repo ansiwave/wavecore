@@ -20,11 +20,12 @@ proc open*(filename: string, http: bool = false): PSqlite3 =
     db_sqlite.dbError(result)
 
 template withOpen*(conn: untyped, filename: string, http: bool, body: untyped) =
-  let conn = open(filename, http)
-  try:
-    body
-  finally:
-    db_sqlite.close(conn)
+  block:
+    let conn = open(filename, http)
+    try:
+      body
+    finally:
+      db_sqlite.close(conn)
 
 template withTransaction*(conn: PSqlite3, body: untyped) =
   db_sqlite.exec(conn, sql"BEGIN TRANSACTION")

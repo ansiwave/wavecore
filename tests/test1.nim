@@ -49,7 +49,6 @@ test "Request static file asynchronously":
 import ./wavecorepkg/db
 import ./wavecorepkg/db/entities
 import ./wavecorepkg/db/vfs
-from ./wavecorepkg/db/db_sqlite import nil
 from os import nil
 import sets
 
@@ -58,27 +57,7 @@ vfs.readUrl = "http://localhost:" & $port & "/" & dbFilename
 vfs.register()
 
 test "query users":
-  let conn = db.open(":memory:")
-  db.init(conn)
-  let
-    aliceKeys = ed25519.initKeyPair()
-    bobKeys = ed25519.initKeyPair()
-    alice = User(public_key: paths.encode(aliceKeys.public))
-    bob = User(public_key: paths.encode(bobKeys.public))
-  entities.insertUser(conn, alice)
-  entities.insertUser(conn, bob)
-  check alice == entities.selectUser(conn, alice.public_key)
-  check bob == entities.selectUser(conn, bob.public_key)
-  db_sqlite.close(conn)
-
-test "query users asynchronously":
-  var s = server.initServer("localhost", port, ".")
-  server.start(s)
-  var c = client.initClient(address)
-  client.start(c)
-  try:
-    # create test db
-    let conn = db.open(dbFilename)
+  db.withOpen(conn, ":memory:", false):
     db.init(conn)
     let
       aliceKeys = ed25519.initKeyPair()
@@ -87,7 +66,27 @@ test "query users asynchronously":
       bob = User(public_key: paths.encode(bobKeys.public))
     entities.insertUser(conn, alice)
     entities.insertUser(conn, bob)
-    db_sqlite.close(conn)
+    check alice == entities.selectUser(conn, alice.public_key)
+    check bob == entities.selectUser(conn, bob.public_key)
+
+test "query users asynchronously":
+  var s = server.initServer("localhost", port, ".")
+  server.start(s)
+  var c = client.initClient(address)
+  client.start(c)
+  try:
+    var
+      alice, bob: User
+    # create test db
+    db.withOpen(conn, dbFilename, false):
+      db.init(conn)
+      let
+        aliceKeys = ed25519.initKeyPair()
+        bobKeys = ed25519.initKeyPair()
+      alice = User(public_key: paths.encode(aliceKeys.public))
+      bob = User(public_key: paths.encode(bobKeys.public))
+      entities.insertUser(conn, alice)
+      entities.insertUser(conn, bob)
     # query db over http
     var response = client.queryUser(c, dbFilename, alice.publicKey)
     client.get(response, true)
@@ -105,44 +104,7 @@ test "query users asynchronously":
     client.stop(c)
 
 test "query posts":
-  let conn = db.open(":memory:")
-  db.init(conn)
-  let
-    aliceKeys = ed25519.initKeyPair()
-    bobKeys = ed25519.initKeyPair()
-    alice = User(public_key: paths.encode(aliceKeys.public))
-    bob = User(public_key: paths.encode(bobKeys.public))
-  entities.insertUser(conn, alice)
-  entities.insertUser(conn, bob)
-  var p1 = Post(parent: alice.public_key, public_key: alice.public_key, content: entities.initContent(aliceKeys, "Hello, i'm alice"))
-  entities.insertPost(conn, p1)
-  var p2 = Post(parent: p1.content.sig, public_key: bob.public_key, content: entities.initContent(bobKeys, "Hello, i'm bob"))
-  entities.insertPost(conn, p2)
-  var p3 = Post(parent: p2.content.sig, public_key: alice.public_key, content: entities.initContent(aliceKeys, "What's up"))
-  entities.insertPost(conn, p3)
-  var p4 = Post(parent: p2.content.sig, public_key: alice.public_key, content: entities.initContent(aliceKeys, "How are you?"))
-  entities.insertPost(conn, p4)
-  expect Exception:
-    entities.insertPost(conn, Post(parent: "invalid parent", public_key: alice.public_key, content: entities.initContent(aliceKeys, "How are you?")))
-  p1 = entities.selectPost(conn, p1.content.sig)
-  p2 = entities.selectPost(conn, p2.content.sig)
-  p3 = entities.selectPost(conn, p3.content.sig)
-  p4 = entities.selectPost(conn, p4.content.sig)
-  check @[p2] == entities.selectPostChildren(conn, p1.content.sig)
-  check 3 == entities.selectPost(conn, p1.content.sig).reply_count
-  check @[p4, p3] == entities.selectPostChildren(conn, p2.content.sig)
-  check 2 == entities.selectPost(conn, p2.content.sig).reply_count
-  check [p1, p3, p4].toHashSet == entities.selectUserPosts(conn, alice.public_key).toHashSet
-  db_sqlite.close(conn)
-
-test "query posts asynchronously":
-  var s = server.initServer("localhost", port, ".")
-  server.start(s)
-  var c = client.initClient(address)
-  client.start(c)
-  try:
-    # create test db
-    let conn = db.open(dbFilename)
+  db.withOpen(conn, ":memory:", false):
     db.init(conn)
     let
       aliceKeys = ed25519.initKeyPair()
@@ -159,8 +121,46 @@ test "query posts asynchronously":
     entities.insertPost(conn, p3)
     var p4 = Post(parent: p2.content.sig, public_key: alice.public_key, content: entities.initContent(aliceKeys, "How are you?"))
     entities.insertPost(conn, p4)
+    expect Exception:
+      entities.insertPost(conn, Post(parent: "invalid parent", public_key: alice.public_key, content: entities.initContent(aliceKeys, "How are you?")))
     p1 = entities.selectPost(conn, p1.content.sig)
-    db_sqlite.close(conn)
+    p2 = entities.selectPost(conn, p2.content.sig)
+    p3 = entities.selectPost(conn, p3.content.sig)
+    p4 = entities.selectPost(conn, p4.content.sig)
+    check @[p2] == entities.selectPostChildren(conn, p1.content.sig)
+    check 3 == entities.selectPost(conn, p1.content.sig).reply_count
+    check @[p4, p3] == entities.selectPostChildren(conn, p2.content.sig)
+    check 2 == entities.selectPost(conn, p2.content.sig).reply_count
+    check [p1, p3, p4].toHashSet == entities.selectUserPosts(conn, alice.public_key).toHashSet
+
+test "query posts asynchronously":
+  var s = server.initServer("localhost", port, ".")
+  server.start(s)
+  var c = client.initClient(address)
+  client.start(c)
+  try:
+    var
+      alice, bob: User
+      p1, p2, p3, p4: Post
+    # create test db
+    db.withOpen(conn, dbFilename, false):
+      db.init(conn)
+      let
+        aliceKeys = ed25519.initKeyPair()
+        bobKeys = ed25519.initKeyPair()
+      alice = User(public_key: paths.encode(aliceKeys.public))
+      bob = User(public_key: paths.encode(bobKeys.public))
+      entities.insertUser(conn, alice)
+      entities.insertUser(conn, bob)
+      p1 = Post(parent: alice.public_key, public_key: alice.public_key, content: entities.initContent(aliceKeys, "Hello, i'm alice"))
+      entities.insertPost(conn, p1)
+      p2 = Post(parent: p1.content.sig, public_key: bob.public_key, content: entities.initContent(bobKeys, "Hello, i'm bob"))
+      entities.insertPost(conn, p2)
+      p3 = Post(parent: p2.content.sig, public_key: alice.public_key, content: entities.initContent(aliceKeys, "What's up"))
+      entities.insertPost(conn, p3)
+      p4 = Post(parent: p2.content.sig, public_key: alice.public_key, content: entities.initContent(aliceKeys, "How are you?"))
+      entities.insertPost(conn, p4)
+      p1 = entities.selectPost(conn, p1.content.sig)
     # query db over http
     var response = client.queryPost(c, dbFilename, p1.content.sig)
     client.get(response, true)
@@ -181,88 +181,7 @@ test "query posts asynchronously":
     client.stop(c)
 
 test "search posts":
-  let conn = db.open(":memory:")
-  db.init(conn)
-  let
-    aliceKeys = ed25519.initKeyPair()
-    bobKeys = ed25519.initKeyPair()
-    alice = User(public_key: paths.encode(aliceKeys.public))
-    bob = User(public_key: paths.encode(bobKeys.public))
-  entities.insertUser(conn, alice)
-  entities.insertUser(conn, bob)
-  var p1 = Post(parent: alice.public_key, public_key: alice.public_key, content: entities.initContent(aliceKeys, "Hello, i'm alice"))
-  entities.insertPost(conn, p1)
-  var p2 = Post(parent: p1.content.sig, public_key: bob.public_key, content: entities.initContent(bobKeys, "Hello, i'm bob"))
-  entities.insertPost(conn, p2)
-  p1 = entities.selectPost(conn, p1.content.sig)
-  p2 = entities.selectPost(conn, p2.content.sig)
-  check @[p1, p2] == entities.searchPosts(conn, "hello")
-  db_sqlite.close(conn)
-
-test "score":
-  let conn = db.open(":memory:")
-  db.init(conn)
-  let
-    aliceKeys = ed25519.initKeyPair()
-    bobKeys = ed25519.initKeyPair()
-    alice = User(public_key: paths.encode(aliceKeys.public))
-    bob = User(public_key: paths.encode(bobKeys.public))
-  entities.insertUser(conn, alice)
-  entities.insertUser(conn, bob)
-  let p1 = Post(parent: alice.public_key, public_key: alice.public_key, content: entities.initContent(aliceKeys, "Hello, i'm alice"))
-  entities.insertPost(conn, p1)
-  let p2 = Post(parent: p1.content.sig, public_key: bob.public_key, content: entities.initContent(bobKeys, "Hello, i'm bob"))
-  entities.insertPost(conn, p2)
-  let p3 = Post(parent: p2.content.sig, public_key: alice.public_key, content: entities.initContent(aliceKeys, "What's up"))
-  entities.insertPost(conn, p3)
-  let p4 = Post(parent: p2.content.sig, public_key: alice.public_key, content: entities.initContent(aliceKeys, "How are you?"))
-  entities.insertPost(conn, p4)
-  check 2 == entities.selectPostExtras(conn, p1.content.sig).score
-  db_sqlite.close(conn)
-
-test "edit post":
-  let conn = db.open(":memory:")
-  db.init(conn)
-  let
-    aliceKeys = ed25519.initKeyPair()
-    bobKeys = ed25519.initKeyPair()
-    alice = User(public_key: paths.encode(aliceKeys.public))
-    bob = User(public_key: paths.encode(bobKeys.public))
-  entities.insertUser(conn, alice)
-  entities.insertUser(conn, bob)
-  let p1 = Post(parent: alice.public_key, public_key: alice.public_key, content: entities.initContent(aliceKeys, "I like turtles"))
-  entities.insertPost(conn, p1)
-  let newText = "I hate turtles"
-  var newContent = entities.initContent(aliceKeys, newText)
-  newContent.sig_last = p1.content.sig
-  entities.editPost(conn, newContent, alice.public_key)
-  check entities.searchPosts(conn, "like").len == 0
-  check entities.searchPosts(conn, "hate").len == 1
-  expect Exception:
-    entities.editPost(conn, newContent, bob.public_key)
-  db_sqlite.close(conn)
-
-test "post to blog":
-  let conn = db.open(":memory:")
-  db.init(conn)
-  let
-    aliceKeys = ed25519.initKeyPair()
-    bobKeys = ed25519.initKeyPair()
-    alice = User(public_key: paths.encode(aliceKeys.public))
-    bob = User(public_key: paths.encode(bobKeys.public))
-  entities.insertUser(conn, alice)
-  entities.insertUser(conn, bob)
-  entities.insertPost(conn, Post(parent: alice.public_key, public_key: alice.public_key, content: entities.initContent(aliceKeys, "My first blog post")))
-  expect Exception:
-    entities.insertPost(conn, Post(parent: alice.public_key, public_key: bob.public_key, content: entities.initContent(bobKeys, "I shouldn't be able to post here")))
-  db_sqlite.close(conn)
-
-test "retrieve sqlite db via http":
-  var s = server.initServer("localhost", port, ".")
-  server.start(s)
-  try:
-    # create test db
-    var conn = db.open(dbFilename)
+  db.withOpen(conn, ":memory:", false):
     db.init(conn)
     let
       aliceKeys = ed25519.initKeyPair()
@@ -271,15 +190,91 @@ test "retrieve sqlite db via http":
       bob = User(public_key: paths.encode(bobKeys.public))
     entities.insertUser(conn, alice)
     entities.insertUser(conn, bob)
-    db_sqlite.close(conn)
-    # re-open db, but this time all reads happen over http
-    conn = db.open(dbFilename, true)
+    var p1 = Post(parent: alice.public_key, public_key: alice.public_key, content: entities.initContent(aliceKeys, "Hello, i'm alice"))
+    entities.insertPost(conn, p1)
+    var p2 = Post(parent: p1.content.sig, public_key: bob.public_key, content: entities.initContent(bobKeys, "Hello, i'm bob"))
+    entities.insertPost(conn, p2)
+    p1 = entities.selectPost(conn, p1.content.sig)
+    p2 = entities.selectPost(conn, p2.content.sig)
+    check @[p1, p2] == entities.searchPosts(conn, "hello")
+
+test "score":
+  db.withOpen(conn, ":memory:", false):
+    db.init(conn)
     let
-      alice2 = entities.selectUser(conn, alice.public_key)
-      bob2 = entities.selectUser(conn, bob.public_key)
-    check alice == alice2
-    check bob == bob2
-    db_sqlite.close(conn)
+      aliceKeys = ed25519.initKeyPair()
+      bobKeys = ed25519.initKeyPair()
+      alice = User(public_key: paths.encode(aliceKeys.public))
+      bob = User(public_key: paths.encode(bobKeys.public))
+    entities.insertUser(conn, alice)
+    entities.insertUser(conn, bob)
+    let p1 = Post(parent: alice.public_key, public_key: alice.public_key, content: entities.initContent(aliceKeys, "Hello, i'm alice"))
+    entities.insertPost(conn, p1)
+    let p2 = Post(parent: p1.content.sig, public_key: bob.public_key, content: entities.initContent(bobKeys, "Hello, i'm bob"))
+    entities.insertPost(conn, p2)
+    let p3 = Post(parent: p2.content.sig, public_key: alice.public_key, content: entities.initContent(aliceKeys, "What's up"))
+    entities.insertPost(conn, p3)
+    let p4 = Post(parent: p2.content.sig, public_key: alice.public_key, content: entities.initContent(aliceKeys, "How are you?"))
+    entities.insertPost(conn, p4)
+    check 2 == entities.selectPostExtras(conn, p1.content.sig).score
+
+test "edit post":
+  db.withOpen(conn, ":memory:", false):
+    db.init(conn)
+    let
+      aliceKeys = ed25519.initKeyPair()
+      bobKeys = ed25519.initKeyPair()
+      alice = User(public_key: paths.encode(aliceKeys.public))
+      bob = User(public_key: paths.encode(bobKeys.public))
+    entities.insertUser(conn, alice)
+    entities.insertUser(conn, bob)
+    let p1 = Post(parent: alice.public_key, public_key: alice.public_key, content: entities.initContent(aliceKeys, "I like turtles"))
+    entities.insertPost(conn, p1)
+    let newText = "I hate turtles"
+    var newContent = entities.initContent(aliceKeys, newText)
+    newContent.sig_last = p1.content.sig
+    entities.editPost(conn, newContent, alice.public_key)
+    check entities.searchPosts(conn, "like").len == 0
+    check entities.searchPosts(conn, "hate").len == 1
+    expect Exception:
+      entities.editPost(conn, newContent, bob.public_key)
+
+test "post to blog":
+  db.withOpen(conn, ":memory:", false):
+    db.init(conn)
+    let
+      aliceKeys = ed25519.initKeyPair()
+      bobKeys = ed25519.initKeyPair()
+      alice = User(public_key: paths.encode(aliceKeys.public))
+      bob = User(public_key: paths.encode(bobKeys.public))
+    entities.insertUser(conn, alice)
+    entities.insertUser(conn, bob)
+    entities.insertPost(conn, Post(parent: alice.public_key, public_key: alice.public_key, content: entities.initContent(aliceKeys, "My first blog post")))
+    expect Exception:
+      entities.insertPost(conn, Post(parent: alice.public_key, public_key: bob.public_key, content: entities.initContent(bobKeys, "I shouldn't be able to post here")))
+
+test "retrieve sqlite db via http":
+  var s = server.initServer("localhost", port, ".")
+  server.start(s)
+  try:
+    var alice, bob: User
+    # create test db
+    db.withOpen(conn, dbFilename, false):
+      db.init(conn)
+      let
+        aliceKeys = ed25519.initKeyPair()
+        bobKeys = ed25519.initKeyPair()
+      alice = User(public_key: paths.encode(aliceKeys.public))
+      bob = User(public_key: paths.encode(bobKeys.public))
+      entities.insertUser(conn, alice)
+      entities.insertUser(conn, bob)
+    # re-open db, but this time all reads happen over http
+    db.withOpen(conn, dbFilename, true):
+      let
+        alice2 = entities.selectUser(conn, alice.public_key)
+        bob2 = entities.selectUser(conn, bob.public_key)
+      check alice == alice2
+      check bob == bob2
   finally:
     os.removeFile(dbFilename)
     server.stop(s)
