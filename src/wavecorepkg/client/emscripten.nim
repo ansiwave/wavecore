@@ -78,7 +78,7 @@ proc emscripten_worker_respond(data: cstring, size: cint) {.importc.}
 proc wavecore_fetch(url: cstring, verb: cstring, headers: cstring, body: cstring): cstring {.importc.}
 proc wavecore_set_innerhtml(selector: cstring, html: cstring) {.importc.}
 proc wavecore_set_display(selector: cstring, display: cstring) {.importc.}
-proc wavecore_set_size_max(selector: cstring, xadd: cint, yadd: cint) {.importc.}
+proc wavecore_set_size_max(selector: cstring, ratio: cfloat, xadd: cint, yadd: cint) {.importc.}
 proc wavecore_browse_file(callback: cstring) {.importc.}
 proc wavecore_get_pixel_density(): cfloat {.importc.}
 proc wavecore_start_download(data_uri: cstring, filename: cstring) {.importc.}
@@ -122,8 +122,8 @@ proc setInnerHtml*(selector: string, html: string) =
 proc setDisplay*(selector: string, display: string) =
   wavecore_set_display(selector, display)
 
-proc setSizeMax*(selector: string, xadd: int32, yadd: int32) =
-  wavecore_set_size_max(selector, xadd, yadd)
+proc setSizeMax*(selector: string, ratio: float32, xadd: int32, yadd: int32) =
+  wavecore_set_size_max(selector, ratio, xadd, yadd)
 
 proc browseFile*(callback: string) =
   wavecore_browse_file(callback)

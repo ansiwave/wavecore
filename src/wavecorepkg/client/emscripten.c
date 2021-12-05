@@ -47,10 +47,10 @@ EM_JS(void, wavecore_set_display, (const char* selector, const char* display), {
   elem.style.display = UTF8ToString(display);
 });
 
-EM_JS(void, wavecore_set_size_max, (const char* selector, int xadd, int yadd), {
+EM_JS(void, wavecore_set_size_max, (const char* selector, float ratio, int xadd, int yadd), {
   var elem = document.querySelector(UTF8ToString(selector));
-  elem.width = document.documentElement.clientWidth * window.devicePixelRatio + xadd;
-  elem.height = document.documentElement.clientHeight * window.devicePixelRatio + yadd;
+  elem.width = document.documentElement.clientWidth * ratio + xadd;
+  elem.height = document.documentElement.clientHeight * ratio + yadd;
 });
 
 EM_JS(void, wavecore_browse_file, (const char* callback), {
