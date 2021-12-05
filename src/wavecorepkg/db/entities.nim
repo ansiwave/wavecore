@@ -120,15 +120,15 @@ proc selectPostParentIds(conn: PSqlite3, id: int64): string =
         result.parent_ids = $sqlite3.column_text(stmt, col)
   db.select[tuple[parent_ids: string]](conn, init, query, id)[0].parent_ids
 
-proc selectPostChildren*(conn: PSqlite3, sig: string, offset: int = 0): seq[Post] =
+proc selectPostChildren*(conn: PSqlite3, sig: string, sortByTs: bool = false, offset: int = 0): seq[Post] =
   let query =
     """
       SELECT content, content_sig, content_sig_last, public_key, parent, reply_count FROM post
       WHERE parent = ?
-      ORDER BY score DESC
-      LIMIT $1
-      OFFSET $2
-    """.format(limit, offset)
+      ORDER BY $1 DESC
+      LIMIT $2
+      OFFSET $3
+    """.format((if sortByTs: "ts" else: "score"), limit, offset)
   #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), sig):
   #  echo x
   sequtils.toSeq(db.select[Post](conn, initPost, query, sig))

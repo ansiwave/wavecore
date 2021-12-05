@@ -49,6 +49,7 @@ type
       postSig*: string
     of QueryPostChildren:
       postParentSig*: string
+      sortByTs*: bool
     of QueryUserPosts:
       userPostsPublicKey*: string
     of SearchPosts:
@@ -203,8 +204,8 @@ proc sendUserQuery*(client: Client, filename: string, publicKey: string, chan: C
 proc sendPostQuery*(client: Client, filename: string, sig: string, chan: ChannelRef) =
   sendAction(client, Action(kind: QueryPost, dbFilename: filename, postSig: sig), chan)
 
-proc sendPostChildrenQuery*(client: Client, filename: string, sig: string, offset: int, chan: ChannelRef) =
-  sendAction(client, Action(kind: QueryPostChildren, dbFilename: filename, offset: offset, postParentSig: sig), chan)
+proc sendPostChildrenQuery*(client: Client, filename: string, sig: string, sortByTs: bool, offset: int, chan: ChannelRef) =
+  sendAction(client, Action(kind: QueryPostChildren, dbFilename: filename, sortByTs: sortByTs, offset: offset, postParentSig: sig), chan)
 
 proc sendUserPostsQuery*(client: Client, filename: string, publicKey: string, offset: int, chan: ChannelRef) =
   sendAction(client, Action(kind: QueryUserPosts, dbFilename: filename, offset: offset, userPostsPublicKey: publicKey), chan)
@@ -255,7 +256,7 @@ proc recvAction(data: pointer, size: cint) {.exportc.} =
       try:
         var s: string
         db.withOpen(conn, action.dbFilename, true):
-          let posts = entities.selectPostChildren(conn, action.postParentSig, action.offset)
+          let posts = entities.selectPostChildren(conn, action.postParentSig, action.sortByTs, action.offset)
           s = flatty.toFlatty(Result[seq[entities.Post]](kind: Valid, valid: posts))
         s
       except Exception as ex:
