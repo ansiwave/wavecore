@@ -69,16 +69,26 @@ os.createDir(bbsDir / paths.boardsDir / sysopPublicKey / paths.dbDir)
 vfs.readUrl = "http://localhost:" & $port & "/" & dbDirs
 vfs.register()
 
+proc initUser(publicKey: string): User =
+  entities.User(public_key: publicKey, tags: entities.Tags(sig: publicKey))
+
+proc initContent(keys: ed25519.KeyPair, origContent: string): entities.Content =
+  let content = "\n\n" & origContent # add two newlines to simulate where headers would've been
+  result.value = initCompressedValue(content)
+  result.sig = paths.encode(ed25519.sign(keys, content))
+  result.sig_last = result.sig
+
 test "query users":
   db.withOpen(conn, ":memory:", false):
     db.init(conn)
     let
       aliceKeys = ed25519.initKeyPair()
       bobKeys = ed25519.initKeyPair()
-      alice = User(public_key: paths.encode(aliceKeys.public))
-      bob = User(public_key: paths.encode(bobKeys.public))
-    entities.insertUser(conn, alice)
-    entities.insertUser(conn, bob)
+    var
+      alice = initUser(paths.encode(aliceKeys.public))
+      bob = initUser(paths.encode(bobKeys.public))
+    entities.insertUser(conn, alice, alice.user_id)
+    entities.insertUser(conn, bob, bob.user_id)
     check alice == entities.selectUser(conn, alice.public_key)
     check bob == entities.selectUser(conn, bob.public_key)
 
@@ -96,10 +106,10 @@ test "query users asynchronously":
       let
         aliceKeys = ed25519.initKeyPair()
         bobKeys = ed25519.initKeyPair()
-      alice = User(public_key: paths.encode(aliceKeys.public))
-      bob = User(public_key: paths.encode(bobKeys.public))
-      entities.insertUser(conn, alice)
-      entities.insertUser(conn, bob)
+      alice = initUser(paths.encode(aliceKeys.public))
+      bob = initUser(paths.encode(bobKeys.public))
+      entities.insertUser(conn, alice, alice.user_id)
+      entities.insertUser(conn, bob, bob.user_id)
     # query db over http
     var response = client.queryUser(c, dbPath, alice.publicKey)
     client.get(response, true)
@@ -122,20 +132,21 @@ test "query posts":
     let
       aliceKeys = ed25519.initKeyPair()
       bobKeys = ed25519.initKeyPair()
-      alice = User(public_key: paths.encode(aliceKeys.public))
-      bob = User(public_key: paths.encode(bobKeys.public))
-    entities.insertUser(conn, alice)
-    entities.insertUser(conn, bob)
-    var p1 = Post(parent: alice.public_key, public_key: alice.public_key, content: entities.initContent(aliceKeys, "Hello, i'm alice"))
-    entities.insertPost(conn, p1)
-    var p2 = Post(parent: p1.content.sig, public_key: bob.public_key, content: entities.initContent(bobKeys, "Hello, i'm bob"))
-    entities.insertPost(conn, p2)
-    var p3 = Post(parent: p2.content.sig, public_key: alice.public_key, content: entities.initContent(aliceKeys, "What's up"))
-    entities.insertPost(conn, p3)
-    var p4 = Post(parent: p2.content.sig, public_key: alice.public_key, content: entities.initContent(aliceKeys, "How are you?"))
-    entities.insertPost(conn, p4)
+    var
+      alice = initUser(paths.encode(aliceKeys.public))
+      bob = initUser(paths.encode(bobKeys.public))
+    entities.insertUser(conn, alice, alice.user_id)
+    entities.insertUser(conn, bob, bob.user_id)
+    var p1 = Post(parent: alice.public_key, public_key: alice.public_key, content: initContent(aliceKeys, "Hello, i'm alice"))
+    entities.insertPost(conn, p1, p1.post_id)
+    var p2 = Post(parent: p1.content.sig, public_key: bob.public_key, content: initContent(bobKeys, "Hello, i'm bob"))
+    entities.insertPost(conn, p2, p2.post_id)
+    var p3 = Post(parent: p2.content.sig, public_key: alice.public_key, content: initContent(aliceKeys, "What's up"))
+    entities.insertPost(conn, p3, p3.post_id)
+    var p4 = Post(parent: p2.content.sig, public_key: alice.public_key, content: initContent(aliceKeys, "How are you?"))
+    entities.insertPost(conn, p4, p4.post_id)
     expect Exception:
-      entities.insertPost(conn, Post(parent: "invalid parent", public_key: alice.public_key, content: entities.initContent(aliceKeys, "How are you?")))
+      entities.insertPost(conn, Post(parent: "invalid parent", public_key: alice.public_key, content: initContent(aliceKeys, "How are you?")))
     p1 = entities.selectPost(conn, p1.content.sig)
     p2 = entities.selectPost(conn, p2.content.sig)
     p3 = entities.selectPost(conn, p3.content.sig)
@@ -161,18 +172,18 @@ test "query posts asynchronously":
       let
         aliceKeys = ed25519.initKeyPair()
         bobKeys = ed25519.initKeyPair()
-      alice = User(public_key: paths.encode(aliceKeys.public))
-      bob = User(public_key: paths.encode(bobKeys.public))
-      entities.insertUser(conn, alice)
-      entities.insertUser(conn, bob)
-      p1 = Post(parent: alice.public_key, public_key: alice.public_key, content: entities.initContent(aliceKeys, "Hello, i'm alice"))
-      entities.insertPost(conn, p1)
-      p2 = Post(parent: p1.content.sig, public_key: bob.public_key, content: entities.initContent(bobKeys, "Hello, i'm bob"))
-      entities.insertPost(conn, p2)
-      p3 = Post(parent: p2.content.sig, public_key: alice.public_key, content: entities.initContent(aliceKeys, "What's up"))
-      entities.insertPost(conn, p3)
-      p4 = Post(parent: p2.content.sig, public_key: alice.public_key, content: entities.initContent(aliceKeys, "How are you?"))
-      entities.insertPost(conn, p4)
+      alice = initUser(paths.encode(aliceKeys.public))
+      bob = initUser(paths.encode(bobKeys.public))
+      entities.insertUser(conn, alice, alice.user_id)
+      entities.insertUser(conn, bob, bob.user_id)
+      p1 = Post(parent: alice.public_key, public_key: alice.public_key, content: initContent(aliceKeys, "Hello, i'm alice"))
+      entities.insertPost(conn, p1, p1.post_id)
+      p2 = Post(parent: p1.content.sig, public_key: bob.public_key, content: initContent(bobKeys, "Hello, i'm bob"))
+      entities.insertPost(conn, p2, p2.post_id)
+      p3 = Post(parent: p2.content.sig, public_key: alice.public_key, content: initContent(aliceKeys, "What's up"))
+      entities.insertPost(conn, p3, p3.post_id)
+      p4 = Post(parent: p2.content.sig, public_key: alice.public_key, content: initContent(aliceKeys, "How are you?"))
+      entities.insertPost(conn, p4, p4.post_id)
       p1 = entities.selectPost(conn, p1.content.sig)
     # query db over http
     var response = client.queryPost(c, dbPath, p1.content.sig)
@@ -199,13 +210,14 @@ test "search posts":
     let
       aliceKeys = ed25519.initKeyPair()
       bobKeys = ed25519.initKeyPair()
-      alice = User(public_key: paths.encode(aliceKeys.public))
-      bob = User(public_key: paths.encode(bobKeys.public))
-    entities.insertUser(conn, alice)
-    entities.insertUser(conn, bob)
-    var p1 = Post(parent: alice.public_key, public_key: alice.public_key, content: entities.initContent(aliceKeys, "Hello, i'm alice"))
+    var
+      alice = initUser(paths.encode(aliceKeys.public))
+      bob = initUser(paths.encode(bobKeys.public))
+    entities.insertUser(conn, alice, alice.user_id)
+    entities.insertUser(conn, bob, bob.user_id)
+    var p1 = Post(parent: alice.public_key, public_key: alice.public_key, content: initContent(aliceKeys, "Hello, i'm alice"))
     entities.insertPost(conn, p1)
-    var p2 = Post(parent: p1.content.sig, public_key: bob.public_key, content: entities.initContent(bobKeys, "Hello, i'm bob"))
+    var p2 = Post(parent: p1.content.sig, public_key: bob.public_key, content: initContent(bobKeys, "Hello, i'm bob"))
     entities.insertPost(conn, p2)
     p1 = entities.selectPost(conn, p1.content.sig)
     p2 = entities.selectPost(conn, p2.content.sig)
@@ -217,40 +229,47 @@ test "score":
     let
       aliceKeys = ed25519.initKeyPair()
       bobKeys = ed25519.initKeyPair()
-      alice = User(public_key: paths.encode(aliceKeys.public))
-      bob = User(public_key: paths.encode(bobKeys.public))
-    entities.insertUser(conn, alice)
-    entities.insertUser(conn, bob)
-    let p1 = Post(parent: alice.public_key, public_key: alice.public_key, content: entities.initContent(aliceKeys, "Hello, i'm alice"))
+    var
+      alice = initUser(paths.encode(aliceKeys.public))
+      bob = initUser(paths.encode(bobKeys.public))
+    entities.insertUser(conn, alice, alice.user_id)
+    entities.insertUser(conn, bob, bob.user_id)
+    let p1 = Post(parent: alice.public_key, public_key: alice.public_key, content: initContent(aliceKeys, "Hello, i'm alice"))
     entities.insertPost(conn, p1)
-    let p2 = Post(parent: p1.content.sig, public_key: bob.public_key, content: entities.initContent(bobKeys, "Hello, i'm bob"))
+    let p2 = Post(parent: p1.content.sig, public_key: bob.public_key, content: initContent(bobKeys, "Hello, i'm bob"))
     entities.insertPost(conn, p2)
-    let p3 = Post(parent: p2.content.sig, public_key: alice.public_key, content: entities.initContent(aliceKeys, "What's up"))
+    let p3 = Post(parent: p2.content.sig, public_key: alice.public_key, content: initContent(aliceKeys, "What's up"))
     entities.insertPost(conn, p3)
-    let p4 = Post(parent: p2.content.sig, public_key: alice.public_key, content: entities.initContent(aliceKeys, "How are you?"))
+    let p4 = Post(parent: p2.content.sig, public_key: alice.public_key, content: initContent(aliceKeys, "How are you?"))
     entities.insertPost(conn, p4)
-    check 2 == entities.selectPostExtras(conn, p1.content.sig).score
+    check 2 == entities.selectPost(conn, p1.content.sig).score
 
-test "edit post":
+test "edit post and user":
   db.withOpen(conn, ":memory:", false):
     db.init(conn)
     let
       aliceKeys = ed25519.initKeyPair()
       bobKeys = ed25519.initKeyPair()
-      alice = User(public_key: paths.encode(aliceKeys.public))
-      bob = User(public_key: paths.encode(bobKeys.public))
-    entities.insertUser(conn, alice)
-    entities.insertUser(conn, bob)
-    let p1 = Post(parent: alice.public_key, public_key: alice.public_key, content: entities.initContent(aliceKeys, "I like turtles"))
+    var
+      alice = initUser(paths.encode(aliceKeys.public))
+      bob = initUser(paths.encode(bobKeys.public))
+    entities.insertUser(conn, alice, alice.user_id)
+    entities.insertUser(conn, bob, bob.user_id)
+    let p1 = Post(parent: alice.public_key, public_key: alice.public_key, content: initContent(aliceKeys, "I like turtles"))
     entities.insertPost(conn, p1)
     let newText = "I hate turtles"
-    var newContent = entities.initContent(aliceKeys, newText)
+    var newContent = initContent(aliceKeys, newText)
     newContent.sig_last = p1.content.sig
     entities.editPost(conn, newContent, alice.public_key)
     check entities.search(conn, entities.AllPosts, "like").len == 0
     check entities.search(conn, entities.AllPosts, "hate").len == 1
+    entities.editTags(conn, entities.Tags(value: "moderator", sig: "asdf"), alice.public_key, sysopPublicKey, sysopPublicKey)
+    check "moderator" == entities.selectUser(conn, alice.public_key).tags.value
+    entities.editTags(conn, entities.Tags(value: "stuff", sig: "asdf2"), bob.public_key, sysopPublicKey, alice.public_key)
     expect Exception:
       entities.editPost(conn, newContent, bob.public_key)
+    expect Exception:
+      entities.editTags(conn, entities.Tags(value: "", sig: "asdf3"), alice.public_key, sysopPublicKey, bob.public_key)
 
 test "post to blog":
   db.withOpen(conn, ":memory:", false):
@@ -258,13 +277,14 @@ test "post to blog":
     let
       aliceKeys = ed25519.initKeyPair()
       bobKeys = ed25519.initKeyPair()
-      alice = User(public_key: paths.encode(aliceKeys.public))
-      bob = User(public_key: paths.encode(bobKeys.public))
-    entities.insertUser(conn, alice)
-    entities.insertUser(conn, bob)
-    entities.insertPost(conn, Post(parent: alice.public_key, public_key: alice.public_key, content: entities.initContent(aliceKeys, "My first blog post")))
+    var
+      alice = initUser(paths.encode(aliceKeys.public))
+      bob = initUser(paths.encode(bobKeys.public))
+    entities.insertUser(conn, alice, alice.user_id)
+    entities.insertUser(conn, bob, bob.user_id)
+    entities.insertPost(conn, Post(parent: alice.public_key, public_key: alice.public_key, content: initContent(aliceKeys, "My first blog post")))
     expect Exception:
-      entities.insertPost(conn, Post(parent: alice.public_key, public_key: bob.public_key, content: entities.initContent(bobKeys, "I shouldn't be able to post here")))
+      entities.insertPost(conn, Post(parent: alice.public_key, public_key: bob.public_key, content: initContent(bobKeys, "I shouldn't be able to post here")))
 
 test "retrieve sqlite db via http":
   var s = server.initServer("localhost", port, bbsDir)
@@ -277,10 +297,10 @@ test "retrieve sqlite db via http":
       let
         aliceKeys = ed25519.initKeyPair()
         bobKeys = ed25519.initKeyPair()
-      alice = User(public_key: paths.encode(aliceKeys.public))
-      bob = User(public_key: paths.encode(bobKeys.public))
-      entities.insertUser(conn, alice)
-      entities.insertUser(conn, bob)
+      alice = initUser(paths.encode(aliceKeys.public))
+      bob = initUser(paths.encode(bobKeys.public))
+      entities.insertUser(conn, alice, alice.user_id)
+      entities.insertUser(conn, bob, bob.user_id)
     # re-open db, but this time all reads happen over http
     db.withOpen(conn, dbPath, true):
       let
@@ -302,7 +322,7 @@ test "submit an ansiwave":
     var subboard: Post
     db.withOpen(conn, dbPath, false):
       db.init(conn)
-      let sysop = entities.User(public_key: sysopPublicKey)
+      let sysop = initUser(sysopPublicKey)
       server.editPost(s, sysopPublicKey, entities.initContent(common.signWithHeaders(sysopKeys, "Welcome to my BBS", sysop.public_key, false), sysop.public_key), sysop.public_key)
       subboard = entities.Post(parent: sysop.public_key, public_key: sysop.public_key, content: entities.initContent(common.signWithHeaders(sysopKeys, "General Discussion", sysop.public_key, true)))
       server.insertPost(s, sysopPublicKey, subboard)

@@ -17,11 +17,13 @@ type
     value*: CompressedValue
     sig*: string
     sig_last*: string
+  Tags* = object
+    value*: string
+    sig*: string
   User* = object
     user_id*: int64
     public_key*: string
-    tags*: string
-    tags_sig*: string
+    tags*: Tags
   Post* = object
     post_id*: int64
     content*: Content
@@ -37,13 +39,6 @@ const limit* = 10
 proc initCompressedValue*(uncompressed: string): CompressedValue =
   result.compressed = cast[seq[uint8]](zippy.compress(uncompressed, dataFormat = zippy.dfZlib))
   result.uncompressed = uncompressed
-
-# not used in prod...only in tests
-proc initContent*(keys: ed25519.KeyPair, origContent: string): Content =
-  let content = "\n\n" & origContent # add two newlines to simulate where headers would've been
-  result.value = initCompressedValue(content)
-  result.sig = paths.encode(ed25519.sign(keys, content))
-  result.sig_last = result.sig
 
 # not used in prod...only in tests
 proc initContent*(content: tuple[body: string, sig: string], sigLast: string = content.sig): Content =
@@ -84,20 +79,6 @@ proc initPost(stmt: PStmt): Post =
 proc selectPost*(conn: PSqlite3, sig: string): Post =
   const query =
     """
-      SELECT content, content_sig, content_sig_last, public_key, parent, reply_count FROM post
-      WHERE content_sig = ?
-    """
-  #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), sig):
-  #  echo x
-  let ret = db.select[Post](conn, initPost, query, sig)
-  if ret.len == 1:
-    ret[0]
-  else:
-    raise newException(Exception, "Can't select post")
-
-proc selectPostExtras*(conn: PSqlite3, sig: string): Post =
-  const query =
-    """
       SELECT post_id, content, content_sig, content_sig_last, public_key, parent, reply_count, score FROM post
       WHERE content_sig = ?
     """
@@ -127,7 +108,7 @@ proc selectPostParentIds(conn: PSqlite3, id: int64): string =
 proc selectPostChildren*(conn: PSqlite3, sig: string, sortByTs: bool = false, offset: int = 0): seq[Post] =
   let query =
     """
-      SELECT content, content_sig, content_sig_last, public_key, parent, reply_count FROM post
+      SELECT post_id, content, content_sig, content_sig_last, public_key, parent, reply_count, score FROM post
       WHERE parent = ?
       ORDER BY $1 DESC
       LIMIT $2
@@ -140,7 +121,7 @@ proc selectPostChildren*(conn: PSqlite3, sig: string, sortByTs: bool = false, of
 proc selectUserPosts*(conn: PSqlite3, publicKey: string, offset: int = 0): seq[Post] =
   let query =
     """
-      SELECT content, content_sig, content_sig_last, public_key, parent, reply_count FROM post
+      SELECT post_id, content, content_sig, content_sig_last, public_key, parent, reply_count, score FROM post
       WHERE public_key = ? AND parent != ''
       ORDER BY ts DESC
       LIMIT $1
@@ -160,14 +141,14 @@ proc initUser(stmt: PStmt): User =
     of "public_key":
       result.public_key = $sqlite3.column_text(stmt, col)
     of "tags":
-      result.tags = $sqlite3.column_text(stmt, col)
+      result.tags.value = $sqlite3.column_text(stmt, col)
     of "tags_sig":
-      result.tags_sig = $sqlite3.column_text(stmt, col)
+      result.tags.sig = $sqlite3.column_text(stmt, col)
 
 proc selectUser*(conn: PSqlite3, publicKey: string): User =
   const query =
     """
-      SELECT public_key, tags, tags_sig FROM user
+      SELECT user_id, public_key, tags, tags_sig FROM user
       WHERE public_key = ?
     """
   #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), publicKey):
@@ -178,25 +159,10 @@ proc selectUser*(conn: PSqlite3, publicKey: string): User =
   else:
     raise newException(Exception, "Can't select user")
 
-proc selectUserExtras*(conn: PSqlite3, publicKey: string): User =
-  const query =
-    """
-      SELECT user_id, public_key FROM user
-      WHERE public_key = ?
-    """
-  #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), publicKey):
-  #  echo x
-  let ret = db.select[User](conn, initUser, query, publicKey)
-  if ret.len == 1:
-    ret[0]
-  else:
-    raise newException(Exception, "Can't select user")
-
-proc insertPost*(conn: PSqlite3, entity: Post, extraFn: proc (x: Post, sig: string) = nil) =
+proc insertPost*(conn: PSqlite3, entity: Post, id: var int64, extraFn: proc (x: Post, sig: string) = nil) =
   var
     e = entity
     stmt: PStmt
-    id: int64
 
   let
     parentIds =
@@ -208,7 +174,7 @@ proc insertPost*(conn: PSqlite3, entity: Post, extraFn: proc (x: Post, sig: stri
         ""
       else:
         let
-          parentId = selectPostExtras(conn, e.parent).post_id
+          parentId = selectPost(conn, e.parent).post_id
           parentParentIds = selectPostParentIds(conn, parentId)
         if parentParentIds.len == 0:
           $parentId
@@ -246,7 +212,7 @@ proc insertPost*(conn: PSqlite3, entity: Post, extraFn: proc (x: Post, sig: stri
   if extraFn != nil:
     extraFn(e, sig)
 
-  let userId = selectUserExtras(conn, entity.public_key).user_id
+  let userId = selectUser(conn, entity.public_key).user_id
 
   db.withStatement(conn, "INSERT INTO post_search (post_id, user_id, attribute, value) VALUES (?, ?, ?, ?)", stmt):
     db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), id, userId, "content", common.stripUnsearchableText(e.content.value.uncompressed))
@@ -274,6 +240,10 @@ proc insertPost*(conn: PSqlite3, entity: Post, extraFn: proc (x: Post, sig: stri
       """.format(parentIds)
     db_sqlite.exec(conn, sql score_query)
 
+proc insertPost*(conn: PSqlite3, entity: Post, extraFn: proc (x: Post, sig: string) = nil) =
+  var id: int64
+  insertPost(conn, entity, id, extraFn)
+
 proc search*(conn: PSqlite3, kind: SearchKind, term: string, offset: int = 0): seq[Post] =
   if term == "":
     let query =
@@ -299,7 +269,7 @@ proc search*(conn: PSqlite3, kind: SearchKind, term: string, offset: int = 0): s
   else:
     let query =
       """
-        SELECT content, content_sig, content_sig_last, public_key, parent, reply_count FROM post
+        SELECT post_id, content, content_sig, content_sig_last, public_key, parent, reply_count, score FROM post
         WHERE post_id IN (SELECT post_id FROM post_search WHERE attribute MATCH 'content' AND value MATCH ? ORDER BY rank)
         $1
         LIMIT $2
@@ -351,14 +321,55 @@ proc editPost*(conn: PSqlite3, content: Content, key: string, extraFn: proc (x: 
   if extraFn != nil:
     extraFn(selectPost(conn, post.content.sig))
 
-proc insertUser*(conn: PSqlite3, entity: User, extraFn: proc (x: User) = nil) =
+proc insertUser*(conn: PSqlite3, entity: User, id: var int64) =
   var
     e = entity
     stmt: PStmt
-  db.withStatement(conn, "INSERT INTO user (ts, public_key, public_key_algo) VALUES (?, ?, ?)", stmt):
-    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), times.toUnix(times.getTime()), entity.publicKey, "ed25519")
+
+  db.withStatement(conn, "INSERT INTO user (ts, public_key, public_key_algo, tags, tags_sig) VALUES (?, ?, ?, ?, ?)", stmt):
+    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), times.toUnix(times.getTime()), entity.publicKey, "ed25519", "", entity.publicKey)
     if step(stmt) != SQLITE_DONE:
       db_sqlite.dbError(conn)
-  if extraFn != nil:
-    extraFn(e)
+    id = sqlite3.last_insert_rowid(conn)
+
+  db.withStatement(conn, "INSERT INTO user_search (user_id, attribute, value) VALUES (?, ?, ?)", stmt):
+    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), id, "tags", "")
+    if step(stmt) != SQLITE_DONE:
+      db_sqlite.dbError(conn)
+
+proc insertUser*(conn: PSqlite3, entity: User) =
+  var id: int64
+  insertUser(conn, entity, id)
+
+proc editTags*(conn: PSqlite3, tags: Tags, tagsSigLast: string, board: string, key: string) =
+  if key != board:
+    let tags = strutils.split(selectUser(conn, key).tags.value, ' ')
+    if tags.find("moderator") == -1:
+      raise newException(Exception, "Only the sysop or moderators can edit tags")
+
+  proc selectUserByTagsSigLast(conn: PSqlite3, sig: string): User =
+    const query =
+      """
+        SELECT user_id FROM user
+        WHERE tags_sig = ?
+      """
+    let ret = db.select[User](conn, initUser, query, sig)
+    if ret.len == 1:
+      ret[0]
+    else:
+      raise newException(Exception, "Can't edit tags (maybe you're editing an old version?)")
+
+  let user = selectUserByTagsSigLast(conn, tagsSigLast)
+
+  var stmt: PStmt
+
+  db.withStatement(conn, "UPDATE user SET tags = ?, tags_sig = ? WHERE user_id = ?", stmt):
+    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), tags.value, tags.sig, user.user_id)
+    if step(stmt) != SQLITE_DONE:
+      db_sqlite.dbError(conn)
+
+  db.withStatement(conn, "UPDATE user_search SET value = ? WHERE user_id MATCH ? AND attribute MATCH 'tags'", stmt):
+    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), tags.value, user.user_id)
+    if step(stmt) != SQLITE_DONE:
+      db_sqlite.dbError(conn)
 
