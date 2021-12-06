@@ -63,8 +63,8 @@ let
   dbDirs = paths.db(sysopPublicKey)
   dbPath = bbsDir / dbDirs
 discard osproc.execProcess("rm -r " & bbsDir)
-os.createDir(bbsDir / paths.boardsDir / sysopPublicKey / paths.ansiwavesDir)
-os.createDir(bbsDir / paths.boardsDir / sysopPublicKey / paths.dbDir)
+os.createDir(bbsDir / paths.boardsDir / sysopPublicKey / paths.gitDir / paths.ansiwavesDir)
+os.createDir(bbsDir / paths.boardsDir / sysopPublicKey / paths.gitDir / paths.dbDir)
 
 vfs.readUrl = "http://localhost:" & $port & "/" & dbDirs
 vfs.register()

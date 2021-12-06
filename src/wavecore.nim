@@ -176,8 +176,8 @@ when isMainModule:
   server.start(s)
   # create test db
   discard osproc.execProcess("rm -r " & staticFileDir / paths.boardsDir)
-  os.createDir(staticFileDir / paths.boardsDir / paths.sysopPublicKey / paths.ansiwavesDir)
-  os.createDir(staticFileDir / paths.boardsDir / paths.sysopPublicKey / paths.dbDir)
+  os.createDir(staticFileDir / paths.boardsDir / paths.sysopPublicKey / paths.gitDir / paths.ansiwavesDir)
+  os.createDir(staticFileDir / paths.boardsDir / paths.sysopPublicKey / paths.gitDir / paths.dbDir)
   db.withOpen(conn, staticFileDir / paths.db(paths.sysopPublicKey), false):
     db.init(conn)
   let sysop = entities.User(public_key: paths.sysopPublicKey)
