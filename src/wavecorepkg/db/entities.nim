@@ -20,6 +20,8 @@ type
   User* = object
     user_id*: int64
     public_key*: string
+    tags*: string
+    tags_sig*: string
   Post* = object
     post_id*: int64
     content*: Content
@@ -157,11 +159,15 @@ proc initUser(stmt: PStmt): User =
       result.user_id = sqlite3.column_int(stmt, col):
     of "public_key":
       result.public_key = $sqlite3.column_text(stmt, col)
+    of "tags":
+      result.tags = $sqlite3.column_text(stmt, col)
+    of "tags_sig":
+      result.tags_sig = $sqlite3.column_text(stmt, col)
 
 proc selectUser*(conn: PSqlite3, publicKey: string): User =
   const query =
     """
-      SELECT public_key FROM user
+      SELECT public_key, tags, tags_sig FROM user
       WHERE public_key = ?
     """
   #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), publicKey):
