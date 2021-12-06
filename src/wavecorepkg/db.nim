@@ -70,11 +70,15 @@ proc init*(conn: PSqlite3) =
           user_id INTEGER PRIMARY KEY AUTOINCREMENT,
           ts INTEGER,
           public_key TEXT UNIQUE,
-          public_key_algo TEXT
+          public_key_algo TEXT,
+          tags TEXT,
+          tags_sig TEXT UNIQUE
         ) STRICT
       """
+      db_sqlite.exec conn, sql"CREATE INDEX user_ts ON user(ts)"
       db_sqlite.exec conn, sql"CREATE INDEX user_public_key ON user(public_key)"
       db_sqlite.exec conn, sql"CREATE INDEX user_public_key_ts ON user(public_key, ts)"
+      db_sqlite.exec conn, sql"CREATE INDEX user_tags_sig ON user(tags_sig)"
       db_sqlite.exec conn, sql"CREATE VIRTUAL TABLE user_search USING fts5 (user_id, attribute, value, value_unindexed UNINDEXED)"
       db_sqlite.exec conn, sql"""
         CREATE TABLE post (
@@ -90,6 +94,7 @@ proc init*(conn: PSqlite3) =
           score INTEGER
         ) STRICT
       """
+      db_sqlite.exec conn, sql"CREATE INDEX post_ts ON post(ts)"
       db_sqlite.exec conn, sql"CREATE INDEX post_content_sig ON post(content_sig)"
       db_sqlite.exec conn, sql"CREATE INDEX post_content_sig_last ON post(content_sig_last)"
       db_sqlite.exec conn, sql"CREATE INDEX post_public_key ON post(public_key)"
