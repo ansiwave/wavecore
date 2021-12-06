@@ -9,13 +9,22 @@ import unicode
 proc parseTags*(tags: string): HashSet[string] =
   strutils.split(tags, ' ').toHashSet
 
-proc headers*(pubKey: string, target: string, isNew: bool, board: string = paths.sysopPublicKey): string =
+type
+  HeaderKind* = enum
+    New, Edit, Tags
+
+proc headers*(pubKey: string, target: string, kind: HeaderKind, board: string = paths.sysopPublicKey): string =
   strutils.join(
     [
       "/head.key " & pubKey,
       "/head.algo ed25519",
       "/head.target " & target,
-      "/head.type " & (if isNew: "new" else: "edit"),
+      "/head.type " & (
+          case kind:
+          of New: "new"
+          of Edit: "edit"
+          of Tags: "tags"
+      ),
       "/head.board " & board,
     ],
     "\n",
@@ -27,8 +36,15 @@ proc sign*(keyPair: ed25519.KeyPair, headers: string, content: string): tuple[bo
   result.sig = paths.encode(ed25519.sign(keyPair, result.body))
   result.body = "/head.sig " & result.sig & "\n" & result.body
 
-proc signWithHeaders*(keyPair: ed25519.KeyPair, content: string, target: string, isNew: bool, board: string = paths.sysopPublicKey): tuple[body: string, sig: string] =
-  sign(keyPair, headers(paths.encode(keyPair.public), target, isNew, board), content)
+proc signWithHeaders*(keyPair: ed25519.KeyPair, content: string, target: string, kind: HeaderKind, board: string = paths.sysopPublicKey): tuple[body: string, sig: string] =
+  sign(keyPair, headers(paths.encode(keyPair.public), target, kind, board), content)
+
+proc splitAfterHeaders*(content: string): seq[string] =
+  let idx = strutils.find(content, "\n\n")
+  if idx == -1: # this should never happen
+    @[""]
+  else:
+    strutils.splitLines(content[idx + 2 ..< content.len])
 
 proc parseAnsiwave*(ansiwave: string): tuple[cmds: Table[string, string], headersAndContent: string, content: string] =
   let col = unicode.validateUtf8(ansiwave)

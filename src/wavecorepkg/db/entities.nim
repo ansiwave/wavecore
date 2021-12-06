@@ -359,17 +359,22 @@ proc editTags*(conn: PSqlite3, tags: Tags, tagsSigLast: string, board: string, k
     else:
       raise newException(Exception, "Can't edit tags (maybe you're editing an old version?)")
 
-  let user = selectUserByTagsSigLast(conn, tagsSigLast)
+  let
+    user = selectUserByTagsSigLast(conn, tagsSigLast)
+    content = common.splitAfterHeaders(tags.value)
+
+  if content.len != 1:
+    raise newException(Exception, "Tags must be on a single line")
 
   var stmt: PStmt
 
   db.withStatement(conn, "UPDATE user SET tags = ?, tags_sig = ? WHERE user_id = ?", stmt):
-    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), tags.value, tags.sig, user.user_id)
+    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), content[0], tags.sig, user.user_id)
     if step(stmt) != SQLITE_DONE:
       db_sqlite.dbError(conn)
 
   db.withStatement(conn, "UPDATE user_search SET value = ? WHERE user_id MATCH ? AND attribute MATCH 'tags'", stmt):
-    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), tags.value, user.user_id)
+    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), content[0], user.user_id)
     if step(stmt) != SQLITE_DONE:
       db_sqlite.dbError(conn)
 

@@ -14,7 +14,7 @@ import tables
 type
   State = object
   ActionKind = enum
-    Stop, InsertPost, EditPost,
+    Stop, InsertPost, EditPost, EditTags,
   Action = object
     case kind: ActionKind
     of Stop:
@@ -23,8 +23,11 @@ type
       post: entities.Post
     of EditPost:
       content: entities.Content
-      key: string
+    of EditTags:
+      tags: entities.Tags
+      tagsSigLast: string
     board: string
+    key: string
     done: ptr Channel[bool]
   Server* = ref object
     hostname: string
@@ -85,6 +88,12 @@ proc editPost*(server: Server, board: string, content: entities.Content, key: st
         proc (x: entities.Post) =
           writeFile(server.staticFileDir / paths.ansiwavez(board, x.content.sig), x.content.value.compressed)
       )
+
+proc editTags*(server: Server, board: string, tags: entities.Tags, tagsSigLast: string, key: string) =
+  assert server.staticFileDir != ""
+  db.withOpen(conn, server.staticFileDir / paths.db(board), false):
+    db.withTransaction(conn):
+      entities.editTags(conn, tags, tagsSigLast, board, key)
 
 proc sendAction(server: Server, action: Action): bool =
   let done = cast[ptr Channel[bool]](
@@ -147,6 +156,10 @@ proc ansiwavePost(server: Server, request: Request, headers: var string, body: v
       let content = entities.Content(value: entities.initCompressedValue(request.body), sig: sigBase64, sig_last: cmds["/head.target"])
       if not sendAction(server, Action(kind: EditPost, board: board, content: content, key: cmds["/head.key"])):
         raise newException(Exception, "Failed to edit post")
+    of "tags":
+      let tags = entities.Tags(value: request.body, sig: sigBase64)
+      if not sendAction(server, Action(kind: EditTags, board: board, tags: tags, tagsSigLast: cmds["/head.target"], key: cmds["/head.key"])):
+        raise newException(Exception, "Failed to edit tags")
     else:
       raise newException(BadRequestException, "Invalid /head.type")
   else:
@@ -301,6 +314,13 @@ proc recvAction(server: Server) {.thread.} =
       try:
         {.cast(gcsafe).}:
           editPost(server, action.board, action.content, action.key)
+        resp = true
+      except Exception as ex:
+        resp = false
+    of EditTags:
+      try:
+        {.cast(gcsafe).}:
+          editTags(server, action.board, action.tags, action.tagsSigLast, action.key)
         resp = true
       except Exception as ex:
         resp = false

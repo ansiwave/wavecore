@@ -323,18 +323,18 @@ test "submit an ansiwave":
     db.withOpen(conn, dbPath, false):
       db.init(conn)
       let sysop = initUser(sysopPublicKey)
-      server.editPost(s, sysopPublicKey, entities.initContent(common.signWithHeaders(sysopKeys, "Welcome to my BBS", sysop.public_key, false), sysop.public_key), sysop.public_key)
-      subboard = entities.Post(parent: sysop.public_key, public_key: sysop.public_key, content: entities.initContent(common.signWithHeaders(sysopKeys, "General Discussion", sysop.public_key, true)))
+      server.editPost(s, sysopPublicKey, entities.initContent(common.signWithHeaders(sysopKeys, "Welcome to my BBS", sysop.public_key, common.Edit), sysop.public_key), sysop.public_key)
+      subboard = entities.Post(parent: sysop.public_key, public_key: sysop.public_key, content: entities.initContent(common.signWithHeaders(sysopKeys, "General Discussion", sysop.public_key, common.New)))
       server.insertPost(s, sysopPublicKey, subboard)
     let aliceKeys = ed25519.initKeyPair()
     block:
-      let (body, sig) = common.signWithHeaders(aliceKeys, "Hi i'm alice", subboard.content.sig, true, sysopPublicKey)
+      let (body, sig) = common.signWithHeaders(aliceKeys, "Hi i'm alice", subboard.content.sig, common.New, sysopPublicKey)
       var res = client.submit(c, "ansiwave", body)
       client.get(res, true)
       check res.value.kind == client.Valid
     block:
       const hulk = staticRead("hulk.ansiwave")
-      let (body, sig) = common.signWithHeaders(aliceKeys, strutils.repeat(hulk, 15), subboard.content.sig, true, sysopPublicKey)
+      let (body, sig) = common.signWithHeaders(aliceKeys, strutils.repeat(hulk, 15), subboard.content.sig, common.New, sysopPublicKey)
       var res = client.submit(c, "ansiwave", body)
       client.get(res, true)
       check res.value.kind == client.Error
