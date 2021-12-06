@@ -343,6 +343,9 @@ proc insertUser*(conn: PSqlite3, entity: User) =
   insertUser(conn, entity, id)
 
 proc editTags*(conn: PSqlite3, tags: Tags, tagsSigLast: string, board: string, key: string) =
+  if tags.value.len > 80:
+    raise newException(Exception, "Max tag length exceeded")
+
   if key != board:
     if "moderator" notin common.parseTags(selectUser(conn, key).tags.value):
       raise newException(Exception, "Only the sysop or moderators can edit tags")
