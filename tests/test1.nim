@@ -263,9 +263,9 @@ test "edit post and user":
     entities.editPost(conn, newContent, alice.public_key)
     check entities.search(conn, entities.AllPosts, "like").len == 0
     check entities.search(conn, entities.AllPosts, "hate").len == 1
-    entities.editTags(conn, entities.Tags(value: "moderator", sig: "asdf"), alice.public_key, sysopPublicKey, sysopPublicKey)
+    entities.editTags(conn, entities.Tags(value: "\n\nmoderator", sig: "asdf"), alice.public_key, sysopPublicKey, sysopPublicKey)
     check "moderator" == entities.selectUser(conn, alice.public_key).tags.value
-    entities.editTags(conn, entities.Tags(value: "stuff", sig: "asdf2"), bob.public_key, sysopPublicKey, alice.public_key)
+    entities.editTags(conn, entities.Tags(value: "\n\nstuff", sig: "asdf2"), bob.public_key, sysopPublicKey, alice.public_key)
     expect Exception:
       entities.editPost(conn, newContent, bob.public_key)
     expect Exception:
