@@ -53,7 +53,8 @@ type
     of QueryUserPosts:
       userPostsPublicKey*: string
     of SearchPosts:
-      term*: string
+      searchKind*: entities.SearchKind
+      searchTerm*: string
     dbFilename*: string
     offset: int
   WorkerRequest = object
@@ -210,8 +211,8 @@ proc sendPostChildrenQuery*(client: Client, filename: string, sig: string, sortB
 proc sendUserPostsQuery*(client: Client, filename: string, publicKey: string, offset: int, chan: ChannelRef) =
   sendAction(client, Action(kind: QueryUserPosts, dbFilename: filename, offset: offset, userPostsPublicKey: publicKey), chan)
 
-proc sendSearchPostsQuery*(client: Client, filename: string, term: string, offset: int, chan: ChannelRef) =
-  sendAction(client, Action(kind: SearchPosts, dbFilename: filename, offset: offset, term: term), chan)
+proc sendSearchQuery*(client: Client, filename: string, kind: entities.SearchKind, term: string, offset: int, chan: ChannelRef) =
+  sendAction(client, Action(kind: SearchPosts, dbFilename: filename, searchKind: kind, searchTerm: term, offset: offset), chan)
 
 proc recvAction(data: pointer, size: cint) {.exportc.} =
   var input = newString(size)
@@ -274,7 +275,7 @@ proc recvAction(data: pointer, size: cint) {.exportc.} =
       try:
         var s: string
         db.withOpen(conn, action.dbFilename, true):
-          let posts = entities.searchPosts(conn, action.term, action.offset)
+          let posts = entities.search(conn, action.searchKind, action.searchTerm, action.offset)
           s = flatty.toFlatty(Result[seq[entities.Post]](kind: Valid, valid: posts))
         s
       except Exception as ex:

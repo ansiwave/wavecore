@@ -27,6 +27,8 @@ type
     parent*: string
     reply_count*: int64
     score*: int64
+  SearchKind* = enum
+    AllPosts, Users,
 
 const limit* = 10
 
@@ -266,17 +268,40 @@ proc insertPost*(conn: PSqlite3, entity: Post, extraFn: proc (x: Post, sig: stri
       """.format(parentIds)
     db_sqlite.exec(conn, sql score_query)
 
-proc searchPosts*(conn: PSqlite3, term: string, offset: int = 0): seq[Post] =
-  let query =
-    """
-      SELECT content, content_sig, content_sig_last, public_key, parent, reply_count FROM post
-      WHERE post_id IN (SELECT post_id FROM post_search WHERE attribute MATCH 'content' AND value MATCH ? ORDER BY rank)
-      LIMIT $1
-      OFFSET $2
-    """.format(limit, offset)
-  #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), term):
-  #  echo x
-  sequtils.toSeq(db.select[Post](conn, initPost, query, term))
+proc search*(conn: PSqlite3, kind: SearchKind, term: string, offset: int = 0): seq[Post] =
+  if term == "":
+    let query =
+      case kind:
+      of AllPosts:
+        """
+          SELECT content, content_sig, content_sig_last, public_key, parent, reply_count FROM post
+          ORDER BY ts DESC
+          LIMIT $1
+          OFFSET $2
+        """.format(limit, offset)
+      of Users:
+        """
+          SELECT post.content, user.public_key AS content_sig, user.public_key FROM user
+          LEFT JOIN post ON user.public_key = post.content_sig
+          ORDER BY user.ts DESC
+          LIMIT $1
+          OFFSET $2
+        """.format(limit, offset)
+    #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query)):
+    #  echo x
+    sequtils.toSeq(db.select[Post](conn, initPost, query))
+  else:
+    let query =
+      """
+        SELECT content, content_sig, content_sig_last, public_key, parent, reply_count FROM post
+        WHERE post_id IN (SELECT post_id FROM post_search WHERE attribute MATCH 'content' AND value MATCH ? ORDER BY rank)
+        $1
+        LIMIT $2
+        OFFSET $3
+      """.format((if kind == AllPosts: "" else: "AND parent = ''"), limit, offset)
+    #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), term):
+    #  echo x
+    sequtils.toSeq(db.select[Post](conn, initPost, query, term))
 
 proc editPost*(conn: PSqlite3, content: Content, key: string, extraFn: proc (x: Post) = nil) =
   var stmt: PStmt

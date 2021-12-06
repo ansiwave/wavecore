@@ -209,7 +209,7 @@ test "search posts":
     entities.insertPost(conn, p2)
     p1 = entities.selectPost(conn, p1.content.sig)
     p2 = entities.selectPost(conn, p2.content.sig)
-    check @[p1, p2] == entities.searchPosts(conn, "hello")
+    check @[p1, p2] == entities.search(conn, entities.AllPosts, "hello")
 
 test "score":
   db.withOpen(conn, ":memory:", false):
@@ -247,8 +247,8 @@ test "edit post":
     var newContent = entities.initContent(aliceKeys, newText)
     newContent.sig_last = p1.content.sig
     entities.editPost(conn, newContent, alice.public_key)
-    check entities.searchPosts(conn, "like").len == 0
-    check entities.searchPosts(conn, "hate").len == 1
+    check entities.search(conn, entities.AllPosts, "like").len == 0
+    check entities.search(conn, entities.AllPosts, "hate").len == 1
     expect Exception:
       entities.editPost(conn, newContent, bob.public_key)
 

@@ -39,8 +39,9 @@ type
       userPostsPublicKey*: string
       userPostsResponse*: ChannelRef[Result[seq[entities.Post]]]
     of SearchPosts:
-      term*: string
-      searchPostsResponse*: ChannelRef[Result[seq[entities.Post]]]
+      searchKind*: entities.SearchKind
+      searchTerm*: string
+      searchResponse*: ChannelRef[Result[seq[entities.Post]]]
     dbFilename*: string
     offset: int
   Client* = ref object
@@ -96,8 +97,8 @@ proc sendPostChildrenQuery*(client: Client, filename: string, sig: string, sortB
 proc sendUserPostsQuery*(client: Client, filename: string, publicKey: string, offset: int, chan: ChannelRef) =
   sendAction(client, Action(kind: QueryUserPosts, dbFilename: filename, userPostsPublicKey: publicKey, offset: offset, userPostsResponse: chan))
 
-proc sendSearchPostsQuery*(client: Client, filename: string, term: string, offset: int, chan: ChannelRef) =
-  sendAction(client, Action(kind: SearchPosts, dbFilename: filename, term: term, offset: offset, searchPostsResponse: chan))
+proc sendSearchQuery*(client: Client, filename: string, kind: entities.SearchKind, term: string, offset: int, chan: ChannelRef) =
+  sendAction(client, Action(kind: SearchPosts, dbFilename: filename, searchKind: kind, searchTerm: term, offset: offset, searchResponse: chan))
 
 proc recvAction(client: Client) {.thread.} =
   while true:
@@ -144,9 +145,9 @@ proc recvAction(client: Client) {.thread.} =
     of SearchPosts:
       try:
         db.withOpen(conn, action.dbFilename, true):
-          action.searchPostsResponse[].send(Result[seq[entities.Post]](kind: Valid, valid: entities.searchPosts(conn, action.term, action.offset)))
+          action.searchResponse[].send(Result[seq[entities.Post]](kind: Valid, valid: entities.search(conn, action.searchKind, action.searchTerm, action.offset)))
       except Exception as ex:
-        action.searchPostsResponse[].send(Result[seq[entities.Post]](kind: Error, error: ex.msg))
+        action.searchResponse[].send(Result[seq[entities.Post]](kind: Error, error: ex.msg))
 
 proc initShared(client: var Client) =
   client.action = cast[ChannelRef[Action]](
