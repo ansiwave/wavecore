@@ -6,6 +6,9 @@ import tables, sets
 from times import nil
 import unicode
 
+proc parseTags*(tags: string): HashSet[string] =
+  strutils.split(tags, ' ').toHashSet
+
 proc headers*(pubKey: string, target: string, isNew: bool, board: string = paths.sysopPublicKey): string =
   strutils.join(
     [

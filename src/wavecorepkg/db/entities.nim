@@ -8,6 +8,7 @@ from ../ed25519 import nil
 from ../paths import nil
 from times import nil
 from ../common import nil
+import sets
 
 type
   CompressedValue* = object
@@ -343,8 +344,7 @@ proc insertUser*(conn: PSqlite3, entity: User) =
 
 proc editTags*(conn: PSqlite3, tags: Tags, tagsSigLast: string, board: string, key: string) =
   if key != board:
-    let tags = strutils.split(selectUser(conn, key).tags.value, ' ')
-    if tags.find("moderator") == -1:
+    if "moderator" notin common.parseTags(selectUser(conn, key).tags.value):
       raise newException(Exception, "Only the sysop or moderators can edit tags")
 
   proc selectUserByTagsSigLast(conn: PSqlite3, sig: string): User =
