@@ -68,6 +68,7 @@ type
     postAddress*: string
     worker: cint
   ChannelValue*[T] = object
+    init: bool
     chan*: ChannelRef
     value*: Result[T]
     ready*: bool
@@ -160,6 +161,7 @@ proc stopAudio*() =
 
 proc initChannelValue*[T](): ChannelValue[T] =
   result = ChannelValue[T](
+    init: true,
     chan: cast[ChannelRef](
       allocShared0(sizeof(Channel))
     )
@@ -177,7 +179,7 @@ proc openNewTab*(url: string) =
   wavecore_open_new_tab(url)
 
 proc get*[T](cv: var ChannelValue[T]) =
-  if not cv.ready:
+  if cv.init and not cv.ready:
     if cv.chan[].dataAvailable:
       cv.value = flatty.fromFlatty(cv.chan[].data, Result[T])
       cv.ready = true

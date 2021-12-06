@@ -50,6 +50,7 @@ type
     requestThread*: Thread[Client]
     action*: ChannelRef[Action]
   ChannelValue*[T] = object
+    init: bool
     chan*: ChannelRef[Result[T]]
     value*: Result[T]
     ready*: bool
@@ -58,6 +59,7 @@ export puppy.fetch, puppy.Request, puppy.Response, puppy.Header
 
 proc initChannelValue*[T](): ChannelValue[T] =
   result = ChannelValue[T](
+    init: true,
     chan: cast[ChannelRef[Result[T]]](
       allocShared0(sizeof(Channel[Result[T]]))
     )
@@ -65,7 +67,7 @@ proc initChannelValue*[T](): ChannelValue[T] =
   result.chan[].open()
 
 proc get*[T](cv: var ChannelValue[T], blocking: static[bool] = false) =
-  if not cv.ready:
+  if cv.init and not cv.ready:
     when blocking:
       cv.value = cv.chan[].recv()
       cv.ready = true
