@@ -1,6 +1,8 @@
 import ./sqlite3
 from os import joinPath
 from strformat import fmt
+from strutils import nil
+from ../paths import nil
 
 import ../client
 from urlly import nil
@@ -195,6 +197,8 @@ proc register*() =
 
 when defined(multiplexSqlite):
   proc wavecore_save_manifest(fileName: cstring, fileSize: int64): cint {.cdecl, exportc.} =
-    writeFile(os.parentDir($fileName).joinPath(manifestFile), $ %* {"total-size": fileSize, "chunk-size": chunkSize})
+    let name = $fileName
+    if strutils.endsWith(name, "/" & paths.dbFilename): # make sure this is the main db file, not the journal file
+      writeFile(os.parentDir(name).joinPath(manifestFile), $ %* {"total-size": fileSize, "chunk-size": chunkSize})
     0
 
