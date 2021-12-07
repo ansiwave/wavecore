@@ -32,6 +32,7 @@ type
     parent*: string
     reply_count*: int64
     score*: int64
+    tags*: string
   SearchKind* = enum
     AllPosts, Users,
 
@@ -74,13 +75,15 @@ proc initPost(stmt: PStmt): Post =
       result.reply_count = sqlite3.column_int(stmt, col)
     of "score":
       result.score = sqlite3.column_int(stmt, col)
+    of "tags":
+      result.tags = $sqlite3.column_text(stmt, col)
     else:
       discard
 
 proc selectPost*(conn: PSqlite3, sig: string): Post =
   const query =
     """
-      SELECT post_id, content, content_sig, content_sig_last, public_key, parent, reply_count, score FROM post
+      SELECT post_id, content, content_sig, content_sig_last, public_key, parent, reply_count, score, tags FROM post
       WHERE content_sig = ?
     """
   #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), sig):
@@ -109,7 +112,7 @@ proc selectPostParentIds(conn: PSqlite3, id: int64): string =
 proc selectPostChildren*(conn: PSqlite3, sig: string, sortByTs: bool = false, offset: int = 0): seq[Post] =
   let query =
     """
-      SELECT post_id, content, content_sig, content_sig_last, public_key, parent, reply_count, score FROM post
+      SELECT post_id, content, content_sig, content_sig_last, public_key, parent, reply_count, score, tags FROM post
       WHERE parent = ?
       ORDER BY $1 DESC
       LIMIT $2
@@ -122,7 +125,7 @@ proc selectPostChildren*(conn: PSqlite3, sig: string, sortByTs: bool = false, of
 proc selectUserPosts*(conn: PSqlite3, publicKey: string, offset: int = 0): seq[Post] =
   let query =
     """
-      SELECT post_id, content, content_sig, content_sig_last, public_key, parent, reply_count, score FROM post
+      SELECT post_id, content, content_sig, content_sig_last, public_key, parent, reply_count, score, tags FROM post
       WHERE public_key = ? AND parent != ''
       ORDER BY ts DESC
       LIMIT $1
@@ -251,7 +254,7 @@ proc search*(conn: PSqlite3, kind: SearchKind, term: string, offset: int = 0): s
       case kind:
       of AllPosts:
         """
-          SELECT content, content_sig, content_sig_last, public_key, parent, reply_count FROM post
+          SELECT post_id, content, content_sig, content_sig_last, public_key, parent, reply_count, score, tags FROM post
           ORDER BY ts DESC
           LIMIT $1
           OFFSET $2
@@ -270,7 +273,7 @@ proc search*(conn: PSqlite3, kind: SearchKind, term: string, offset: int = 0): s
   else:
     let query =
       """
-        SELECT post_id, content, content_sig, content_sig_last, public_key, parent, reply_count, score FROM post
+        SELECT post_id, content, content_sig, content_sig_last, public_key, parent, reply_count, score, tags FROM post
         WHERE post_id IN (SELECT post_id FROM post_search WHERE attribute MATCH 'content' AND value MATCH ? ORDER BY rank)
         $1
         LIMIT $2
@@ -295,7 +298,7 @@ proc editPost*(conn: PSqlite3, content: Content, key: string, extraFn: proc (x: 
   proc selectPostByLastSig(conn: PSqlite3, sig: string): Post =
     const query =
       """
-        SELECT post_id, content, content_sig, content_sig_last, public_key, parent, reply_count, score FROM post
+        SELECT post_id, content, content_sig, content_sig_last, public_key, parent, reply_count, score, tags FROM post
         WHERE content_sig_last = ?
       """
     let ret = db.select[Post](conn, initPost, query, sig)
@@ -353,7 +356,7 @@ proc editTags*(conn: PSqlite3, tags: Tags, tagsSigLast: string, board: string, k
   proc selectUserByTagsSigLast(conn: PSqlite3, sig: string): User =
     const query =
       """
-        SELECT user_id FROM user
+        SELECT user_id, public_key FROM user
         WHERE tags_sig = ?
       """
     let ret = db.select[User](conn, initUser, query, sig)
@@ -378,6 +381,11 @@ proc editTags*(conn: PSqlite3, tags: Tags, tagsSigLast: string, board: string, k
 
   db.withStatement(conn, "UPDATE user_search SET value = ? WHERE user_id MATCH ? AND attribute MATCH 'tags'", stmt):
     db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), content[0], user.user_id)
+    if step(stmt) != SQLITE_DONE:
+      db_sqlite.dbError(conn)
+
+  db.withStatement(conn, "UPDATE post SET tags = ? WHERE public_key = ?", stmt):
+    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), content[0], user.public_key)
     if step(stmt) != SQLITE_DONE:
       db_sqlite.dbError(conn)
 

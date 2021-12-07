@@ -91,7 +91,8 @@ proc init*(conn: PSqlite3) =
           parent TEXT,
           parent_public_key TEXT,
           reply_count INTEGER,
-          score INTEGER
+          score INTEGER,
+          tags TEXT
         ) STRICT
       """
       db_sqlite.exec conn, sql"CREATE INDEX post_ts ON post(ts)"
