@@ -73,7 +73,7 @@ int sqlite3PendingByte = 0x40000000;
 #define DEFAULT_SECTOR_SIZE 0x1000
 
 /* Maximum chunk number */
-#define MX_CHUNK_NUMBER 299
+#define MX_CHUNK_NUMBER 2147483647
 
 /* First chunk for rollback journal files */
 #define SQLITE_MULTIPLEX_JOURNAL_8_3_OFFSET 400
