@@ -289,6 +289,9 @@ test "edit post and user":
     # mod* tags are reserved, and unrecognized ones are an error
     expect Exception:
       entities.editTags(conn, entities.Tags(value: "\n\nmodleader modstuff", sig: "alice3"), "alice2", sysopPublicKey, sysopPublicKey)
+    # tags can only contain a-z
+    expect Exception:
+      entities.editTags(conn, entities.Tags(value: "\n\nmodleader HI", sig: "alice3"), "alice2", sysopPublicKey, sysopPublicKey)
     # bob cannot ban alice
     expect Exception:
       entities.editTags(conn, entities.Tags(value: "\n\nmodban", sig: "alice3"), "alice2", sysopPublicKey, bob.public_key)

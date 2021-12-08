@@ -383,6 +383,10 @@ proc editTags*(conn: PSqlite3, tags: Tags, tagsSigLast: string, board: string, k
   elif content[0].len > 80:
     raise newException(Exception, "Max tag length exceeded")
 
+  for ch in content[0]:
+    if ch notin {'a'..'z', ' '}:
+      raise newException(Exception, "Only the letters a-z are allowed in tags")
+
   let
     oldTags = common.parseTags(targetUser.tags.value)
     newTags = common.parseTags(content[0])
