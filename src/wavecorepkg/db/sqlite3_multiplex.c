@@ -72,8 +72,8 @@ int sqlite3PendingByte = 0x40000000;
 #define MAX_PAGE_SIZE       0x10000
 #define DEFAULT_SECTOR_SIZE 0x1000
 
-/* Maximum chunk number */
-#define MX_CHUNK_NUMBER 2147483647
+#define CHUNK_NUMBER_DIGITS 10
+#define CHUNK_NUMBER_FORMAT_STRING "%010d"
 
 /* First chunk for rollback journal files */
 #define SQLITE_MULTIPLEX_JOURNAL_8_3_OFFSET 400
@@ -198,24 +198,15 @@ static int multiplexStrlen30(const char *z){
 /*
 ** Generate the file-name for chunk iChunk of the group with base name
 ** zBase. The file-name is written to buffer zOut before returning. Buffer
-** zOut must be allocated by the caller so that it is at least (nBase+5)
+** zOut must be allocated by the caller so that it is at least (nBase+CHUNK_NUMBER_DIGITS+2)
 ** bytes in size, where nBase is the length of zBase, not including the
 ** nul-terminator.
 **
-** If iChunk is 0 (or 400 - the number for the first journal file chunk),
-** the output is a copy of the input string. Otherwise, if 
-** SQLITE_ENABLE_8_3_NAMES is not defined or the input buffer does not contain
-** a "." character, then the output is a copy of the input string with the 
-** three-digit zero-padded decimal representation if iChunk appended to it. 
+** The output is a copy of the input string with the zero-padded decimal representation
+** of iChunk appended to it.
 ** For example:
 **
-**   zBase="test.db", iChunk=4  ->  zOut="test.db004"
-**
-** Or, if SQLITE_ENABLE_8_3_NAMES is defined and the input buffer contains
-** a "." character, then everything after the "." is replaced by the 
-** three-digit representation of iChunk.
-**
-**   zBase="test.db", iChunk=4  ->  zOut="test.004"
+**   zBase="test.db", iChunk=4  ->  zOut="test.db0000000004"
 **
 ** The output buffer string is terminated by 2 0x00 bytes. This makes it safe
 ** to pass to sqlite3_uri_parameter() and similar.
@@ -229,26 +220,9 @@ static void multiplexFilename(
 ){
   int n = nBase;
   memcpy(zOut, zBase, n+1);
-  if( iChunk!=0 && iChunk<=MX_CHUNK_NUMBER ){
-#ifdef SQLITE_ENABLE_8_3_NAMES
-    int i;
-    for(i=n-1; i>0 && i>=n-4 && zOut[i]!='.'; i--){}
-    if( i>=n-4 ) n = i+1;
-    if( flags & SQLITE_OPEN_MAIN_JOURNAL ){
-      /* The extensions on overflow files for main databases are 001, 002,
-      ** 003 and so forth.  To avoid name collisions, add 400 to the 
-      ** extensions of journal files so that they are 401, 402, 403, ....
-      */
-      iChunk += SQLITE_MULTIPLEX_JOURNAL_8_3_OFFSET;
-    }else if( flags & SQLITE_OPEN_WAL ){
-      /* To avoid name collisions, add 700 to the 
-      ** extensions of WAL files so that they are 701, 702, 703, ....
-      */
-      iChunk += SQLITE_MULTIPLEX_WAL_8_3_OFFSET;
-    }
-#endif
-    sqlite3_snprintf(4,&zOut[n],"%03d",iChunk);
-    n += 3;
+  if( iChunk!=0 ){
+    sqlite3_snprintf(CHUNK_NUMBER_DIGITS+1,&zOut[n],CHUNK_NUMBER_FORMAT_STRING,iChunk);
+    n += CHUNK_NUMBER_DIGITS;
   }
 
   assert( zOut[n]=='\0' );
@@ -271,7 +245,7 @@ static int multiplexSubFilename(multiplexGroup *pGroup, int iChunk){
   if( pGroup->zName && pGroup->aReal[iChunk].z==0 ){
     char *z;
     int n = pGroup->nName;
-    z = sqlite3_malloc64( n+5 );
+    z = sqlite3_malloc64( n+CHUNK_NUMBER_DIGITS+2 );
     if( z==0 ){
       return SQLITE_NOMEM;
     }
@@ -299,18 +273,6 @@ static sqlite3_file *multiplexSubOpen(
 ){
   sqlite3_file *pSubOpen = 0;
   sqlite3_vfs *pOrigVfs = gMultiplex.pOrigVfs;        /* Real VFS */
-
-#ifdef SQLITE_ENABLE_8_3_NAMES
-  /* If JOURNAL_8_3_OFFSET is set to (say) 400, then any overflow files are 
-  ** part of a database journal are named db.401, db.402, and so on. A 
-  ** database may therefore not grow to larger than 400 chunks. Attempting
-  ** to open chunk 401 indicates the database is full. */
-  if( iChunk>=SQLITE_MULTIPLEX_JOURNAL_8_3_OFFSET ){
-    sqlite3_log(SQLITE_FULL, "multiplexed chunk overflow: %s", pGroup->zName);
-    *rc = SQLITE_FULL;
-    return 0;
-  }
-#endif
 
   *rc = multiplexSubFilename(pGroup, iChunk);
   if( (*rc)==SQLITE_OK && (pSubOpen = pGroup->aReal[iChunk].p)==0 ){
@@ -626,7 +588,7 @@ static int multiplexDelete(
     */
     int nName = (int)strlen(zName);
     char *z;
-    z = sqlite3_malloc64(nName + 5);
+    z = sqlite3_malloc64(nName + CHUNK_NUMBER_DIGITS+2);
     if( z==0 ){
       rc = SQLITE_IOERR_NOMEM;
     }else{

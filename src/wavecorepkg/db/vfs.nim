@@ -99,7 +99,7 @@ let customMethods = sqlite3_io_methods(
       if extra < 0: extra = 0
       amt -= extra;
       let
-        suffix = if i == 0: "" else : "{i:03}".fmt
+        suffix = if i == 0: "" else : "{i:010}".fmt
         firstByte = off mod chunkSize
         lastByte = firstByte + amt - 1
       var res = fetch(Request(
