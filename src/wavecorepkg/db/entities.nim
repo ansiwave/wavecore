@@ -164,6 +164,10 @@ proc selectUser*(conn: PSqlite3, publicKey: string): User =
     raise newException(Exception, "Can't select user")
 
 proc insertPost*(conn: PSqlite3, entity: Post, id: var int64, extraFn: proc (x: Post, sig: string) = nil) =
+  let sourceUser = selectUser(conn, entity.public_key)
+  if "modban" in common.parseTags(sourceUser.tags.value):
+    raise newException(Exception, "You are banned")
+
   var
     e = entity
     stmt: PStmt
@@ -216,7 +220,7 @@ proc insertPost*(conn: PSqlite3, entity: Post, id: var int64, extraFn: proc (x: 
   if extraFn != nil:
     extraFn(e, sig)
 
-  let userId = selectUser(conn, entity.public_key).user_id
+  let userId = sourceUser.user_id
 
   db.withStatement(conn, "INSERT INTO post_search (post_id, user_id, attribute, value) VALUES (?, ?, ?, ?)", stmt):
     db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), id, userId, "content", common.stripUnsearchableText(e.content.value.uncompressed))
@@ -285,6 +289,10 @@ proc search*(conn: PSqlite3, kind: SearchKind, term: string, offset: int = 0): s
     sequtils.toSeq(db.select[Post](conn, initPost, query, term))
 
 proc editPost*(conn: PSqlite3, content: Content, key: string, extraFn: proc (x: Post) = nil) =
+  let sourceUser = selectUser(conn, key)
+  if "modban" in common.parseTags(sourceUser.tags.value):
+    raise newException(Exception, "You are banned")
+
   var stmt: PStmt
 
   let sigLast =
@@ -348,9 +356,12 @@ proc insertUser*(conn: PSqlite3, entity: User) =
 
 const
   modRoles = ["modleader", "moderator"].toHashSet
-  modCommands = modRoles + ["modban", "modhide"].toHashSet
+  modCommands = modRoles + ["modban"].toHashSet
 
 proc editTags*(conn: PSqlite3, tags: Tags, tagsSigLast: string, board: string, key: string) =
+  if tagsSigLast == board:
+    raise newException(Exception, "Cannot tag the sysop")
+
   proc selectUserByTagsSigLast(conn: PSqlite3, sig: string): User =
     const query =
       """
@@ -364,7 +375,7 @@ proc editTags*(conn: PSqlite3, tags: Tags, tagsSigLast: string, board: string, k
       raise newException(Exception, "Can't edit tags (maybe you're editing an old version?)")
 
   let
-    user = selectUserByTagsSigLast(conn, tagsSigLast)
+    targetUser = selectUserByTagsSigLast(conn, tagsSigLast)
     content = common.splitAfterHeaders(tags.value)
 
   if content.len != 1:
@@ -373,7 +384,7 @@ proc editTags*(conn: PSqlite3, tags: Tags, tagsSigLast: string, board: string, k
     raise newException(Exception, "Max tag length exceeded")
 
   let
-    oldTags = common.parseTags(user.tags.value)
+    oldTags = common.parseTags(targetUser.tags.value)
     newTags = common.parseTags(content[0])
 
   for tag in newTags:
@@ -381,27 +392,33 @@ proc editTags*(conn: PSqlite3, tags: Tags, tagsSigLast: string, board: string, k
       raise newException(Exception, tag & " is an invalid tag")
 
   if key != board:
-    let userTags = common.parseTags(selectUser(conn, key).tags.value)
-    if "moderator" notin userTags and "modleader" notin userTags:
+    let
+      sourceUser = selectUser(conn, key)
+      sourceTags = common.parseTags(sourceUser.tags.value)
+    if "modban" in sourceTags:
+      raise newException(Exception, "You are banned")
+    if "moderator" notin sourceTags and "modleader" notin sourceTags:
       raise newException(Exception, "Only the sysop or moderators can edit tags")
     let changedTags = oldTags.symmetricDifference(newTags)
-    if changedTags - modRoles != changedTags and "modleader" notin userTags:
+    if changedTags - modRoles != changedTags and "modleader" notin sourceTags:
       raise newException(Exception, "Only modleaders can change someone's moderator status")
+    if changedTags - modCommands != changedTags and "modleader" in oldTags and "modleader" notin sourceTags:
+      raise newException(Exception, "Only modleaders can change mod tags of another modleader")
 
   var stmt: PStmt
 
   db.withStatement(conn, "UPDATE user SET tags = ?, tags_sig = ? WHERE user_id = ?", stmt):
-    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), content[0], tags.sig, user.user_id)
+    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), content[0], tags.sig, targetUser.user_id)
     if step(stmt) != SQLITE_DONE:
       db_sqlite.dbError(conn)
 
   db.withStatement(conn, "UPDATE user_search SET value = ? WHERE user_id MATCH ? AND attribute MATCH 'tags'", stmt):
-    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), content[0], user.user_id)
+    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), content[0], targetUser.user_id)
     if step(stmt) != SQLITE_DONE:
       db_sqlite.dbError(conn)
 
   db.withStatement(conn, "UPDATE post SET tags = ? WHERE public_key = ?", stmt):
-    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), content[0], user.public_key)
+    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), content[0], targetUser.public_key)
     if step(stmt) != SQLITE_DONE:
       db_sqlite.dbError(conn)
 

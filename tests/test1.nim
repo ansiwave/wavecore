@@ -289,6 +289,23 @@ test "edit post and user":
     # mod* tags are reserved, and unrecognized ones are an error
     expect Exception:
       entities.editTags(conn, entities.Tags(value: "\n\nmodleader modstuff", sig: "alice3"), "alice2", sysopPublicKey, sysopPublicKey)
+    # bob cannot ban alice
+    expect Exception:
+      entities.editTags(conn, entities.Tags(value: "\n\nmodban", sig: "alice3"), "alice2", sysopPublicKey, bob.public_key)
+    # bob can post
+    let p2 = Post(parent: bob.public_key, public_key: bob.public_key, content: initContent(bobKeys, "I like turtles"))
+    entities.insertPost(conn, p2)
+    # alice can ban bob
+    entities.editTags(conn, entities.Tags(value: "\n\nmoderator modban", sig: "bob4"), "bob3", sysopPublicKey, alice.public_key)
+    # bob can no longer post
+    expect Exception:
+      entities.insertPost(conn, Post(parent: bob.public_key, public_key: bob.public_key, content: initContent(bobKeys, "I like turtles a lot")))
+    expect Exception:
+      var newContent = initContent(bobKeys, newText)
+      newContent.sig_last = p2.content.sig
+      entities.editPost(conn, newContent, bob.public_key)
+    expect Exception:
+      entities.editTags(conn, entities.Tags(value: "\n\nmoderator hi", sig: "bob5"), "bob4", sysopPublicKey, bob.public_key)
 
 test "post to blog":
   db.withOpen(conn, ":memory:", false):
