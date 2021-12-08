@@ -221,7 +221,7 @@ test "search posts":
     entities.insertPost(conn, p2)
     p1 = entities.selectPost(conn, p1.content.sig)
     p2 = entities.selectPost(conn, p2.content.sig)
-    check @[p1, p2] == entities.search(conn, entities.AllPosts, "hello")
+    check @[p1, p2] == entities.search(conn, entities.Posts, "hello")
 
 test "score":
   db.withOpen(conn, ":memory:", false):
@@ -261,8 +261,8 @@ test "edit post and user":
     var newContent = initContent(aliceKeys, newText)
     newContent.sig_last = p1.content.sig
     entities.editPost(conn, newContent, alice.public_key)
-    check entities.search(conn, entities.AllPosts, "like").len == 0
-    check entities.search(conn, entities.AllPosts, "hate").len == 1
+    check entities.search(conn, entities.Posts, "like").len == 0
+    check entities.search(conn, entities.Posts, "hate").len == 1
     entities.editTags(conn, entities.Tags(value: "\n\nmoderator", sig: "asdf"), alice.public_key, sysopPublicKey, sysopPublicKey)
     check "moderator" == entities.selectUser(conn, alice.public_key).tags.value
     check "moderator" == entities.selectPost(conn, p1.content.sig).tags

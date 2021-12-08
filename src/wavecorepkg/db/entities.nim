@@ -34,7 +34,7 @@ type
     score*: int64
     tags*: string
   SearchKind* = enum
-    AllPosts, Users,
+    Posts, Users,
 
 const limit* = 10
 
@@ -252,9 +252,10 @@ proc search*(conn: PSqlite3, kind: SearchKind, term: string, offset: int = 0): s
   if term == "":
     let query =
       case kind:
-      of AllPosts:
+      of Posts:
         """
           SELECT post_id, content, content_sig, content_sig_last, public_key, parent, reply_count, score, tags FROM post
+          WHERE parent != ''
           ORDER BY ts DESC
           LIMIT $1
           OFFSET $2
@@ -275,10 +276,10 @@ proc search*(conn: PSqlite3, kind: SearchKind, term: string, offset: int = 0): s
       """
         SELECT post_id, content, content_sig, content_sig_last, public_key, parent, reply_count, score, tags FROM post
         WHERE post_id IN (SELECT post_id FROM post_search WHERE attribute MATCH 'content' AND value MATCH ? ORDER BY rank)
-        $1
+        AND $1
         LIMIT $2
         OFFSET $3
-      """.format((if kind == AllPosts: "" else: "AND parent = ''"), limit, offset)
+      """.format((if kind == Posts: "parent != ''" else: "parent = ''"), limit, offset)
     #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), term):
     #  echo x
     sequtils.toSeq(db.select[Post](conn, initPost, query, term))
