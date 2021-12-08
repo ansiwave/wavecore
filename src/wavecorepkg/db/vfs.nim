@@ -10,7 +10,7 @@ import bitops
 import json
 
 const
-  chunkSize = bitand(102400 + 0xffff, bitnot 0xffff)
+  chunkSize = bitand(524288 + 0xffff, bitnot 0xffff)
   manifestFile = "manifest.json"
 
 when defined(multiplexSqlite):
