@@ -359,9 +359,6 @@ const
   modCommands = modRoles + ["modban"].toHashSet
 
 proc editTags*(conn: PSqlite3, tags: Tags, tagsSigLast: string, board: string, key: string) =
-  if tagsSigLast == board:
-    raise newException(Exception, "Cannot tag the sysop")
-
   proc selectUserByTagsSigLast(conn: PSqlite3, sig: string): User =
     const query =
       """
