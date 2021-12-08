@@ -346,15 +346,15 @@ proc insertUser*(conn: PSqlite3, entity: User) =
   var id: int64
   insertUser(conn, entity, id)
 
-proc editTags*(conn: PSqlite3, tags: Tags, tagsSigLast: string, board: string, key: string) =
-  if key != board:
-    if "moderator" notin common.parseTags(selectUser(conn, key).tags.value):
-      raise newException(Exception, "Only the sysop or moderators can edit tags")
+const
+  modRoles = ["modleader", "moderator"].toHashSet
+  modCommands = modRoles + ["modban", "modhide"].toHashSet
 
+proc editTags*(conn: PSqlite3, tags: Tags, tagsSigLast: string, board: string, key: string) =
   proc selectUserByTagsSigLast(conn: PSqlite3, sig: string): User =
     const query =
       """
-        SELECT user_id, public_key FROM user
+        SELECT user_id, public_key, tags, tags_sig FROM user
         WHERE tags_sig = ?
       """
     let ret = db.select[User](conn, initUser, query, sig)
@@ -371,6 +371,22 @@ proc editTags*(conn: PSqlite3, tags: Tags, tagsSigLast: string, board: string, k
     raise newException(Exception, "Tags must be on a single line")
   elif content[0].len > 80:
     raise newException(Exception, "Max tag length exceeded")
+
+  let
+    oldTags = common.parseTags(user.tags.value)
+    newTags = common.parseTags(content[0])
+
+  for tag in newTags:
+    if strutils.startsWith(tag, "mod") and tag notin modCommands:
+      raise newException(Exception, tag & " is an invalid tag")
+
+  if key != board:
+    let userTags = common.parseTags(selectUser(conn, key).tags.value)
+    if "moderator" notin userTags and "modleader" notin userTags:
+      raise newException(Exception, "Only the sysop or moderators can edit tags")
+    let changedTags = oldTags.symmetricDifference(newTags)
+    if changedTags - modRoles != changedTags and "modleader" notin userTags:
+      raise newException(Exception, "Only modleaders can change someone's moderator status")
 
   var stmt: PStmt
 

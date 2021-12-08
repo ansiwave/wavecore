@@ -263,14 +263,32 @@ test "edit post and user":
     entities.editPost(conn, newContent, alice.public_key)
     check entities.search(conn, entities.Posts, "like").len == 0
     check entities.search(conn, entities.Posts, "hate").len == 1
-    entities.editTags(conn, entities.Tags(value: "\n\nmoderator", sig: "asdf"), alice.public_key, sysopPublicKey, sysopPublicKey)
-    check "moderator" == entities.selectUser(conn, alice.public_key).tags.value
-    check "moderator" == entities.selectPost(conn, p1.content.sig).tags
-    entities.editTags(conn, entities.Tags(value: "\n\nstuff", sig: "asdf2"), bob.public_key, sysopPublicKey, alice.public_key)
     expect Exception:
       entities.editPost(conn, newContent, bob.public_key)
+    # sysop can make alice a moderator
+    entities.editTags(conn, entities.Tags(value: "\n\nmoderator", sig: "alice1"), alice.public_key, sysopPublicKey, sysopPublicKey)
+    check "moderator" == entities.selectUser(conn, alice.public_key).tags.value
+    check "moderator" == entities.selectPost(conn, p1.content.sig).tags
+    # alice can now tag bob
+    entities.editTags(conn, entities.Tags(value: "\n\nstuff", sig: "bob1"), bob.public_key, sysopPublicKey, alice.public_key)
+    # bob cannot tag alice
     expect Exception:
-      entities.editTags(conn, entities.Tags(value: "", sig: "asdf3"), alice.public_key, sysopPublicKey, bob.public_key)
+      entities.editTags(conn, entities.Tags(value: "\n\nmoderator hi", sig: "alice2"), "alice1", sysopPublicKey, bob.public_key)
+    # alice cannot make bob a moderator because she isn't a modleader
+    expect Exception:
+      entities.editTags(conn, entities.Tags(value: "\n\nmoderator", sig: "bob2"), "bob1", sysopPublicKey, alice.public_key)
+    # sysop now makes alice a modleader
+    entities.editTags(conn, entities.Tags(value: "\n\nmodleader", sig: "alice2"), "alice1", sysopPublicKey, sysopPublicKey)
+    # alice now makes bob a moderator
+    entities.editTags(conn, entities.Tags(value: "\n\nmoderator", sig: "bob2"), "bob1", sysopPublicKey, alice.public_key)
+    # bob cannot remove his moderator status
+    expect Exception:
+      entities.editTags(conn, entities.Tags(value: "\n\n", sig: "bob3"), "bob2", sysopPublicKey, bob.public_key)
+    # bob change other tags
+    entities.editTags(conn, entities.Tags(value: "\n\nmoderator hello", sig: "bob3"), "bob2", sysopPublicKey, bob.public_key)
+    # mod* tags are reserved, and unrecognized ones are an error
+    expect Exception:
+      entities.editTags(conn, entities.Tags(value: "\n\nmodleader modstuff", sig: "alice3"), "alice2", sysopPublicKey, sysopPublicKey)
 
 test "post to blog":
   db.withOpen(conn, ":memory:", false):

@@ -7,7 +7,8 @@ from times import nil
 import unicode
 
 proc parseTags*(tags: string): HashSet[string] =
-  strutils.split(tags, ' ').toHashSet
+  result = strutils.split(tags, ' ').toHashSet
+  result.excl("")
 
 type
   HeaderKind* = enum
