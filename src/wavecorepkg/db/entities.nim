@@ -113,7 +113,7 @@ proc selectPostChildren*(conn: PSqlite3, sig: string, sortByTs: bool = false, of
   let query =
     """
       SELECT post_id, content, content_sig, content_sig_last, public_key, parent, reply_count, score, tags FROM post
-      WHERE parent = ?
+      WHERE parent = ? AND visibility = 1
       ORDER BY $1 DESC
       LIMIT $2
       OFFSET $3
@@ -126,7 +126,7 @@ proc selectUserPosts*(conn: PSqlite3, publicKey: string, offset: int = 0): seq[P
   let query =
     """
       SELECT post_id, content, content_sig, content_sig_last, public_key, parent, reply_count, score, tags FROM post
-      WHERE public_key = ? AND parent != ''
+      WHERE public_key = ? AND parent != '' AND visibility = 1
       ORDER BY ts DESC
       LIMIT $1
       OFFSET $2
@@ -211,7 +211,7 @@ proc insertPost*(conn: PSqlite3, entity: Post, id: var int64, extraFn: proc (x: 
       else:
         e.content.sig
 
-  db.withStatement(conn, "INSERT INTO post (ts, content, content_sig, content_sig_last, public_key, parent, parent_public_key, reply_count, score) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0)", stmt):
+  db.withStatement(conn, "INSERT INTO post (ts, content, content_sig, content_sig_last, public_key, parent, parent_public_key, reply_count, score, visibility) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, 1)", stmt):
     db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), times.toUnix(times.getTime()), e.content.value.compressed, sig, e.content.sig, e.public_key, e.parent, parentPublicKey)
     if step(stmt) != SQLITE_DONE:
       db_sqlite.dbError(conn)
@@ -259,7 +259,7 @@ proc search*(conn: PSqlite3, kind: SearchKind, term: string, offset: int = 0): s
       of Posts:
         """
           SELECT post_id, content, content_sig, content_sig_last, public_key, parent, reply_count, score, tags FROM post
-          WHERE parent != ''
+          WHERE parent != '' AND visibility = 1
           ORDER BY ts DESC
           LIMIT $1
           OFFSET $2
@@ -268,6 +268,7 @@ proc search*(conn: PSqlite3, kind: SearchKind, term: string, offset: int = 0): s
         """
           SELECT post.content, user.public_key AS content_sig, user.public_key FROM user
           LEFT JOIN post ON user.public_key = post.content_sig
+          WHERE post.visibility = 1
           ORDER BY user.ts DESC
           LIMIT $1
           OFFSET $2
@@ -280,6 +281,7 @@ proc search*(conn: PSqlite3, kind: SearchKind, term: string, offset: int = 0): s
       """
         SELECT post_id, content, content_sig, content_sig_last, public_key, parent, reply_count, score, tags FROM post
         WHERE post_id IN (SELECT post_id FROM post_search WHERE attribute MATCH 'content' AND value MATCH ? ORDER BY rank)
+        AND visibility = 1
         AND $1
         LIMIT $2
         OFFSET $3
@@ -356,7 +358,7 @@ proc insertUser*(conn: PSqlite3, entity: User) =
 
 const
   modRoles = ["modleader", "moderator"].toHashSet
-  modCommands = modRoles + ["modban"].toHashSet
+  modCommands = modRoles + ["modban", "modhide"].toHashSet
 
 proc editTags*(conn: PSqlite3, tags: Tags, tagsSigLast: string, board: string, key: string) =
   proc selectUserByTagsSigLast(conn: PSqlite3, sig: string): User =
@@ -422,4 +424,15 @@ proc editTags*(conn: PSqlite3, tags: Tags, tagsSigLast: string, board: string, k
     db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), content[0], targetUser.public_key)
     if step(stmt) != SQLITE_DONE:
       db_sqlite.dbError(conn)
+
+  if "modhide" in newTags and "modhide" notin oldTags:
+    db.withStatement(conn, "UPDATE post SET visibility = ? WHERE public_key = ?", stmt):
+      db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), 0, targetUser.public_key)
+      if step(stmt) != SQLITE_DONE:
+        db_sqlite.dbError(conn)
+  elif "modhide" in oldTags and "modhide" notin newTags:
+    db.withStatement(conn, "UPDATE post SET visibility = ? WHERE public_key = ?", stmt):
+      db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), 1, targetUser.public_key)
+      if step(stmt) != SQLITE_DONE:
+        db_sqlite.dbError(conn)
 

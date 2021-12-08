@@ -298,8 +298,14 @@ test "edit post and user":
     # bob can post
     let p2 = Post(parent: bob.public_key, public_key: bob.public_key, content: initContent(bobKeys, "I like turtles"))
     entities.insertPost(conn, p2)
+    # alice can hide bob
+    check 1 == entities.selectPostChildren(conn, bob.public_key).len
+    entities.editTags(conn, entities.Tags(value: "\n\nmoderator modhide", sig: "bob4"), "bob3", sysopPublicKey, alice.public_key)
+    check 0 == entities.selectPostChildren(conn, bob.public_key).len
+    entities.editTags(conn, entities.Tags(value: "\n\nmoderator", sig: "bob5"), "bob4", sysopPublicKey, alice.public_key)
+    check 1 == entities.selectPostChildren(conn, bob.public_key).len
     # alice can ban bob
-    entities.editTags(conn, entities.Tags(value: "\n\nmoderator modban", sig: "bob4"), "bob3", sysopPublicKey, alice.public_key)
+    entities.editTags(conn, entities.Tags(value: "\n\nmoderator modban", sig: "bob6"), "bob5", sysopPublicKey, alice.public_key)
     # bob can no longer post
     expect Exception:
       entities.insertPost(conn, Post(parent: bob.public_key, public_key: bob.public_key, content: initContent(bobKeys, "I like turtles a lot")))
@@ -308,7 +314,7 @@ test "edit post and user":
       newContent.sig_last = p2.content.sig
       entities.editPost(conn, newContent, bob.public_key)
     expect Exception:
-      entities.editTags(conn, entities.Tags(value: "\n\nmoderator hi", sig: "bob5"), "bob4", sysopPublicKey, bob.public_key)
+      entities.editTags(conn, entities.Tags(value: "\n\nmoderator hi", sig: "bob7"), "bob6", sysopPublicKey, bob.public_key)
 
 test "post to blog":
   db.withOpen(conn, ":memory:", false):

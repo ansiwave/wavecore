@@ -93,6 +93,7 @@ proc init*(conn: PSqlite3) =
           parent_public_key TEXT,
           reply_count INTEGER,
           score INTEGER,
+          visibility INTEGER,
           tags TEXT,
           misc TEXT
         ) STRICT
