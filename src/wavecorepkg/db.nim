@@ -77,9 +77,7 @@ proc init*(conn: PSqlite3) =
         ) STRICT
       """
       db_sqlite.exec conn, sql"CREATE INDEX user_ts ON user(ts)"
-      db_sqlite.exec conn, sql"CREATE INDEX user_public_key ON user(public_key)"
       db_sqlite.exec conn, sql"CREATE INDEX user_public_key_ts ON user(public_key, ts)"
-      db_sqlite.exec conn, sql"CREATE INDEX user_tags_sig ON user(tags_sig)"
       db_sqlite.exec conn, sql"CREATE VIRTUAL TABLE user_search USING fts5 (user_id, attribute, value, value_unindexed UNINDEXED)"
       db_sqlite.exec conn, sql"""
         CREATE TABLE post (
@@ -99,15 +97,11 @@ proc init*(conn: PSqlite3) =
         ) STRICT
       """
       db_sqlite.exec conn, sql"CREATE INDEX post_ts ON post(ts)"
-      db_sqlite.exec conn, sql"CREATE INDEX post_content_sig ON post(content_sig)"
-      db_sqlite.exec conn, sql"CREATE INDEX post_content_sig_last ON post(content_sig_last)"
-      db_sqlite.exec conn, sql"CREATE INDEX post_public_key ON post(public_key)"
-      db_sqlite.exec conn, sql"CREATE INDEX post_public_key_ts ON post(public_key, ts)"
-      db_sqlite.exec conn, sql"CREATE INDEX post_parent ON post(parent)"
-      db_sqlite.exec conn, sql"CREATE INDEX post_parent_ts ON post(parent, ts)"
-      db_sqlite.exec conn, sql"CREATE INDEX post_parent_score ON post(parent, score)"
-      db_sqlite.exec conn, sql"CREATE INDEX post_parent_public_key ON post(parent_public_key)"
-      db_sqlite.exec conn, sql"CREATE INDEX post_parent_public_key_ts ON post(parent_public_key, ts)"
+      db_sqlite.exec conn, sql"CREATE INDEX post_visibility_public_key_parent_ts ON post(visibility, public_key, parent, ts)"
+      db_sqlite.exec conn, sql"CREATE INDEX post_visibility_ts ON post(visibility, ts)"
+      db_sqlite.exec conn, sql"CREATE INDEX post_visibility_parent_ts ON post(visibility, parent, ts)"
+      db_sqlite.exec conn, sql"CREATE INDEX post_visibility_parent_score ON post(visibility, parent, score)"
+      db_sqlite.exec conn, sql"CREATE INDEX post_visibility_parent_public_key_ts ON post(visibility, parent_public_key, ts)"
       db_sqlite.exec conn, sql"CREATE VIRTUAL TABLE post_search USING fts5 (post_id, user_id, attribute, value, value_unindexed UNINDEXED)"
       version += 1
       db_sqlite.exec conn, sql("PRAGMA user_version = " & $version)

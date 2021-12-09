@@ -268,7 +268,7 @@ proc search*(conn: PSqlite3, kind: SearchKind, term: string, offset: int = 0): s
         """
           SELECT post.content, user.public_key AS content_sig, user.public_key FROM user
           LEFT JOIN post ON user.public_key = post.content_sig
-          WHERE post.visibility = 1
+          WHERE IFNULL(post.visibility, 1) == 1
           ORDER BY user.ts DESC
           LIMIT $1
           OFFSET $2

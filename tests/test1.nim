@@ -263,6 +263,8 @@ test "search posts":
     p1 = entities.selectPost(conn, p1.content.sig)
     p2 = entities.selectPost(conn, p2.content.sig)
     check @[p1, p2] == entities.search(conn, entities.Posts, "hello")
+    check entities.search(conn, entities.Posts, "").len == 2
+    check entities.search(conn, entities.Users, "").len == 2
 
 test "score":
   db.withOpen(conn, ":memory:", false):
