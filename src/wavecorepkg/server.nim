@@ -110,11 +110,14 @@ proc sendAction(server: Server, action: Action): bool =
 proc ansiwavePost(server: Server, request: Request, headers: var string, body: var string) =
   if request.body.len > 0:
     # parse the ansiwave
-    let (cmds, headersAndContent, _) =
+    let (cmds, headersAndContent, contentOnly) =
       try:
         common.parseAnsiwave(request.body)
       except Exception as ex:
         raise newException(BadRequestException, ex.msg)
+
+    if strutils.countLines(contentOnly) > 120:
+      raise newException(BadRequestException, "Too many lines")
 
     # check the board
     let board = cmds["/head.board"]
