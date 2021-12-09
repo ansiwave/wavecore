@@ -338,7 +338,6 @@ proc editPost*(conn: PSqlite3, content: Content, key: string, extraFn: proc (x: 
 
 proc insertUser*(conn: PSqlite3, entity: User, id: var int64) =
   var
-    e = entity
     stmt: PStmt
 
   db.withStatement(conn, "INSERT INTO user (ts, public_key, public_key_algo, tags, tags_sig) VALUES (?, ?, ?, ?, ?)", stmt):
