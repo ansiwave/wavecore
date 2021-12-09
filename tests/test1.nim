@@ -1,6 +1,47 @@
 import unittest
 from strutils import nil
+from sequtils import nil
 import json
+
+from ./wavecorepkg/wavescript import nil
+
+proc parseAnsiwave(lines: seq[string]): seq[wavescript.CommandTree] =
+  var scriptContext = waveScript.initContext()
+  let
+    cmds = wavescript.extract(lines)
+    treesTemp = sequtils.map(cmds, proc (text: auto): wavescript.CommandTree = wavescript.parse(scriptContext, text))
+  wavescript.parseOperatorCommands(treesTemp)
+
+test "Parse commands":
+  const hello = staticRead("hello.ansiwave")
+  let lines = strutils.splitLines(hello)
+  let trees = parseAnsiwave(lines)
+  check trees.len == 2
+
+test "Parse operators":
+  let lines = strutils.splitLines("/rock-organ c#+3 /octave 3 d-,c /2 1/2 c,d c+")
+  let trees = parseAnsiwave(lines)
+  check trees.len == 1
+
+test "Parse broken symbol":
+  let lines = strutils.splitLines("/instrument -hello-world")
+  let trees = parseAnsiwave(lines)
+  check trees.len == 1
+
+test "/,":
+  let text = strutils.splitLines("""
+/banjo /octave 3 /16 b c+ /8 d+ b c+ a b g a
+/,
+/guitar /octave 3 /16 r r /8 g r d r g g d
+""")
+  let trees = parseAnsiwave(text)
+  check trees.len == 3
+
+test "variables":
+  const text = staticRead("variables.ansiwave")
+  let lines = strutils.splitLines(text)
+  let trees = parseAnsiwave(lines)
+  check trees.len == 4
 
 from ./wavecorepkg/client import nil
 from ./wavecorepkg/server import nil
