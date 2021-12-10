@@ -126,7 +126,7 @@ proc selectUserPosts*(conn: PSqlite3, publicKey: string, offset: int = 0): seq[P
   let query =
     """
       SELECT post_id, content, content_sig, content_sig_last, public_key, parent, reply_count, score, tags FROM post
-      WHERE public_key = ? AND parent != '' AND visibility = 1
+      WHERE public_key = ? AND parent != ''
       ORDER BY ts DESC
       LIMIT $1
       OFFSET $2
