@@ -309,7 +309,7 @@ proc recvAction(server: Server) {.thread.} =
   # FIXME: catch exceptions
   while true:
     let action = server.action[].recv()
-    var resp: string
+    var resp = ""
     case action.kind:
     of Stop:
       break
@@ -317,21 +317,18 @@ proc recvAction(server: Server) {.thread.} =
       try:
         {.cast(gcsafe).}:
           insertPost(server, action.board, action.post)
-        resp = ""
       except Exception as ex:
         resp = ex.msg
     of EditPost:
       try:
         {.cast(gcsafe).}:
           editPost(server, action.board, action.content, action.key)
-        resp = ""
       except Exception as ex:
         resp = ex.msg
     of EditTags:
       try:
         {.cast(gcsafe).}:
           editTags(server, action.board, action.tags, action.tagsSigLast, action.key)
-        resp = ""
       except Exception as ex:
         resp = ex.msg
     action.error[].send(resp)
