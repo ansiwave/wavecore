@@ -162,3 +162,15 @@ EM_JS(void, wavecore_open_new_tab, (const char* url), {
   window.open(UTF8ToString(url), "_blank");
 });
 
+EM_JS(void, wavecore_scroll_up, (int top), {
+  if (document.documentElement.scrollTop > top) {
+    document.documentElement.scrollTop = top;
+  }
+});
+
+EM_JS(void, wavecore_scroll_down, (int bottom), {
+  if (document.documentElement.scrollTop + document.documentElement.clientHeight < bottom) {
+    document.documentElement.scrollTop = bottom - document.documentElement.clientHeight;
+  }
+});
+
