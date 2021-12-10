@@ -31,6 +31,26 @@ const
                  .'.eeeeeeeeeeeeeeeeeeeeee.'.         
                 :____________________________:
     """
+  subboard1Text =
+    """
+                                       
+                                    )  
+    )            (       )  (    ( /(  
+ ( /(   (     (  )\   ( /(  )(   )\()) 
+ )(_))  )\ )  )\((_)  )(_))(()\ (_))/  
+((_)_  _(_/( ((_)(_) ((_)_  ((_)| |_   
+/ _` || ' \))(_-<| | / _` || '_||  _|  
+\__,_||_||_| /__/|_| \__,_||_|   \__|  
+                                       
+    """
+  subboard2Text =
+    """
+         _    ___                  _    
+  __ _  (_)__/ (_) __ _  __ _____ (_)___
+ /  ' \/ / _  / / /  ' \/ // (_-</ / __/
+/_/_/_/_/\_,_/_/ /_/_/_/\_,_/___/_/\__/ 
+                                        
+    """
   jabba =
     """
 [0m[40m                                                                                [0m
@@ -142,14 +162,13 @@ const
  |_|/_/   \_\____/ \___/|_____\___/ \___/|____/ 
                                                 
     """
-  loremIpsum =
+  aerith =
     """
-Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor
-incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis
-nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
-Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu
-fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in
-culpa qui officia deserunt mollit anim id est laborum.
+Aerith's theme
+
+/instrument organ
+/tempo 74
+/play /8 d-,a-,e,f# a /2 f#,d+ /8 e-,e,c+ a /2 c,e /8 d-,a-,e,f# a d+ c#+ e+ d+ b c#+ /2 e-,c,a /2 c,e
     """
   staticFileDir = "bbs"
 
@@ -182,8 +201,11 @@ when isMainModule:
     db.init(conn)
   let sysop = entities.User(public_key: paths.sysopPublicKey)
   server.editPost(s, paths.sysopPublicKey, entities.initContent(common.signWithHeaders(sysopKeys, asciiArt, sysop.public_key, common.Edit), sysop.public_key), sysop.public_key)
-  let subboard = entities.Post(parent: sysop.public_key, public_key: sysop.public_key, content: entities.initContent(common.signWithHeaders(sysopKeys, "General Discussion", sysop.public_key, common.New)))
+  let
+    subboard = entities.Post(parent: sysop.public_key, public_key: sysop.public_key, content: entities.initContent(common.signWithHeaders(sysopKeys, subboard1Text, sysop.public_key, common.New)))
+    subboard2 = entities.Post(parent: sysop.public_key, public_key: sysop.public_key, content: entities.initContent(common.signWithHeaders(sysopKeys, subboard2Text, sysop.public_key, common.New)))
   server.insertPost(s, paths.sysopPublicKey, subboard)
+  server.insertPost(s, paths.sysopPublicKey, subboard2)
   let
     aliceKeys = ed25519.initKeyPair()
     bobKeys = ed25519.initKeyPair()
@@ -191,7 +213,7 @@ when isMainModule:
     bob = entities.User(public_key: paths.encode(bobKeys.public))
   server.editPost(s, paths.sysopPublicKey, entities.initContent(common.signWithHeaders(aliceKeys, "Hi i'm alice", alice.public_key, common.Edit), alice.public_key), alice.public_key)
   server.editPost(s, paths.sysopPublicKey, entities.initContent(common.signWithHeaders(bobKeys, "Hi i'm bob", bob.public_key, common.Edit), bob.public_key), bob.public_key)
-  let p1 = entities.Post(parent: subboard.content.sig, public_key: bob.public_key, content: entities.initContent(common.signWithHeaders(bobKeys, "Hello, world...this is a lame comment\n\n" & loremIpsum, subboard.content.sig, common.New)))
+  let p1 = entities.Post(parent: subboard2.content.sig, public_key: bob.public_key, content: entities.initContent(common.signWithHeaders(bobKeys, aerith, subboard2.content.sig, common.New)))
   server.insertPost(s, paths.sysopPublicKey, p1)
   let p2 = entities.Post(parent: subboard.content.sig, public_key: bob.public_key, content: entities.initContent(common.signWithHeaders(bobKeys, jabba, subboard.content.sig, common.New)))
   server.insertPost(s, paths.sysopPublicKey, p2)
