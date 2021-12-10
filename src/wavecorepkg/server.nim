@@ -28,7 +28,7 @@ type
       tagsSigLast: string
     board: string
     key: string
-    done: ptr Channel[bool]
+    error: ptr Channel[string]
   Server* = ref object
     hostname: string
     port: int
@@ -95,17 +95,17 @@ proc editTags*(server: Server, board: string, tags: entities.Tags, tagsSigLast: 
     db.withTransaction(conn):
       entities.editTags(conn, tags, tagsSigLast, board, key)
 
-proc sendAction(server: Server, action: Action): bool =
-  let done = cast[ptr Channel[bool]](
-    allocShared0(sizeof(Channel[bool]))
+proc sendAction(server: Server, action: Action): string =
+  let error = cast[ptr Channel[string]](
+    allocShared0(sizeof(Channel[string]))
   )
-  done[].open()
+  error[].open()
   var newAction = action
-  newAction.done = done
+  newAction.error = error
   server.action[].send(newAction)
-  result = done[].recv()
-  done[].close()
-  deallocShared(done)
+  result = error[].recv()
+  error[].close()
+  deallocShared(error)
 
 proc ansiwavePost(server: Server, request: Request, headers: var string, body: var string) =
   if request.body.len > 0:
@@ -149,21 +149,27 @@ proc ansiwavePost(server: Server, request: Request, headers: var string, body: v
 
     case cmds["/head.type"]:
     of "new":
-      let post = entities.Post(
-        content: entities.Content(value: entities.initCompressedValue(request.body), sig: sigBase64),
-        public_key: keyBase64,
-        parent: cmds["/head.target"],
-      )
-      if not sendAction(server, Action(kind: InsertPost, board: board, post: post)):
-        raise newException(Exception, "Failed to insert post")
+      let
+        post = entities.Post(
+          content: entities.Content(value: entities.initCompressedValue(request.body), sig: sigBase64),
+          public_key: keyBase64,
+          parent: cmds["/head.target"],
+        )
+        error = sendAction(server, Action(kind: InsertPost, board: board, post: post))
+      if error != "":
+        raise newException(Exception, error)
     of "edit":
-      let content = entities.Content(value: entities.initCompressedValue(request.body), sig: sigBase64, sig_last: cmds["/head.target"])
-      if not sendAction(server, Action(kind: EditPost, board: board, content: content, key: cmds["/head.key"])):
-        raise newException(Exception, "Failed to edit post")
+      let
+        content = entities.Content(value: entities.initCompressedValue(request.body), sig: sigBase64, sig_last: cmds["/head.target"])
+        error = sendAction(server, Action(kind: EditPost, board: board, content: content, key: cmds["/head.key"]))
+      if error != "":
+        raise newException(Exception, error)
     of "tags":
-      let tags = entities.Tags(value: request.body, sig: sigBase64)
-      if not sendAction(server, Action(kind: EditTags, board: board, tags: tags, tagsSigLast: cmds["/head.target"], key: cmds["/head.key"])):
-        raise newException(Exception, "Failed to edit tags")
+      let
+        tags = entities.Tags(value: request.body, sig: sigBase64)
+        error = sendAction(server, Action(kind: EditTags, board: board, tags: tags, tagsSigLast: cmds["/head.target"], key: cmds["/head.key"]))
+      if error != "":
+        raise newException(Exception, error)
     else:
       raise newException(BadRequestException, "Invalid /head.type")
   else:
@@ -303,7 +309,7 @@ proc recvAction(server: Server) {.thread.} =
   # FIXME: catch exceptions
   while true:
     let action = server.action[].recv()
-    var resp = false
+    var resp: string
     case action.kind:
     of Stop:
       break
@@ -311,24 +317,24 @@ proc recvAction(server: Server) {.thread.} =
       try:
         {.cast(gcsafe).}:
           insertPost(server, action.board, action.post)
-        resp = true
+        resp = ""
       except Exception as ex:
-        resp = false
+        resp = ex.msg
     of EditPost:
       try:
         {.cast(gcsafe).}:
           editPost(server, action.board, action.content, action.key)
-        resp = true
+        resp = ""
       except Exception as ex:
-        resp = false
+        resp = ex.msg
     of EditTags:
       try:
         {.cast(gcsafe).}:
           editTags(server, action.board, action.tags, action.tagsSigLast, action.key)
-        resp = true
+        resp = ""
       except Exception as ex:
-        resp = false
-    action.done[].send(resp)
+        resp = ex.msg
+    action.error[].send(resp)
 
 proc initShared(server: var Server) =
   server.listenStopped = cast[ptr Channel[bool]](
