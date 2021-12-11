@@ -216,7 +216,7 @@ proc insertPost*(conn: PSqlite3, entity: Post, id: var int64, extraFn: proc (x: 
       else:
         e.content.sig
 
-  db.withStatement(conn, "INSERT INTO post (ts, content, content_sig, content_sig_last, public_key, parent, parent_public_key, tags, reply_count, score, visibility) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 1)", stmt):
+  db.withStatement(conn, "INSERT INTO post (ts, content, content_sig, content_sig_last, public_key, parent, parent_public_key, reply_count, score, visibility, tags) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, 1, ?)", stmt):
     db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), times.toUnix(times.getTime()), e.content.value.compressed, sig, e.content.sig, e.public_key, e.parent, parentPublicKey, sourceUser.tags.value)
     if step(stmt) != SQLITE_DONE:
       db_sqlite.dbError(conn)
