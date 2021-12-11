@@ -34,7 +34,7 @@ type
     score*: int64
     tags*: string
   SearchKind* = enum
-    Posts, Users,
+    Posts, Users, UserTags,
 
 const limit* = 10
 
@@ -47,6 +47,11 @@ proc initContent*(content: tuple[body: string, sig: string], sigLast: string = c
   result.value = initCompressedValue(content.body)
   result.sig = content.sig
   result.sig_last = sigLast
+
+# not used in prod...only in tests
+proc initTags*(tags: tuple[body: string, sig: string]): Tags =
+  result.value = tags.body
+  result.sig = tags.sig
 
 proc initPost(stmt: PStmt): Post =
   var cols = sqlite3.column_count(stmt)
@@ -211,8 +216,8 @@ proc insertPost*(conn: PSqlite3, entity: Post, id: var int64, extraFn: proc (x: 
       else:
         e.content.sig
 
-  db.withStatement(conn, "INSERT INTO post (ts, content, content_sig, content_sig_last, public_key, parent, parent_public_key, reply_count, score, visibility) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, 1)", stmt):
-    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), times.toUnix(times.getTime()), e.content.value.compressed, sig, e.content.sig, e.public_key, e.parent, parentPublicKey)
+  db.withStatement(conn, "INSERT INTO post (ts, content, content_sig, content_sig_last, public_key, parent, parent_public_key, tags, reply_count, score, visibility) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 1)", stmt):
+    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), times.toUnix(times.getTime()), e.content.value.compressed, sig, e.content.sig, e.public_key, e.parent, parentPublicKey, sourceUser.tags.value)
     if step(stmt) != SQLITE_DONE:
       db_sqlite.dbError(conn)
     id = sqlite3.last_insert_rowid(conn)
@@ -266,9 +271,18 @@ proc search*(conn: PSqlite3, kind: SearchKind, term: string, offset: int = 0): s
         """.format(limit, offset)
       of Users:
         """
-          SELECT post.content, user.public_key AS content_sig, user.public_key FROM user
+          SELECT post.content, user.public_key AS content_sig, user.public_key, user.tags FROM user
           LEFT JOIN post ON user.public_key = post.content_sig
           WHERE IFNULL(post.visibility, 1) == 1
+          ORDER BY user.ts DESC
+          LIMIT $1
+          OFFSET $2
+        """.format(limit, offset)
+      of UserTags:
+        """
+          SELECT post.content, user.public_key AS content_sig, user.public_key, user.tags FROM user
+          LEFT JOIN post ON user.public_key = post.content_sig
+          WHERE IFNULL(post.visibility, 1) == 1 AND user.tags != ""
           ORDER BY user.ts DESC
           LIMIT $1
           OFFSET $2
@@ -278,14 +292,24 @@ proc search*(conn: PSqlite3, kind: SearchKind, term: string, offset: int = 0): s
     sequtils.toSeq(db.select[Post](conn, initPost, query))
   else:
     let query =
-      """
-        SELECT post_id, content, content_sig, content_sig_last, public_key, parent, reply_count, score, tags FROM post
-        WHERE post_id IN (SELECT post_id FROM post_search WHERE attribute MATCH 'content' AND value MATCH ? ORDER BY rank)
-        AND visibility = 1
-        AND $1
-        LIMIT $2
-        OFFSET $3
-      """.format((if kind == Posts: "parent != ''" else: "parent = ''"), limit, offset)
+      case kind:
+      of Posts, Users:
+        """
+          SELECT post_id, content, content_sig, content_sig_last, public_key, parent, reply_count, score, tags FROM post
+          WHERE post_id IN (SELECT post_id FROM post_search WHERE attribute MATCH 'content' AND value MATCH ? ORDER BY rank)
+          AND visibility = 1
+          AND $1
+          LIMIT $2
+          OFFSET $3
+        """.format((if kind == Posts: "parent != ''" else: "parent = ''"), limit, offset)
+      of UserTags:
+        """
+          SELECT post.content, user.public_key AS content_sig, user.public_key, user.tags FROM user
+          LEFT JOIN post ON user.public_key = post.content_sig
+          WHERE user.user_id IN (SELECT user_id FROM user_search WHERE attribute MATCH 'tags' AND value MATCH ? ORDER BY rank)
+          LIMIT $1
+          OFFSET $2
+        """.format(limit, offset)
     #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), term):
     #  echo x
     sequtils.toSeq(db.select[Post](conn, initPost, query, term))

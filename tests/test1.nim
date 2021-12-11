@@ -265,6 +265,10 @@ test "search posts":
     check @[p1, p2] == entities.search(conn, entities.Posts, "hello")
     check entities.search(conn, entities.Posts, "").len == 2
     check entities.search(conn, entities.Users, "").len == 2
+    entities.editTags(conn, entities.Tags(value: "\n\nmoderator", sig: "alice1"), alice.public_key, sysopPublicKey, sysopPublicKey)
+    check entities.search(conn, entities.UserTags, "").len == 1
+    check entities.search(conn, entities.UserTags, "stuff").len == 0
+    check entities.search(conn, entities.UserTags, "moderator").len == 1
 
 test "score":
   db.withOpen(conn, ":memory:", false):

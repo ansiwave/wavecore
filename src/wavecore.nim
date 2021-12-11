@@ -214,6 +214,7 @@ when isMainModule:
     bob = entities.User(public_key: paths.encode(bobKeys.public))
   server.editPost(s, paths.sysopPublicKey, entities.initContent(common.signWithHeaders(aliceKeys, "Hi i'm alice", alice.public_key, common.Edit), alice.public_key), alice.public_key)
   server.editPost(s, paths.sysopPublicKey, entities.initContent(common.signWithHeaders(bobKeys, "Hi i'm bob", bob.public_key, common.Edit), bob.public_key), bob.public_key)
+  server.editTags(s, paths.sysopPublicKey, entities.initTags(common.signWithHeaders(sysopKeys, "moderator", bob.public_key, common.Tags)), bob.public_key, sysop.public_key)
   let p1 = entities.Post(parent: subboard2.content.sig, public_key: bob.public_key, content: entities.initContent(common.signWithHeaders(bobKeys, aerith, subboard2.content.sig, common.New)))
   server.insertPost(s, paths.sysopPublicKey, p1)
   let p2 = entities.Post(parent: subboard.content.sig, public_key: bob.public_key, content: entities.initContent(common.signWithHeaders(bobKeys, jabba, subboard.content.sig, common.New)))
