@@ -10,6 +10,7 @@ from ./wavecorepkg/paths import nil
 from ./wavecorepkg/common import nil
 
 const
+  port = 3000
   asciiArt =
     """
                            ______                     
@@ -191,7 +192,7 @@ assert paths.sysopPublicKey == paths.encode(sysopKeys.public)
 
 when isMainModule:
   vfs.register()
-  var s = server.initServer("localhost", paths.port, staticFileDir)
+  var s = server.initServer("localhost", port, staticFileDir)
   server.start(s)
   # create test db
   discard osproc.execProcess("rm -r " & staticFileDir / paths.boardsDir)

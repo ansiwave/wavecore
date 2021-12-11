@@ -2,18 +2,16 @@ from os import `/`
 from base64 import nil
 from strutils import nil
 
+when defined(emscripten):
+  const
+    address* = ""
+    postAddress* = address
+else:
+  var
+    address* = "http://test.ansiwave.net"
+    postAddress* = address
+
 const
-  port* = 3000
-  address* =
-    when defined(emscripten):
-      ""
-    else:
-      "http://localhost:" & $port
-  postAddress* =
-    when defined(release):
-      "http://test.ansiwave.net"
-    else:
-      address
   boardsDir* = "boards"
   gitDir* = "git"
   ansiwavesDir* = "ansiwavez"
