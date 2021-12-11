@@ -174,3 +174,8 @@ EM_JS(void, wavecore_scroll_down, (int bottom), {
   }
 });
 
+EM_JS(void, wavecore_copy_text, (const char* text), {
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(UTF8ToString(text));
+  }
+});

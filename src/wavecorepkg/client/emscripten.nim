@@ -95,6 +95,7 @@ proc wavecore_set_hash(hash: cstring) {.importc.}
 proc wavecore_open_new_tab(url: cstring) {.importc.}
 proc wavecore_scroll_up(top: cint) {.importc.}
 proc wavecore_scroll_down(bottom: cint) {.importc.}
+proc wavecore_copy_text(text: cstring) {.importc.}
 proc free(p: pointer) {.importc.}
 
 {.compile: "emscripten.c".}
@@ -160,6 +161,9 @@ proc playAudio*(src: string) =
 
 proc stopAudio*() =
   wavecore_stop_audio()
+
+proc copyText*(text: string) =
+  wavecore_copy_text(text)
 
 proc initChannelValue*[T](): ChannelValue[T] =
   result = ChannelValue[T](
