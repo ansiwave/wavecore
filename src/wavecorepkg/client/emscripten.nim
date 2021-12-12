@@ -6,6 +6,7 @@ import json
 import tables
 from base64 import nil
 from zippy import nil
+from times import nil
 
 from ../db import nil
 from ../db/entities import nil
@@ -72,6 +73,7 @@ type
     chan*: ChannelRef
     value*: Result[T]
     ready*: bool
+    readyTime*: float
 
 proc emscripten_create_worker(url: cstring): cint {.importc.}
 proc emscripten_destroy_worker(worker: cint) {.importc.}
@@ -195,6 +197,7 @@ proc get*[T](cv: var ChannelValue[T]) =
     if cv.chan[].dataAvailable:
       cv.value = flatty.fromFlatty(cv.chan[].data, Result[T])
       cv.ready = true
+      cv.readyTime = times.epochTime()
       deallocShared(cv.chan)
 
 proc callback(data: pointer, size: cint, arg: pointer) {.cdecl.} =

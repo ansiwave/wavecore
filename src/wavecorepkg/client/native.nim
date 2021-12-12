@@ -2,6 +2,7 @@ import puppy
 from zippy import nil
 from urlly import nil
 from strutils import nil
+from times import nil
 
 from ../db import nil
 from ../db/entities import nil
@@ -54,6 +55,7 @@ type
     chan*: ChannelRef[Result[T]]
     value*: Result[T]
     ready*: bool
+    readyTime*: float
 
 export puppy.fetch, puppy.Request, puppy.Response, puppy.Header
 
@@ -71,6 +73,7 @@ proc get*[T](cv: var ChannelValue[T], blocking: static[bool] = false) =
     when blocking:
       cv.value = cv.chan[].recv()
       cv.ready = true
+      cv.readyTime = times.epochTime()
       cv.chan[].close()
       deallocShared(cv.chan)
     else:
@@ -78,6 +81,7 @@ proc get*[T](cv: var ChannelValue[T], blocking: static[bool] = false) =
       if res.dataAvailable:
         cv.value = res.msg
         cv.ready = true
+        cv.readyTime = times.epochTime()
         cv.chan[].close()
         deallocShared(cv.chan)
 
