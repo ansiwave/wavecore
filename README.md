@@ -38,4 +38,4 @@ ansiwave http://localhost:80/#board:Q8BTY324cY7nl5kce6ctEfk8IRIrtsM8NfKL29B-3UE
 
 Replace `localhost` with your public IP or hostname to connect to it remotely.
 
-Assuming your ansiwave terminal client is using the sysop key you generated (i.e., it is located at `~/.ansiwave/login-key.png`), you should see an `edit banner` and `create subboard` button. You can use these to create the front page of the board and the subboards. Once you've made the subboards, other users can begin making posts there.
+Assuming your ansiwave terminal client is using the sysop key you generated (i.e., it is located at `~/.ansiwave/login-key.png`), you should see a `create banner` and `create new subboard` button. If these don't appear, the board in the URL you gave to ansiwave doesn't match your login key. Once you've made the subboards, other users can begin making posts there.
