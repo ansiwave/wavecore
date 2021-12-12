@@ -12,6 +12,7 @@ else:
     postAddress* = address
 
 const
+  staticFileDir* = "bbs"
   boardsDir* = "boards"
   gitDir* = "git"
   ansiwavesDir* = "ansiwavez"
