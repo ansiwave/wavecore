@@ -14,7 +14,7 @@ type
   HeaderKind* = enum
     New, Edit, Tags
 
-proc headers*(pubKey: string, target: string, kind: HeaderKind, board: string = paths.sysopPublicKey): string =
+proc headers*(pubKey: string, target: string, kind: HeaderKind, board: string): string =
   strutils.join(
     [
       "/head.key " & pubKey,
@@ -37,7 +37,7 @@ proc sign*(keyPair: ed25519.KeyPair, headers: string, content: string): tuple[bo
   result.sig = paths.encode(ed25519.sign(keyPair, result.body))
   result.body = "/head.sig " & result.sig & "\n" & result.body
 
-proc signWithHeaders*(keyPair: ed25519.KeyPair, content: string, target: string, kind: HeaderKind, board: string = paths.sysopPublicKey): tuple[body: string, sig: string] =
+proc signWithHeaders*(keyPair: ed25519.KeyPair, content: string, target: string, kind: HeaderKind, board: string): tuple[body: string, sig: string] =
   sign(keyPair, headers(paths.encode(keyPair.public), target, kind, board), content)
 
 proc splitAfterHeaders*(content: string): seq[string] =

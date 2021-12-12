@@ -21,7 +21,6 @@ const
   dbDir* = "db"
   dbFilename* = "board.db"
   defaultBoard* = "Q8BTY324cY7nl5kce6ctEfk8IRIrtsM8NfKL29B-3UE"
-  sysopPublicKey* = "Q8BTY324cY7nl5kce6ctEfk8IRIrtsM8NfKL29B-3UE"
 
 proc db*(board: string): string =
   boardsDir / board / gitDir / dbDir / dbFilename
