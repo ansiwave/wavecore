@@ -11,6 +11,8 @@ else:
     address* = "http://test.ansiwave.net"
     postAddress* = address
 
+var readUrl*: string
+
 const
   staticFileDir* = "bbs"
   boardsDir* = "boards"
@@ -18,6 +20,7 @@ const
   ansiwavesDir* = "ansiwavez"
   dbDir* = "db"
   dbFilename* = "board.db"
+  defaultBoard* = "Q8BTY324cY7nl5kce6ctEfk8IRIrtsM8NfKL29B-3UE"
   sysopPublicKey* = "Q8BTY324cY7nl5kce6ctEfk8IRIrtsM8NfKL29B-3UE"
 
 proc db*(board: string): string =

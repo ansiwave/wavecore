@@ -10,6 +10,7 @@ from times import nil
 
 from ../db import nil
 from ../db/entities import nil
+from ../paths import nil
 
 type
   Channel = object
@@ -37,9 +38,11 @@ type
     of Error:
       error*: string
   ActionKind* = enum
-    Stop, Fetch, QueryUser, QueryPost, QueryPostChildren, QueryUserPosts, SearchPosts,
+    SetReadUrl, Stop, Fetch, QueryUser, QueryPost, QueryPostChildren, QueryUserPosts, SearchPosts,
   Action* = object
     case kind*: ActionKind
+    of SetReadUrl:
+      readUrl*: string
     of Stop:
       discard
     of Fetch:
@@ -213,6 +216,10 @@ proc sendAction*(client: Client, action: Action, chan: ptr Channel) =
   let data = flatty.toFlatty(WorkerRequest(action: action, channel: cast[int64](chan)))
   emscripten_call_worker(client.worker, "recvAction", data, data.len.cint, callback, nil)
 
+proc sendSetReadUrl*(client: Client, readUrl: string) =
+  let data = flatty.toFlatty(WorkerRequest(action: Action(kind: SetReadUrl, readUrl: readUrl)))
+  emscripten_call_worker(client.worker, "recvAction", data, data.len.cint, nil, nil)
+
 proc sendFetch*(client: Client, request: Request, chan: ChannelRef) =
   sendAction(client, Action(kind: Fetch, request: request), chan)
 
@@ -239,6 +246,9 @@ proc recvAction(data: pointer, size: cint) {.exportc.} =
     action = workerRequest.action
   let res =
     case action.kind:
+    of SetReadUrl:
+      paths.readUrl = action.readUrl
+      ""
     of Stop:
       return
     of Fetch:
@@ -297,8 +307,9 @@ proc recvAction(data: pointer, size: cint) {.exportc.} =
         s
       except Exception as ex:
         flatty.toFlatty(Result[seq[entities.Post]](kind: Error, error: ex.msg))
-  let data = flatty.toFlatty(WorkerResponse(data: res, channel: workerRequest.channel))
-  emscripten_worker_respond(data, data.len.cint)
+  if res != "":
+    let data = flatty.toFlatty(WorkerResponse(data: res, channel: workerRequest.channel))
+    emscripten_worker_respond(data, data.len.cint)
 
 proc start*(client: var Client) =
   client.worker = emscripten_create_worker("worker.js")

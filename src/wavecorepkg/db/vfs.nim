@@ -81,8 +81,6 @@ type
   sqlite3_file* {.bycopy.} = object
     pMethods*: ptr sqlite3_io_methods ##  Methods for an open file
 
-var readUrl*: string
-
 const SQLITE_IOCAP_IMMUTABLE = 0x00002000
 
 let customMethods = sqlite3_io_methods(
@@ -103,7 +101,7 @@ let customMethods = sqlite3_io_methods(
         firstByte = off mod chunkSize
         lastByte = firstByte + amt - 1
       var res = fetch(Request(
-        url: urlly.parseUrl(readUrl & suffix),
+        url: urlly.parseUrl(paths.readUrl & suffix),
         verb: "get",
         headers: @[
           Header(key: "Range", value: "bytes=" & $firstByte & "-" & $lastByte),
@@ -125,7 +123,7 @@ let customMethods = sqlite3_io_methods(
   xSync: proc (a1: ptr sqlite3_file; flags: cint): cint {.cdecl.} = SQLITE_OK,
   xFileSize: proc (a1: ptr sqlite3_file; pSize: ptr int64): cint {.cdecl.} =
     let res = fetch(Request(
-      url: urlly.parseUrl(readUrl & "/../" & manifestFile),
+      url: urlly.parseUrl(paths.readUrl & "/../" & manifestFile),
       verb: "get",
       headers: @[
         Header(key: "Cache-Control", value: "no-store"),

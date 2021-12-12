@@ -1,6 +1,7 @@
 from strutils import format
 from ./db/entities import nil
 from urlly import nil
+from paths import nil
 
 when defined(emscripten):
   import client/emscripten
@@ -21,6 +22,12 @@ proc initClient*(address: string, postAddress: string = address): Client =
 
 proc initUrl(address: string; endpoint: string): string =
   "$1/$2".format(address, endpoint)
+
+proc setReadUrl*(client: Client, readUrl: string) =
+  when defined(emscripten):
+    emscripten.sendSetReadUrl(client, readUrl)
+  else:
+    paths.readUrl = readUrl
 
 proc request*(url: string, data: string, verb: string): string =
   let response: Response = fetch(Request(url: urlly.parseUrl(url), verb: verb, body: data))

@@ -106,8 +106,7 @@ let
 discard osproc.execProcess("rm -r " & bbsDir)
 os.createDir(bbsDir / paths.boardsDir / sysopPublicKey / paths.gitDir / paths.ansiwavesDir)
 os.createDir(bbsDir / paths.boardsDir / sysopPublicKey / paths.gitDir / paths.dbDir)
-
-vfs.readUrl = "http://localhost:" & $port & "/" & dbDirs
+paths.readUrl = "http://localhost:" & $port & "/" & dbDirs
 vfs.register()
 
 proc initUser(publicKey: string): User =
