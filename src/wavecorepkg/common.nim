@@ -17,25 +17,25 @@ type
 proc headers*(pubKey: string, target: string, kind: HeaderKind, board: string): string =
   strutils.join(
     [
-      "/head.key " & pubKey,
-      "/head.algo ed25519",
-      "/head.target " & target,
-      "/head.type " & (
+      "/key " & pubKey,
+      "/algo ed25519",
+      "/target " & target,
+      "/type " & (
           case kind:
           of New: "new"
           of Edit: "edit"
           of Tags: "tags"
       ),
-      "/head.board " & board,
+      "/board " & board,
     ],
     "\n",
   )
 
 proc sign*(keyPair: ed25519.KeyPair, headers: string, content: string): tuple[body: string, sig: string] =
-  result.body = "/head.time " & $times.toUnix(times.getTime()) & "\n"
+  result.body = "/time " & $times.toUnix(times.getTime()) & "\n"
   result.body &= headers & "\n\n" & content
   result.sig = paths.encode(ed25519.sign(keyPair, result.body))
-  result.body = "/head.sig " & result.sig & "\n" & result.body
+  result.body = "/sig " & result.sig & "\n" & result.body
 
 proc signWithHeaders*(keyPair: ed25519.KeyPair, content: string, target: string, kind: HeaderKind, board: string): tuple[body: string, sig: string] =
   sign(keyPair, headers(paths.encode(keyPair.public), target, kind, board), content)
@@ -52,7 +52,7 @@ proc parseAnsiwave*(ansiwave: string): tuple[cmds: Table[string, string], header
   if col != -1:
     raise newException(Exception, "Invalid UTF8 data")
   var ctx = wavescript.initContext()
-  ctx.stringCommands = ["/head.sig", "/head.time", "/head.key", "/head.algo", "/head.target", "/head.type", "/head.board"].toHashSet
+  ctx.stringCommands = ["/sig", "/time", "/key", "/algo", "/target", "/type", "/board"].toHashSet
   let
     newline = strutils.find(ansiwave, "\n")
     doubleNewline = strutils.find(ansiwave, "\n\n")
@@ -63,7 +63,7 @@ proc parseAnsiwave*(ansiwave: string): tuple[cmds: Table[string, string], header
     headers = strutils.splitLines(ansiwave[newline + 1 ..< doubleNewline])
     content = ansiwave[doubleNewLine + 2 ..< ansiwave.len]
     sigCmd = wavescript.parse(ctx, sigLine)
-  if sigCmd.kind != wavescript.Valid or sigCmd.name != "/head.sig":
+  if sigCmd.kind != wavescript.Valid or sigCmd.name != "/sig":
     raise newException(Exception, "Invalid first header: " & sigLine)
   result.cmds[sigCmd.name] = sigCmd.args[0].name
   for header in headers:

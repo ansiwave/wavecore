@@ -82,11 +82,11 @@ proc toStr(form: Form): string =
 
 const
   symbolChars = {'a'..'z', '#'}
-  operatorChars = {'/', '-', '+', '.'}
+  operatorChars = {'/', '-', '+'}
   operatorSingleChars = {','} # operator chars that can only exist on their own
   numberChars = {'0'..'9'}
   invalidChars = {'A'..'Z', '~', '`', '!', '@', '$', '%', '^', '&', '*', '(', ')', '{', '}',
-                  '[', ']', '_', '=', ':', ';', '<', '>', '"', '\'', '|', '\\', '?'}
+                  '[', ']', '_', '=', ':', ';', '<', '>', '.', '"', '\'', '|', '\\', '?'}
   whitespaceChars* = [
     " ", "▀", "▁", "▂", "▃", "▄", "▅", "▆", "▇", "█", "▉", "▊", "▋", "▌", "▍", "▎", "▏", "▐",
     "░", "▒", "▓", "▔", "▕", "▖", "▗", "▘", "▙", "▚", "▛", "▜", "▝", "▞", "▟",
@@ -248,21 +248,6 @@ proc parse*(context: var Context, command: CommandText): CommandTree =
       else:
         newForms.add(Form(kind: Symbol, name: lastItem.name & forms[i].name))
         i.inc
-    else:
-      newForms.add(forms[i])
-      i.inc
-  forms = newForms
-  # . with symbols on both sides should form a single symbol
-  newForms = @[]
-  i = 0
-  while i < forms.len:
-    if forms[i].kind == Operator and
-        forms[i].name == "." and
-        (newForms.len > 0 and newForms[newForms.len-1].kind == Symbol) and
-        (i != forms.len - 1 and forms[i+1].kind == Symbol):
-      let lastItem = newForms.pop()
-      newForms.add(Form(kind: Symbol, name: lastItem.name & forms[i].name & forms[i+1].name))
-      i += 2
     else:
       newForms.add(forms[i])
       i.inc

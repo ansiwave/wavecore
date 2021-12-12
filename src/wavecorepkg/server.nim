@@ -121,57 +121,57 @@ proc ansiwavePost(server: Server, request: Request, headers: var string, body: v
       raise newException(BadRequestException, "Exceeded the maximum line count of " & $maxLines)
 
     # check the board
-    let board = cmds["/head.board"]
+    let board = cmds["/board"]
     if board != paths.encode(paths.decode(board)):
-      raise newException(BadRequestException, "Invalid value in /head.board")
+      raise newException(BadRequestException, "Invalid value in /board")
     if not os.dirExists(server.staticFileDir / paths.boardsDir / board):
       raise newException(BadRequestException, "Board does not exist")
 
     # check the sig
-    if cmds["/head.algo"] != "ed25519":
-      raise newException(BadRequestException, "Invalid value in /head.algo")
+    if cmds["/algo"] != "ed25519":
+      raise newException(BadRequestException, "Invalid value in /algo")
     let
-      keyBase64 = cmds["/head.key"]
+      keyBase64 = cmds["/key"]
       keyBin = paths.decode(keyBase64)
-      sigBase64 = cmds["/head.sig"]
+      sigBase64 = cmds["/sig"]
       sigBin = paths.decode(sigBase64)
     var
       pubKey: ed25519.PublicKey
       sig: ed25519.Signature
     if keyBin.len != pubKey.len:
-      raise newException(BadRequestException, "Invalid key length for /head.key")
+      raise newException(BadRequestException, "Invalid key length for /key")
     copyMem(pubKey.addr, keyBin[0].unsafeAddr, keyBin.len)
     if sigBin.len != sig.len:
-      raise newException(BadRequestException, "Invalid key length for /head.sig")
+      raise newException(BadRequestException, "Invalid key length for /sig")
     copyMem(sig.addr, sigBin[0].unsafeAddr, sigBin.len)
     if not ed25519.verify(pubKey, sig, headersAndContent):
       raise newException(BadRequestException, "Invalid signature")
 
-    case cmds["/head.type"]:
+    case cmds["/type"]:
     of "new":
       let
         post = entities.Post(
           content: entities.Content(value: entities.initCompressedValue(request.body), sig: sigBase64),
           public_key: keyBase64,
-          parent: cmds["/head.target"],
+          parent: cmds["/target"],
         )
         error = sendAction(server, Action(kind: InsertPost, board: board, post: post))
       if error != "":
         raise newException(Exception, error)
     of "edit":
       let
-        content = entities.Content(value: entities.initCompressedValue(request.body), sig: sigBase64, sig_last: cmds["/head.target"])
-        error = sendAction(server, Action(kind: EditPost, board: board, content: content, key: cmds["/head.key"]))
+        content = entities.Content(value: entities.initCompressedValue(request.body), sig: sigBase64, sig_last: cmds["/target"])
+        error = sendAction(server, Action(kind: EditPost, board: board, content: content, key: cmds["/key"]))
       if error != "":
         raise newException(Exception, error)
     of "tags":
       let
         tags = entities.Tags(value: request.body, sig: sigBase64)
-        error = sendAction(server, Action(kind: EditTags, board: board, tags: tags, tagsSigLast: cmds["/head.target"], key: cmds["/head.key"]))
+        error = sendAction(server, Action(kind: EditTags, board: board, tags: tags, tagsSigLast: cmds["/target"], key: cmds["/key"]))
       if error != "":
         raise newException(Exception, error)
     else:
-      raise newException(BadRequestException, "Invalid /head.type")
+      raise newException(BadRequestException, "Invalid /type")
   else:
     raise newException(BadRequestException, "Invalid request")
 
