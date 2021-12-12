@@ -68,9 +68,9 @@ proc queryUser*(client: Client, filename: string, publicKey: string): ChannelVal
   result = initChannelValue[entities.User]()
   sendUserQuery(client, filename, publicKey, result.chan)
 
-proc queryPost*(client: Client, filename: string, sig: string): ChannelValue[entities.Post] =
+proc queryPost*(client: Client, filename: string, sig: string, getContent: bool = true): ChannelValue[entities.Post] =
   result = initChannelValue[entities.Post]()
-  sendPostQuery(client, filename, sig, result.chan)
+  sendPostQuery(client, filename, sig, getContent, result.chan)
 
 proc queryPostChildren*(client: Client, filename: string, sig: string, sortByTs: bool = false, offset: int = 0): ChannelValue[seq[entities.Post]] =
   result = initChannelValue[seq[entities.Post]]()

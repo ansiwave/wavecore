@@ -85,12 +85,18 @@ proc initPost(stmt: PStmt): Post =
     else:
       discard
 
-proc selectPost*(conn: PSqlite3, sig: string): Post =
-  const query =
-    """
-      SELECT post_id, content, content_sig, content_sig_last, public_key, parent, reply_count, score, tags FROM post
-      WHERE content_sig = ?
-    """
+proc selectPost*(conn: PSqlite3, sig: string, getContent: bool = true): Post =
+  let query =
+    if getContent:
+      """
+        SELECT post_id, content, content_sig, content_sig_last, public_key, parent, reply_count, score, tags FROM post
+        WHERE content_sig = ?
+      """
+    else:
+      """
+        SELECT post_id, content_sig, content_sig_last, public_key, parent, reply_count, score, tags FROM post
+        WHERE content_sig = ?
+      """
   #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), sig):
   #  echo x
   let ret = db.select[Post](conn, initPost, query, sig)

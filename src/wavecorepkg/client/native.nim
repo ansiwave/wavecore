@@ -31,6 +31,7 @@ type
       userResponse*: ChannelRef[Result[entities.User]]
     of QueryPost:
       postSig*: string
+      getContent*: bool
       postResponse*: ChannelRef[Result[entities.Post]]
     of QueryPostChildren:
       postParentSig*: string
@@ -94,8 +95,8 @@ proc sendFetch*(client: Client, request: Request, chan: ChannelRef) =
 proc sendUserQuery*(client: Client, filename: string, publicKey: string, chan: ChannelRef) =
   sendAction(client, Action(kind: QueryUser, dbFilename: filename, publicKey: publicKey, userResponse: chan))
 
-proc sendPostQuery*(client: Client, filename: string, sig: string, chan: ChannelRef) =
-  sendAction(client, Action(kind: QueryPost, dbFilename: filename, postSig: sig, postResponse: chan))
+proc sendPostQuery*(client: Client, filename: string, sig: string, getContent: bool, chan: ChannelRef) =
+  sendAction(client, Action(kind: QueryPost, dbFilename: filename, postSig: sig, getContent: getContent, postResponse: chan))
 
 proc sendPostChildrenQuery*(client: Client, filename: string, sig: string, sortByTs: bool, offset: int, chan: ChannelRef) =
   sendAction(client, Action(kind: QueryPostChildren, dbFilename: filename, postParentSig: sig, sortByTs: sortByTs, offset: offset, postChildrenResponse: chan))
@@ -133,7 +134,7 @@ proc recvAction(client: Client) {.thread.} =
     of QueryPost:
       try:
         db.withOpen(conn, action.dbFilename, true):
-          action.postResponse[].send(Result[entities.Post](kind: Valid, valid: entities.selectPost(conn, action.postSig)))
+          action.postResponse[].send(Result[entities.Post](kind: Valid, valid: entities.selectPost(conn, action.postSig, action.getContent)))
       except Exception as ex:
         action.postResponse[].send(Result[entities.Post](kind: Error, error: ex.msg))
     of QueryPostChildren:
