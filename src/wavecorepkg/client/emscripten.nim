@@ -38,7 +38,7 @@ type
     of Error:
       error*: string
   ActionKind* = enum
-    SetReadUrl, Stop, Fetch, QueryUser, QueryPost, QueryPostChildren, QueryUserPosts, SearchPosts,
+    SetReadUrl, Stop, Fetch, QueryUser, QueryPost, QueryPostChildren, QueryUserPosts, QueryUserReplies, SearchPosts,
   Action* = object
     case kind*: ActionKind
     of SetReadUrl:
@@ -57,6 +57,8 @@ type
       sortByTs*: bool
     of QueryUserPosts:
       userPostsPublicKey*: string
+    of QueryUserReplies:
+      userRepliesPublicKey*: string
     of SearchPosts:
       searchKind*: entities.SearchKind
       searchTerm*: string
@@ -236,6 +238,9 @@ proc sendPostChildrenQuery*(client: Client, filename: string, sig: string, sortB
 proc sendUserPostsQuery*(client: Client, filename: string, publicKey: string, offset: int, chan: ChannelRef) =
   sendAction(client, Action(kind: QueryUserPosts, dbFilename: filename, offset: offset, userPostsPublicKey: publicKey), chan)
 
+proc sendUserRepliesQuery*(client: Client, filename: string, publicKey: string, offset: int, chan: ChannelRef) =
+  sendAction(client, Action(kind: QueryUserReplies, dbFilename: filename, offset: offset, userRepliesPublicKey: publicKey), chan)
+
 proc sendSearchQuery*(client: Client, filename: string, kind: entities.SearchKind, term: string, offset: int, chan: ChannelRef) =
   sendAction(client, Action(kind: SearchPosts, dbFilename: filename, searchKind: kind, searchTerm: term, offset: offset), chan)
 
@@ -295,6 +300,15 @@ proc recvAction(data: pointer, size: cint) {.exportc.} =
         var s: string
         db.withOpen(conn, action.dbFilename, true):
           let posts = entities.selectUserPosts(conn, action.userPostsPublicKey, action.offset)
+          s = flatty.toFlatty(Result[seq[entities.Post]](kind: Valid, valid: posts))
+        s
+      except Exception as ex:
+        flatty.toFlatty(Result[seq[entities.Post]](kind: Error, error: ex.msg))
+    of QueryUserReplies:
+      try:
+        var s: string
+        db.withOpen(conn, action.dbFilename, true):
+          let posts = entities.selectUserReplies(conn, action.userRepliesPublicKey, action.offset)
           s = flatty.toFlatty(Result[seq[entities.Post]](kind: Valid, valid: posts))
         s
       except Exception as ex:

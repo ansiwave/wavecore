@@ -80,6 +80,10 @@ proc queryUserPosts*(client: Client, filename: string, publicKey: string, offset
   result = initChannelValue[seq[entities.Post]]()
   sendUserPostsQuery(client, filename, publicKey, offset, result.chan)
 
+proc queryUserReplies*(client: Client, filename: string, publicKey: string, offset: int = 0): ChannelValue[seq[entities.Post]] =
+  result = initChannelValue[seq[entities.Post]]()
+  sendUserRepliesQuery(client, filename, publicKey, offset, result.chan)
+
 proc search*(client: Client, filename: string, kind: entities.SearchKind, term: string, offset: int = 0): ChannelValue[seq[entities.Post]] =
   result = initChannelValue[seq[entities.Post]]()
   sendSearchQuery(client, filename, kind, term, offset, result.chan)

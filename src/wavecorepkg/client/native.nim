@@ -18,7 +18,7 @@ type
     of Error:
       error*: string
   ActionKind* = enum
-    Stop, Fetch, QueryUser, QueryPost, QueryPostChildren, QueryUserPosts, SearchPosts,
+    Stop, Fetch, QueryUser, QueryPost, QueryPostChildren, QueryUserPosts, QueryUserReplies, SearchPosts,
   Action* = object
     case kind*: ActionKind
     of Stop:
@@ -40,6 +40,9 @@ type
     of QueryUserPosts:
       userPostsPublicKey*: string
       userPostsResponse*: ChannelRef[Result[seq[entities.Post]]]
+    of QueryUserReplies:
+      userRepliesPublicKey*: string
+      userRepliesResponse*: ChannelRef[Result[seq[entities.Post]]]
     of SearchPosts:
       searchKind*: entities.SearchKind
       searchTerm*: string
@@ -104,6 +107,9 @@ proc sendPostChildrenQuery*(client: Client, filename: string, sig: string, sortB
 proc sendUserPostsQuery*(client: Client, filename: string, publicKey: string, offset: int, chan: ChannelRef) =
   sendAction(client, Action(kind: QueryUserPosts, dbFilename: filename, userPostsPublicKey: publicKey, offset: offset, userPostsResponse: chan))
 
+proc sendUserRepliesQuery*(client: Client, filename: string, publicKey: string, offset: int, chan: ChannelRef) =
+  sendAction(client, Action(kind: QueryUserReplies, dbFilename: filename, userRepliesPublicKey: publicKey, offset: offset, userRepliesResponse: chan))
+
 proc sendSearchQuery*(client: Client, filename: string, kind: entities.SearchKind, term: string, offset: int, chan: ChannelRef) =
   sendAction(client, Action(kind: SearchPosts, dbFilename: filename, searchKind: kind, searchTerm: term, offset: offset, searchResponse: chan))
 
@@ -149,6 +155,12 @@ proc recvAction(client: Client) {.thread.} =
           action.userPostsResponse[].send(Result[seq[entities.Post]](kind: Valid, valid: entities.selectUserPosts(conn, action.userPostsPublicKey, action.offset)))
       except Exception as ex:
         action.userPostsResponse[].send(Result[seq[entities.Post]](kind: Error, error: ex.msg))
+    of QueryUserReplies:
+      try:
+        db.withOpen(conn, action.dbFilename, true):
+          action.userRepliesResponse[].send(Result[seq[entities.Post]](kind: Valid, valid: entities.selectUserReplies(conn, action.userRepliesPublicKey, action.offset)))
+      except Exception as ex:
+        action.userRepliesResponse[].send(Result[seq[entities.Post]](kind: Error, error: ex.msg))
     of SearchPosts:
       try:
         db.withOpen(conn, action.dbFilename, true):

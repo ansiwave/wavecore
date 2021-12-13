@@ -146,6 +146,19 @@ proc selectUserPosts*(conn: PSqlite3, publicKey: string, offset: int = 0): seq[P
   #  echo x
   sequtils.toSeq(db.select[Post](conn, initPost, query, publicKey))
 
+proc selectUserReplies*(conn: PSqlite3, publicKey: string, offset: int = 0): seq[Post] =
+  let query =
+    """
+      SELECT post_id, content, content_sig, content_sig_last, public_key, parent, reply_count, score, tags FROM post
+      WHERE visibility = 1 AND parent_public_key = ? AND parent_public_key != public_key
+      ORDER BY ts DESC
+      LIMIT $1
+      OFFSET $2
+    """.format(limit, offset)
+  #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), publicKey):
+  #  echo x
+  sequtils.toSeq(db.select[Post](conn, initPost, query, publicKey))
+
 proc initUser(stmt: PStmt): User =
   var cols = sqlite3.column_count(stmt)
   for col in 0 .. cols-1:

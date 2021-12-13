@@ -95,7 +95,6 @@ import ./wavecorepkg/db/entities
 import ./wavecorepkg/db/vfs
 from os import `/`
 import sets
-from osproc import nil
 
 let
   sysopKeys = ed25519.initKeyPair()
@@ -150,16 +149,19 @@ test "query users asynchronously":
       entities.insertUser(conn, alice, alice.user_id)
       entities.insertUser(conn, bob, bob.user_id)
     # query db over http
-    var response = client.queryUser(c, dbPath, alice.publicKey)
-    client.get(response, true)
-    check response.value.valid == alice
-    var response2 = client.queryUser(c, dbPath, bob.publicKey)
-    client.get(response2, true)
-    check response2.value.valid == bob
+    block:
+      var response = client.queryUser(c, dbPath, alice.publicKey)
+      client.get(response, true)
+      check response.value.valid == alice
+    block:
+      var response = client.queryUser(c, dbPath, bob.publicKey)
+      client.get(response, true)
+      check response.value.valid == bob
     # query something invalid
-    var response3 = client.queryUser(c, dbPath, "STUFF")
-    client.get(response3, true)
-    check response3.value.kind == client.Error
+    block:
+      var response = client.queryUser(c, dbPath, "STUFF")
+      client.get(response, true)
+      check response.value.kind == client.Error
   finally:
     os.removeFile(dbPath)
     server.stop(s)
@@ -195,6 +197,7 @@ test "query posts":
     check @[p4, p3] == entities.selectPostChildren(conn, p2.content.sig)
     check 2 == entities.selectPost(conn, p2.content.sig).reply_count
     check [p1, p3, p4].toHashSet == entities.selectUserPosts(conn, alice.public_key).toHashSet
+    check [p3, p4].toHashSet == entities.selectUserReplies(conn, bob.public_key).toHashSet
 
 test "query posts asynchronously":
   var s = server.initServer("localhost", port, bbsDir)
@@ -225,19 +228,27 @@ test "query posts asynchronously":
       entities.insertPost(conn, p4, p4.post_id)
       p1 = entities.selectPost(conn, p1.content.sig)
     # query db over http
-    var response = client.queryPost(c, dbPath, p1.content.sig)
-    client.get(response, true)
-    check response.value.valid == p1
-    var response2 = client.queryPostChildren(c, dbPath, p2.content.sig)
-    client.get(response2, true)
-    check response2.value.valid == @[p4, p3]
-    var response3 = client.queryUserPosts(c, dbPath, alice.public_key)
-    client.get(response3, true)
-    check response3.value.valid.toHashSet == [p4, p3, p1].toHashSet
+    block:
+      var response = client.queryPost(c, dbPath, p1.content.sig)
+      client.get(response, true)
+      check response.value.valid == p1
+    block:
+      var response = client.queryPostChildren(c, dbPath, p2.content.sig)
+      client.get(response, true)
+      check response.value.valid == @[p4, p3]
+    block:
+      var response = client.queryUserPosts(c, dbPath, alice.public_key)
+      client.get(response, true)
+      check response.value.valid.toHashSet == [p4, p3, p1].toHashSet
+    block:
+      var response = client.queryUserReplies(c, dbPath, bob.public_key)
+      client.get(response, true)
+      check response.value.valid.toHashSet == [p4, p3].toHashSet
     # query something invalid
-    var response4 = client.queryPost(c, dbPath, "yo")
-    client.get(response4, true)
-    check response4.value.kind == client.Error
+    block:
+      var response = client.queryPost(c, dbPath, "yo")
+      client.get(response, true)
+      check response.value.kind == client.Error
   finally:
     os.removeFile(dbPath)
     server.stop(s)
