@@ -10,6 +10,7 @@ from ./paths import nil
 from ./ed25519 import nil
 from ./common import nil
 import tables
+from logging import nil
 
 type
   State = object
@@ -305,6 +306,7 @@ proc listen(server: Server) {.thread.} =
     server.socket.close()
 
 proc recvAction(server: Server) {.thread.} =
+  var logger = logging.newConsoleLogger(fmtStr="[$datetime] - $levelname: ")
   server.stateReady[].send(true)
   # FIXME: catch exceptions
   while true:
@@ -318,18 +320,21 @@ proc recvAction(server: Server) {.thread.} =
         {.cast(gcsafe).}:
           insertPost(server, action.board, action.post)
       except Exception as ex:
+        logging.log(logger, logging.lvlError, ex.msg)
         resp = ex.msg
     of EditPost:
       try:
         {.cast(gcsafe).}:
           editPost(server, action.board, action.content, action.key)
       except Exception as ex:
+        logging.log(logger, logging.lvlError, ex.msg)
         resp = ex.msg
     of EditTags:
       try:
         {.cast(gcsafe).}:
           editTags(server, action.board, action.tags, action.tagsSigLast, action.key)
       except Exception as ex:
+        logging.log(logger, logging.lvlError, ex.msg)
         resp = ex.msg
     action.error[].send(resp)
 
