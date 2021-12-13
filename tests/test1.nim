@@ -103,7 +103,6 @@ let
   bbsDir = "bbstest"
   dbDirs = paths.db(sysopPublicKey)
   dbPath = bbsDir / dbDirs
-discard osproc.execProcess("rm -r " & bbsDir)
 os.createDir(bbsDir / paths.boardsDir / sysopPublicKey / paths.gitDir / paths.ansiwavesDir)
 os.createDir(bbsDir / paths.boardsDir / sysopPublicKey / paths.gitDir / paths.dbDir)
 paths.readUrl = "http://localhost:" & $port & "/" & dbDirs
