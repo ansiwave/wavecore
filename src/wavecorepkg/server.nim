@@ -71,10 +71,8 @@ proc insertPost*(server: Server, board: string, entity: entities.Post) =
         discard entities.selectUser(conn, entity.public_key)
       except Exception as ex:
         entities.insertUser(conn, entities.User(public_key: entity.public_key))
-      entities.insertPost(conn, entity,
-        proc (x: entities.Post, sig: string) =
-          writeFile(server.staticFileDir / paths.ansiwavez(board, sig), x.content.value.compressed)
-      )
+      let sig = entities.insertPost(conn, entity)
+      writeFile(server.staticFileDir / paths.ansiwavez(board, sig), entity.content.value.compressed)
 
 proc editPost*(server: Server, board: string, content: entities.Content, key: string) =
   assert server.staticFileDir != ""
@@ -85,10 +83,8 @@ proc editPost*(server: Server, board: string, content: entities.Content, key: st
         discard entities.selectUser(conn, key)
       except Exception as ex:
         entities.insertUser(conn, entities.User(public_key: key))
-      entities.editPost(conn, content, key,
-        proc (x: entities.Post) =
-          writeFile(server.staticFileDir / paths.ansiwavez(board, x.content.sig), x.content.value.compressed)
-      )
+      let sig = entities.editPost(conn, content, key)
+      writeFile(server.staticFileDir / paths.ansiwavez(board, sig), content.value.compressed)
 
 proc editTags*(server: Server, board: string, tags: entities.Tags, tagsSigLast: string, key: string) =
   assert server.staticFileDir != ""

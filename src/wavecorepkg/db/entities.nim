@@ -187,14 +187,12 @@ proc selectUser*(conn: PSqlite3, publicKey: string): User =
   else:
     raise newException(Exception, "Can't select user")
 
-proc insertPost*(conn: PSqlite3, entity: Post, id: var int64, extraFn: proc (x: Post, sig: string) = nil) =
-  let sourceUser = selectUser(conn, entity.public_key)
+proc insertPost*(conn: PSqlite3, e: Post, id: var int64): string =
+  let sourceUser = selectUser(conn, e.public_key)
   if "modban" in common.parseTags(sourceUser.tags.value):
     raise newException(Exception, "You are banned")
 
-  var
-    e = entity
-    stmt: PStmt
+  var stmt: PStmt
 
   let
     parentIds =
@@ -241,9 +239,6 @@ proc insertPost*(conn: PSqlite3, entity: Post, id: var int64, extraFn: proc (x: 
       db_sqlite.dbError(conn)
     id = sqlite3.last_insert_rowid(conn)
 
-  if extraFn != nil:
-    extraFn(e, sig)
-
   let userId = sourceUser.user_id
 
   db.withStatement(conn, "INSERT INTO post_search (post_id, user_id, attribute, value) VALUES (?, ?, ?, ?)", stmt):
@@ -272,9 +267,11 @@ proc insertPost*(conn: PSqlite3, entity: Post, id: var int64, extraFn: proc (x: 
       """.format(parentIds)
     db_sqlite.exec(conn, sql score_query)
 
-proc insertPost*(conn: PSqlite3, entity: Post, extraFn: proc (x: Post, sig: string) = nil) =
+  return sig
+
+proc insertPost*(conn: PSqlite3, entity: Post): string =
   var id: int64
-  insertPost(conn, entity, id, extraFn)
+  insertPost(conn, entity, id)
 
 proc search*(conn: PSqlite3, kind: SearchKind, term: string, offset: int = 0): seq[Post] =
   if term == "":
@@ -333,7 +330,7 @@ proc search*(conn: PSqlite3, kind: SearchKind, term: string, offset: int = 0): s
     #  echo x
     sequtils.toSeq(db.select[Post](conn, initPost, query, term))
 
-proc editPost*(conn: PSqlite3, content: Content, key: string, extraFn: proc (x: Post) = nil) =
+proc editPost*(conn: PSqlite3, content: Content, key: string): string =
   let sourceUser = selectUser(conn, key)
   if "modban" in common.parseTags(sourceUser.tags.value):
     raise newException(Exception, "You are banned")
@@ -344,7 +341,7 @@ proc editPost*(conn: PSqlite3, content: Content, key: string, extraFn: proc (x: 
     # if the content sig_last is same as the public key, this is the first time they've edited their banner
     # so insert it into the db
     if content.sig_last == key:
-      insertPost(conn, Post(content: content, public_key: key))
+      discard insertPost(conn, Post(content: content, public_key: key))
       content.sig
     else:
       content.sig_last
@@ -376,12 +373,10 @@ proc editPost*(conn: PSqlite3, content: Content, key: string, extraFn: proc (x: 
     if step(stmt) != SQLITE_DONE:
       db_sqlite.dbError(conn)
 
-  if extraFn != nil:
-    extraFn(selectPost(conn, post.content.sig))
+  return post.content.sig
 
 proc insertUser*(conn: PSqlite3, entity: User, id: var int64) =
-  var
-    stmt: PStmt
+  var stmt: PStmt
 
   db.withStatement(conn, "INSERT INTO user (ts, public_key, public_key_algo, tags, tags_sig) VALUES (?, ?, ?, ?, ?)", stmt):
     db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), times.toUnix(times.getTime()), entity.publicKey, "ed25519", "", entity.publicKey)

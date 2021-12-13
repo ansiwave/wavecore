@@ -179,15 +179,15 @@ test "query posts":
     entities.insertUser(conn, alice, alice.user_id)
     entities.insertUser(conn, bob, bob.user_id)
     var p1 = Post(parent: alice.public_key, public_key: alice.public_key, content: initContent(aliceKeys, "Hello, i'm alice"))
-    entities.insertPost(conn, p1, p1.post_id)
+    discard entities.insertPost(conn, p1, p1.post_id)
     var p2 = Post(parent: p1.content.sig, public_key: bob.public_key, content: initContent(bobKeys, "Hello, i'm bob"))
-    entities.insertPost(conn, p2, p2.post_id)
+    discard entities.insertPost(conn, p2, p2.post_id)
     var p3 = Post(parent: p2.content.sig, public_key: alice.public_key, content: initContent(aliceKeys, "What's up"))
-    entities.insertPost(conn, p3, p3.post_id)
+    discard entities.insertPost(conn, p3, p3.post_id)
     var p4 = Post(parent: p2.content.sig, public_key: alice.public_key, content: initContent(aliceKeys, "How are you?"))
-    entities.insertPost(conn, p4, p4.post_id)
+    discard entities.insertPost(conn, p4, p4.post_id)
     expect Exception:
-      entities.insertPost(conn, Post(parent: "invalid parent", public_key: alice.public_key, content: initContent(aliceKeys, "How are you?")))
+      discard entities.insertPost(conn, Post(parent: "invalid parent", public_key: alice.public_key, content: initContent(aliceKeys, "How are you?")))
     p1 = entities.selectPost(conn, p1.content.sig)
     p2 = entities.selectPost(conn, p2.content.sig)
     p3 = entities.selectPost(conn, p3.content.sig)
@@ -219,13 +219,13 @@ test "query posts asynchronously":
       entities.insertUser(conn, alice, alice.user_id)
       entities.insertUser(conn, bob, bob.user_id)
       p1 = Post(parent: alice.public_key, public_key: alice.public_key, content: initContent(aliceKeys, "Hello, i'm alice"))
-      entities.insertPost(conn, p1, p1.post_id)
+      discard entities.insertPost(conn, p1, p1.post_id)
       p2 = Post(parent: p1.content.sig, public_key: bob.public_key, content: initContent(bobKeys, "Hello, i'm bob"))
-      entities.insertPost(conn, p2, p2.post_id)
+      discard entities.insertPost(conn, p2, p2.post_id)
       p3 = Post(parent: p2.content.sig, public_key: alice.public_key, content: initContent(aliceKeys, "What's up"))
-      entities.insertPost(conn, p3, p3.post_id)
+      discard entities.insertPost(conn, p3, p3.post_id)
       p4 = Post(parent: p2.content.sig, public_key: alice.public_key, content: initContent(aliceKeys, "How are you?"))
-      entities.insertPost(conn, p4, p4.post_id)
+      discard entities.insertPost(conn, p4, p4.post_id)
       p1 = entities.selectPost(conn, p1.content.sig)
     # query db over http
     block:
@@ -266,9 +266,9 @@ test "search posts":
     entities.insertUser(conn, alice, alice.user_id)
     entities.insertUser(conn, bob, bob.user_id)
     var p1 = Post(parent: alice.public_key, public_key: alice.public_key, content: initContent(aliceKeys, "Hello, i'm alice"))
-    entities.insertPost(conn, p1)
+    discard entities.insertPost(conn, p1)
     var p2 = Post(parent: p1.content.sig, public_key: bob.public_key, content: initContent(bobKeys, "Hello, i'm bob"))
-    entities.insertPost(conn, p2)
+    discard entities.insertPost(conn, p2)
     p1 = entities.selectPost(conn, p1.content.sig)
     p2 = entities.selectPost(conn, p2.content.sig)
     check @[p1, p2] == entities.search(conn, entities.Posts, "hello")
@@ -291,13 +291,13 @@ test "score":
     entities.insertUser(conn, alice, alice.user_id)
     entities.insertUser(conn, bob, bob.user_id)
     let p1 = Post(parent: alice.public_key, public_key: alice.public_key, content: initContent(aliceKeys, "Hello, i'm alice"))
-    entities.insertPost(conn, p1)
+    discard entities.insertPost(conn, p1)
     let p2 = Post(parent: p1.content.sig, public_key: bob.public_key, content: initContent(bobKeys, "Hello, i'm bob"))
-    entities.insertPost(conn, p2)
+    discard entities.insertPost(conn, p2)
     let p3 = Post(parent: p2.content.sig, public_key: alice.public_key, content: initContent(aliceKeys, "What's up"))
-    entities.insertPost(conn, p3)
+    discard entities.insertPost(conn, p3)
     let p4 = Post(parent: p2.content.sig, public_key: alice.public_key, content: initContent(aliceKeys, "How are you?"))
-    entities.insertPost(conn, p4)
+    discard entities.insertPost(conn, p4)
     check 2 == entities.selectPost(conn, p1.content.sig).score
 
 test "edit post and user":
@@ -312,15 +312,15 @@ test "edit post and user":
     entities.insertUser(conn, alice, alice.user_id)
     entities.insertUser(conn, bob, bob.user_id)
     let p1 = Post(parent: alice.public_key, public_key: alice.public_key, content: initContent(aliceKeys, "I like turtles"))
-    entities.insertPost(conn, p1)
+    discard entities.insertPost(conn, p1)
     let newText = "I hate turtles"
     var newContent = initContent(aliceKeys, newText)
     newContent.sig_last = p1.content.sig
-    entities.editPost(conn, newContent, alice.public_key)
+    discard entities.editPost(conn, newContent, alice.public_key)
     check entities.search(conn, entities.Posts, "like").len == 0
     check entities.search(conn, entities.Posts, "hate").len == 1
     expect Exception:
-      entities.editPost(conn, newContent, bob.public_key)
+      discard entities.editPost(conn, newContent, bob.public_key)
     # sysop can make alice a moderator
     entities.editTags(conn, entities.Tags(value: "\n\nmoderator", sig: "alice1"), alice.public_key, sysopPublicKey, sysopPublicKey)
     check "moderator" == entities.selectUser(conn, alice.public_key).tags.value
@@ -353,7 +353,7 @@ test "edit post and user":
       entities.editTags(conn, entities.Tags(value: "\n\nmodban", sig: "alice3"), "alice2", sysopPublicKey, bob.public_key)
     # bob can post
     let p2 = Post(parent: bob.public_key, public_key: bob.public_key, content: initContent(bobKeys, "I like turtles"))
-    entities.insertPost(conn, p2)
+    discard entities.insertPost(conn, p2)
     # alice can hide bob
     check 1 == entities.selectPostChildren(conn, bob.public_key).len
     entities.editTags(conn, entities.Tags(value: "\n\nmoderator modhide", sig: "bob4"), "bob3", sysopPublicKey, alice.public_key)
@@ -364,11 +364,11 @@ test "edit post and user":
     entities.editTags(conn, entities.Tags(value: "\n\nmoderator modban", sig: "bob6"), "bob5", sysopPublicKey, alice.public_key)
     # bob can no longer post
     expect Exception:
-      entities.insertPost(conn, Post(parent: bob.public_key, public_key: bob.public_key, content: initContent(bobKeys, "I like turtles a lot")))
+      discard entities.insertPost(conn, Post(parent: bob.public_key, public_key: bob.public_key, content: initContent(bobKeys, "I like turtles a lot")))
     expect Exception:
       var newContent = initContent(bobKeys, newText)
       newContent.sig_last = p2.content.sig
-      entities.editPost(conn, newContent, bob.public_key)
+      discard entities.editPost(conn, newContent, bob.public_key)
     expect Exception:
       entities.editTags(conn, entities.Tags(value: "\n\nmoderator hi", sig: "bob7"), "bob6", sysopPublicKey, bob.public_key)
 
@@ -383,9 +383,9 @@ test "post to blog":
       bob = initUser(paths.encode(bobKeys.public))
     entities.insertUser(conn, alice, alice.user_id)
     entities.insertUser(conn, bob, bob.user_id)
-    entities.insertPost(conn, Post(parent: alice.public_key, public_key: alice.public_key, content: initContent(aliceKeys, "My first blog post")))
+    discard entities.insertPost(conn, Post(parent: alice.public_key, public_key: alice.public_key, content: initContent(aliceKeys, "My first blog post")))
     expect Exception:
-      entities.insertPost(conn, Post(parent: alice.public_key, public_key: bob.public_key, content: initContent(bobKeys, "I shouldn't be able to post here")))
+      discard entities.insertPost(conn, Post(parent: alice.public_key, public_key: bob.public_key, content: initContent(bobKeys, "I shouldn't be able to post here")))
 
 test "retrieve sqlite db via http":
   var s = server.initServer("localhost", port, bbsDir)
