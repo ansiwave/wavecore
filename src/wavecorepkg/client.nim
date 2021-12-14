@@ -21,7 +21,10 @@ proc initClient*(address: string, postAddress: string = address): Client =
   Client(address: address, postAddress: postAddress)
 
 proc initUrl(address: string; endpoint: string): string =
-  "$1/$2".format(address, endpoint)
+  if strutils.endsWith(address, "/"):
+    "$1$2".format(address, endpoint)
+  else:
+    "$1/$2".format(address, endpoint)
 
 proc setReadUrl*(client: Client, readUrl: string) =
   when defined(emscripten):
