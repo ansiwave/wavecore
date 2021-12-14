@@ -175,24 +175,23 @@ Aerith's theme
 /play /8 d-,a-,e,f# a /2 f#,d+ /8 e-,e,c+ a /2 c,e /8 d-,a-,e,f# a d+ c#+ e+ d+ b c#+ /2 e-,c,a /2 c,e
     """
 
-let
-  sysopKeys = block:
-    let path = "privkey"
-    if os.fileExists(path):
-      echo "Using existing sysop key"
-      let privKeyStr = readFile(path)
-      var privKey: ed25519.PrivateKey
-      copyMem(privKey.addr, privKeyStr[0].unsafeAddr, privKeyStr.len)
-      ed25519.initKeyPair(privkey)
-    else:
-      echo "Creating new sysop key"
-      let keys = ed25519.initKeyPair()
-      writeFile(path, keys.private)
-      keys
-  board = paths.encode(sysopKeys.public)
-
 proc main*(port: int) =
   echo "Testrun"
+  let
+    sysopKeys = block:
+      let path = "privkey"
+      if os.fileExists(path):
+        echo "Using existing sysop key"
+        let privKeyStr = readFile(path)
+        var privKey: ed25519.PrivateKey
+        copyMem(privKey.addr, privKeyStr[0].unsafeAddr, privKeyStr.len)
+        ed25519.initKeyPair(privkey)
+      else:
+        echo "Creating new sysop key"
+        let keys = ed25519.initKeyPair()
+        writeFile(path, keys.private)
+        keys
+    board = paths.encode(sysopKeys.public)
   let boardDir = paths.staticFileDir / paths.boardsDir / board
   if os.dirExists(boardDir):
     return
