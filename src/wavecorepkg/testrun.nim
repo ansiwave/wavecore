@@ -192,6 +192,7 @@ let
   board = paths.encode(sysopKeys.public)
 
 proc main*(port: int) =
+  echo "Testrun"
   let boardDir = paths.staticFileDir / paths.boardsDir / board
   if os.dirExists(boardDir):
     return
