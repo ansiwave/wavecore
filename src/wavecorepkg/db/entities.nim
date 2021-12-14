@@ -42,17 +42,6 @@ proc initCompressedValue*(uncompressed: string): CompressedValue =
   result.compressed = cast[seq[uint8]](zippy.compress(uncompressed, dataFormat = zippy.dfZlib))
   result.uncompressed = uncompressed
 
-# not used in prod...only in tests
-proc initContent*(content: tuple[body: string, sig: string], sigLast: string = content.sig): Content =
-  result.value = initCompressedValue(content.body)
-  result.sig = content.sig
-  result.sig_last = sigLast
-
-# not used in prod...only in tests
-proc initTags*(tags: tuple[body: string, sig: string]): Tags =
-  result.value = tags.body
-  result.sig = tags.sig
-
 proc initPost(stmt: PStmt): Post =
   var cols = sqlite3.column_count(stmt)
   for col in 0 .. cols-1:

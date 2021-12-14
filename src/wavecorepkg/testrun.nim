@@ -1,11 +1,9 @@
-from ./db import nil
 from ./db/entities import nil
-from ./server import nil
+from ./client import nil
 from ./ed25519 import nil
 from ./paths import nil
 from ./common import nil
 from os import `/`
-from osproc import nil
 
 const
   logo =
@@ -57,7 +55,7 @@ const
 /_/_/_/_/\_,_/_/ /_/_/_/\_,_/___/_/\__/ 
                                         
     """
-  jabba =
+  jabbaAnsi =
     """
 [0m[40m                                                                                [0m
 [0m[40m                                                        [33m▄▄▄[37m                     [0m
@@ -87,7 +85,7 @@ const
 [0m[40m                   [33m▀▀████▄▄▄▄█▄▄██▀[37m        [33mZII[37m                                  [0m
 [0m[40m                        [33m▀▀▀▀▀▀▀░[37m                                                [0m
     """
-  hogan =
+  hoganAnsi =
     """
 [0m[40;37m                                                                                [0m
 [0m[40m  [31mHulk Hogan                           ▄▄██████████[1;41m▄[22;40m▄▄                          [0m
@@ -191,45 +189,36 @@ let
       let keys = ed25519.initKeyPair()
       writeFile(path, keys.private)
       keys
-  sysopPublicKey = paths.encode(sysopKeys.public)
+  board = paths.encode(sysopKeys.public)
 
-proc main*(s: server.Server) =
-  # create test db
-  os.createDir(paths.staticFileDir / paths.boardsDir / sysopPublicKey / paths.gitDir / paths.ansiwavesDir)
-  os.createDir(paths.staticFileDir / paths.boardsDir / sysopPublicKey / paths.gitDir / paths.dbDir)
-  let
-    dbPath = paths.staticFileDir / paths.db(sysopPublicKey)
-    dbIsOld = os.fileExists(dbPath)
-  db.withOpen(conn, dbPath, false):
-    db.init(conn)
-  if dbIsOld:
+proc main*(port: int) =
+  let boardDir = paths.staticFileDir / paths.boardsDir / board
+  if os.dirExists(boardDir):
     return
-  let sysop = entities.User(public_key: sysopPublicKey)
-  server.editPost(s, sysopPublicKey, entities.initContent(common.signWithHeaders(sysopKeys, logo, sysop.public_key, common.Edit, sysopPublicKey), sysop.public_key), sysop.public_key)
+  os.createDir(boardDir)
+  var c = client.initClient("http://localhost:" & $port)
+  client.start(c)
+  let sysop = entities.User(public_key: board)
+  discard client.submit(c, "ansiwave", common.signWithHeaders(sysopKeys, logo, sysop.public_key, common.Edit, board).body)
   let
-    subboard = entities.Post(parent: sysop.public_key, public_key: sysop.public_key, content: entities.initContent(common.signWithHeaders(sysopKeys, subboard1Text, sysop.public_key, common.New, sysopPublicKey)))
-    subboard2 = entities.Post(parent: sysop.public_key, public_key: sysop.public_key, content: entities.initContent(common.signWithHeaders(sysopKeys, subboard2Text, sysop.public_key, common.New, sysopPublicKey)))
-  server.insertPost(s, sysopPublicKey, subboard)
-  server.insertPost(s, sysopPublicKey, subboard2)
+    subboard1 = common.signWithHeaders(sysopKeys, subboard1Text, sysop.public_key, common.New, board)
+    subboard2 = common.signWithHeaders(sysopKeys, subboard2Text, sysop.public_key, common.New, board)
+  discard client.submit(c, "ansiwave", subboard1.body)
+  discard client.submit(c, "ansiwave", subboard2.body)
   let
     aliceKeys = ed25519.initKeyPair()
     bobKeys = ed25519.initKeyPair()
     alice = entities.User(public_key: paths.encode(aliceKeys.public))
     bob = entities.User(public_key: paths.encode(bobKeys.public))
-  server.editPost(s, sysopPublicKey, entities.initContent(common.signWithHeaders(aliceKeys, "Hi i'm alice", alice.public_key, common.Edit, sysopPublicKey), alice.public_key), alice.public_key)
-  server.editPost(s, sysopPublicKey, entities.initContent(common.signWithHeaders(bobKeys, "Hi i'm bob", bob.public_key, common.Edit, sysopPublicKey), bob.public_key), bob.public_key)
-  server.editTags(s, sysopPublicKey, entities.initTags(common.signWithHeaders(sysopKeys, "moderator", bob.public_key, common.Tags, sysopPublicKey)), bob.public_key, sysop.public_key)
-  let p1 = entities.Post(parent: subboard2.content.sig, public_key: bob.public_key, content: entities.initContent(common.signWithHeaders(bobKeys, aerith, subboard2.content.sig, common.New, sysopPublicKey)))
-  server.insertPost(s, sysopPublicKey, p1)
-  let p2 = entities.Post(parent: subboard.content.sig, public_key: bob.public_key, content: entities.initContent(common.signWithHeaders(bobKeys, jabba, subboard.content.sig, common.New, sysopPublicKey)))
-  server.insertPost(s, sysopPublicKey, p2)
-  let p3 = entities.Post(parent: p2.content.sig, public_key: alice.public_key, content: entities.initContent(common.signWithHeaders(aliceKeys, "That ansi is\n" & fabulous, p2.content.sig, common.New, sysopPublicKey)))
-  server.insertPost(s, sysopPublicKey, p3)
-  let p4 = entities.Post(parent: p2.content.sig, public_key: sysop.public_key, content: entities.initContent(common.signWithHeaders(sysopKeys, "The people demand more jabba", p2.content.sig, common.New, sysopPublicKey)))
-  server.insertPost(s, sysopPublicKey, p4)
-  let p5 = entities.Post(parent: subboard.content.sig, public_key: bob.public_key, content: entities.initContent(common.signWithHeaders(bobKeys, hogan, subboard.content.sig, common.New, sysopPublicKey)))
-  server.insertPost(s, sysopPublicKey, p5)
-  server.insertPost(s, sysopPublicKey, entities.Post(parent: p5.content.sig, public_key: alice.public_key, content: entities.initContent(common.signWithHeaders(aliceKeys, "I love hogan", p2.content.sig, common.New, sysopPublicKey))))
-  server.insertPost(s, sysopPublicKey, entities.Post(parent: p5.content.sig, public_key: alice.public_key, content: entities.initContent(common.signWithHeaders(aliceKeys, "The navajo teepees i mean", p5.content.sig, common.New, sysopPublicKey))))
-  server.insertPost(s, sysopPublicKey, entities.Post(parent: p5.content.sig, public_key: alice.public_key, content: entities.initContent(common.signWithHeaders(aliceKeys, "Acknowledge me plz", p5.content.sig, common.New, sysopPublicKey))))
+  discard client.submit(c, "ansiwave", common.signWithHeaders(aliceKeys, "Hi i'm alice", alice.public_key, common.Edit, board).body)
+  discard client.submit(c, "ansiwave", common.signWithHeaders(bobKeys, "Hi i'm bob", bob.public_key, common.Edit, board).body)
+  discard client.submit(c, "ansiwave", common.signWithHeaders(sysopKeys, "moderator", bob.public_key, common.Tags, board).body)
+  discard client.submit(c, "ansiwave", common.signWithHeaders(bobKeys, aerith, subboard2.sig, common.New, board).body)
+  let jabba = common.signWithHeaders(bobKeys, jabbaAnsi, subboard1.sig, common.New, board)
+  discard client.submit(c, "ansiwave", jabba.body)
+  discard client.submit(c, "ansiwave", common.signWithHeaders(aliceKeys, "That ansi is\n" & fabulous, jabba.sig, common.New, board).body)
+  discard client.submit(c, "ansiwave", common.signWithHeaders(sysopKeys, "The people demand more jabba", jabba.sig, common.New, board).body)
+  let hogan = common.signWithHeaders(bobKeys, hoganAnsi, subboard1.sig, common.New, board)
+  discard client.submit(c, "ansiwave", hogan.body)
+  discard client.submit(c, "ansiwave", common.signWithHeaders(aliceKeys, "I love hogan", hogan.sig, common.New, board).body)
 

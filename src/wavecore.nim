@@ -9,6 +9,6 @@ when isMainModule:
   vfs.register()
   var s = server.initServer("localhost", port, paths.staticFileDir)
   server.start(s)
-  testrun.main(s)
+  testrun.main(port)
   discard readLine(stdin)
   server.stop(s)

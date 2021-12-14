@@ -15,10 +15,10 @@ from logging import nil
 type
   State = object
   ActionKind = enum
-    Stop, InsertPost, EditPost, EditTags,
+    Stop, Init, InsertPost, EditPost, EditTags,
   Action = object
     case kind: ActionKind
-    of Stop:
+    of Stop, Init:
       discard
     of InsertPost:
       post: entities.Post
@@ -123,6 +123,10 @@ proc ansiwavePost(server: Server, request: Request, headers: var string, body: v
       raise newException(BadRequestException, "Invalid value in /board")
     if not os.dirExists(server.staticFileDir / paths.boardsDir / board):
       raise newException(BadRequestException, "Board does not exist")
+    elif not os.fileExists(paths.db(board)):
+      let error = sendAction(server, Action(kind: Init, board: board))
+      if error != "":
+        raise newException(Exception, error)
 
     # check the sig
     if cmds["/algo"] != "ed25519":
@@ -208,6 +212,7 @@ proc handleStatic(server: Server, request: Request, headers: var string, body: v
   return false
 
 proc handle(server: Server, client: Socket) =
+  var logger = logging.newConsoleLogger(fmtStr="[$datetime] - $levelname: ")
   var headers, body: string
   try:
     var request = Request(headers: httpcore.newHttpHeaders())
@@ -263,15 +268,19 @@ proc handle(server: Server, client: Socket) =
   except BadRequestException as ex:
     headers = "HTTP/1.1 400 Bad Request"
     body = ex.msg
+    logging.log(logger, logging.lvlError, headers & " - " & body)
   except ForbiddenException as ex:
     headers = "HTTP/1.1 403 Forbidden"
     body = ex.msg
+    logging.log(logger, logging.lvlError, headers & " - " & body)
   except NotFoundException as ex:
     headers = "HTTP/1.1 404 Not Found"
     body = ex.msg
+    logging.log(logger, logging.lvlError, headers & " - " & body)
   except Exception as ex:
     headers = "HTTP/1.1 500 Internal Server Error"
     body = ex.msg
+    logging.log(logger, logging.lvlError, headers & " - " & body)
   finally:
     try:
       client.send(headers & "\r\L\r\L" & body)
@@ -302,7 +311,6 @@ proc listen(server: Server) {.thread.} =
     server.socket.close()
 
 proc recvAction(server: Server) {.thread.} =
-  var logger = logging.newConsoleLogger(fmtStr="[$datetime] - $levelname: ")
   server.stateReady[].send(true)
   # FIXME: catch exceptions
   while true:
@@ -311,26 +319,31 @@ proc recvAction(server: Server) {.thread.} =
     case action.kind:
     of Stop:
       break
+    of Init:
+      try:
+        os.createDir(paths.staticFileDir / paths.boardsDir / action.board / paths.gitDir / paths.ansiwavesDir)
+        os.createDir(paths.staticFileDir / paths.boardsDir / action.board / paths.gitDir / paths.dbDir)
+        db.withOpen(conn, paths.staticFileDir / paths.db(action.board), false):
+          db.init(conn)
+      except Exception as ex:
+        resp = ex.msg
     of InsertPost:
       try:
         {.cast(gcsafe).}:
           insertPost(server, action.board, action.post)
       except Exception as ex:
-        logging.log(logger, logging.lvlError, ex.msg)
         resp = ex.msg
     of EditPost:
       try:
         {.cast(gcsafe).}:
           editPost(server, action.board, action.content, action.key)
       except Exception as ex:
-        logging.log(logger, logging.lvlError, ex.msg)
         resp = ex.msg
     of EditTags:
       try:
         {.cast(gcsafe).}:
           editTags(server, action.board, action.tags, action.tagsSigLast, action.key)
       except Exception as ex:
-        logging.log(logger, logging.lvlError, ex.msg)
         resp = ex.msg
     action.error[].send(resp)
 
