@@ -15,11 +15,13 @@ from logging import nil
 type
   State = object
   ActionKind = enum
-    Stop, Init, InsertPost, EditPost, EditTags,
+    Stop, Log, Init, InsertPost, EditPost, EditTags,
   Action = object
     case kind: ActionKind
     of Stop, Init:
       discard
+    of Log:
+      message: string
     of InsertPost:
       post: entities.Post
     of EditPost:
@@ -212,7 +214,6 @@ proc handleStatic(server: Server, request: Request, headers: var string, body: v
   return false
 
 proc handle(server: Server, client: Socket) =
-  var logger = logging.newConsoleLogger(fmtStr="[$datetime] - $levelname: ")
   var headers, body: string
   try:
     var request = Request(headers: httpcore.newHttpHeaders())
@@ -268,19 +269,19 @@ proc handle(server: Server, client: Socket) =
   except BadRequestException as ex:
     headers = "HTTP/1.1 400 Bad Request"
     body = ex.msg
-    logging.log(logger, logging.lvlError, headers & " - " & body)
+    discard sendAction(server, Action(kind: Log, message: headers & " - " & body))
   except ForbiddenException as ex:
     headers = "HTTP/1.1 403 Forbidden"
     body = ex.msg
-    logging.log(logger, logging.lvlError, headers & " - " & body)
+    discard sendAction(server, Action(kind: Log, message: headers & " - " & body))
   except NotFoundException as ex:
     headers = "HTTP/1.1 404 Not Found"
     body = ex.msg
-    logging.log(logger, logging.lvlError, headers & " - " & body)
+    discard sendAction(server, Action(kind: Log, message: headers & " - " & body))
   except Exception as ex:
     headers = "HTTP/1.1 500 Internal Server Error"
     body = ex.msg
-    logging.log(logger, logging.lvlError, headers & " - " & body)
+    discard sendAction(server, Action(kind: Log, message: headers & " - " & body))
   finally:
     try:
       client.send(headers & "\r\L\r\L" & body)
@@ -311,14 +312,16 @@ proc listen(server: Server) {.thread.} =
     server.socket.close()
 
 proc recvAction(server: Server) {.thread.} =
+  var logger = logging.newConsoleLogger(fmtStr="[$datetime] - $levelname: ")
   server.stateReady[].send(true)
-  # FIXME: catch exceptions
   while true:
     let action = server.action[].recv()
     var resp = ""
     case action.kind:
     of Stop:
       break
+    of Log:
+      logging.log(logger, logging.lvlError, action.message)
     of Init:
       try:
         os.createDir(paths.staticFileDir / paths.boardsDir / action.board / paths.gitDir / paths.ansiwavesDir)
