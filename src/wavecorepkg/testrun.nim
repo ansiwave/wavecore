@@ -176,7 +176,6 @@ Aerith's theme
     """
 
 proc main*(port: int) =
-  echo "Testrun"
   let
     sysopKeys = block:
       let path = "privkey"
@@ -192,6 +191,13 @@ proc main*(port: int) =
         writeFile(path, keys.private)
         keys
     board = paths.encode(sysopKeys.public)
+    readPort =
+      when defined(release):
+        "80"
+      else:
+        $port
+  echo "Test run...open this link in the terminal client:"
+  echo "http://localhost:" & readPort & "#board:" & board
   let boardDir = paths.staticFileDir / paths.boardsDir / board
   if os.dirExists(boardDir):
     return
