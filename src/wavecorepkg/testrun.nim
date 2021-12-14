@@ -195,11 +195,15 @@ let
 
 proc main*(s: server.Server) =
   # create test db
-  discard osproc.execProcess("rm -r " & paths.staticFileDir / paths.boardsDir)
   os.createDir(paths.staticFileDir / paths.boardsDir / sysopPublicKey / paths.gitDir / paths.ansiwavesDir)
   os.createDir(paths.staticFileDir / paths.boardsDir / sysopPublicKey / paths.gitDir / paths.dbDir)
-  db.withOpen(conn, paths.staticFileDir / paths.db(sysopPublicKey), false):
+  let
+    dbPath = paths.staticFileDir / paths.db(sysopPublicKey)
+    dbIsOld = os.fileExists(dbPath)
+  db.withOpen(conn, dbPath, false):
     db.init(conn)
+  if dbIsOld:
+    return
   let sysop = entities.User(public_key: sysopPublicKey)
   server.editPost(s, sysopPublicKey, entities.initContent(common.signWithHeaders(sysopKeys, logo, sysop.public_key, common.Edit, sysopPublicKey), sysop.public_key), sysop.public_key)
   let
