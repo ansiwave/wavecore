@@ -116,6 +116,11 @@ proc initContent(keys: ed25519.KeyPair, origContent: string): entities.Content =
   result.sig = paths.encode(ed25519.sign(keys, content))
   result.sig_last = result.sig
 
+proc initContent(content: tuple[body: string, sig: string], sigLast: string = content.sig): Content =
+  result.value = initCompressedValue(content.body)
+  result.sig = content.sig
+  result.sig_last = sigLast
+
 test "query users":
   db.withOpen(conn, ":memory:", false):
     db.init(conn)
@@ -424,8 +429,8 @@ test "submit an ansiwave":
     db.withOpen(conn, dbPath, false):
       db.init(conn)
       let sysop = initUser(sysopPublicKey)
-      server.editPost(s, sysopPublicKey, entities.initContent(common.signWithHeaders(sysopKeys, "Welcome to my BBS", sysop.public_key, common.Edit, sysopPublicKey), sysop.public_key), sysop.public_key)
-      subboard = entities.Post(parent: sysop.public_key, public_key: sysop.public_key, content: entities.initContent(common.signWithHeaders(sysopKeys, "General Discussion", sysop.public_key, common.New, sysopPublicKey)))
+      server.editPost(s, sysopPublicKey, initContent(common.signWithHeaders(sysopKeys, "Welcome to my BBS", sysop.public_key, common.Edit, sysopPublicKey), sysop.public_key), sysop.public_key)
+      subboard = entities.Post(parent: sysop.public_key, public_key: sysop.public_key, content: initContent(common.signWithHeaders(sysopKeys, "General Discussion", sysop.public_key, common.New, sysopPublicKey)))
       server.insertPost(s, sysopPublicKey, subboard)
     let aliceKeys = ed25519.initKeyPair()
     block:
