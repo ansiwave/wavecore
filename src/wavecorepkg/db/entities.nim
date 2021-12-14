@@ -4,8 +4,6 @@ from ../db import nil
 from zippy import nil
 from sequtils import nil
 from strutils import format
-from ../ed25519 import nil
-from ../paths import nil
 from times import nil
 from ../common import nil
 import sets
