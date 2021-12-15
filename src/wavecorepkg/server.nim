@@ -216,7 +216,7 @@ proc handle(server: Server, client: Socket) =
     var firstLine = ""
     client.readLine(firstLine, recvTimeout)
     let parts = strutils.split(firstLine, ' ')
-    assert parts.len == 3
+    doAssert parts.len >= 3
     # request method
     case parts[0]
     of "GET": request.reqMethod = httpcore.HttpGet
