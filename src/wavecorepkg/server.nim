@@ -117,10 +117,6 @@ proc ansiwavePost(server: Server, request: Request, headers: var string, body: v
     except Exception as ex:
       raise newException(BadRequestException, ex.msg)
 
-  const maxLines = 120
-  if strutils.countLines(contentOnly) > maxLines:
-    raise newException(BadRequestException, "Exceeded the maximum line count of " & $maxLines)
-
   # check the board
   let board = cmds["/board"]
   if board != paths.encode(paths.decode(board)):
