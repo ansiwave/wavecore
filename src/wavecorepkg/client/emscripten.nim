@@ -226,7 +226,7 @@ proc sendSetReadUrl*(client: Client, readUrl: string) =
   emscripten_call_worker(client.worker, "recvAction", data, data.len.cint, nil, nil)
 
 proc sendFetch*(client: Client, request: Request, chan: ChannelRef) =
-  if request.headers.len > 0:
+  if request.verb != "get" or request.headers.len > 0:
     sendAction(client, Action(kind: Fetch, request: request), chan)
   else:
     chan[].url = $request.url
