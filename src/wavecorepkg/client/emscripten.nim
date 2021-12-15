@@ -16,6 +16,7 @@ type
   Channel = object
     dataAvailable: bool
     data: string
+    url: string
   ChannelRef* = ptr Channel
   Request* = object
     url*: urlly.Url
@@ -85,6 +86,7 @@ proc emscripten_create_worker(url: cstring): cint {.importc.}
 proc emscripten_destroy_worker(worker: cint) {.importc.}
 proc emscripten_call_worker(worker: cint, funcname: cstring, data: cstring, size: cint, callback: proc (data: pointer, size: cint, arg: pointer) {.cdecl.}, arg: pointer) {.importc.}
 proc emscripten_worker_respond(data: cstring, size: cint) {.importc.}
+proc emscripten_async_wget_data(url: cstring, arg: pointer, onload: pointer, onerror: pointer) {.importc.}
 proc wavecore_fetch(url: cstring, verb: cstring, headers: cstring, body: cstring): cstring {.importc.}
 proc wavecore_set_innerhtml(selector: cstring, html: cstring) {.importc.}
 proc wavecore_set_display(selector: cstring, display: cstring) {.importc.}
@@ -224,7 +226,26 @@ proc sendSetReadUrl*(client: Client, readUrl: string) =
   emscripten_call_worker(client.worker, "recvAction", data, data.len.cint, nil, nil)
 
 proc sendFetch*(client: Client, request: Request, chan: ChannelRef) =
-  sendAction(client, Action(kind: Fetch, request: request), chan)
+  if request.headers.len > 0:
+    sendAction(client, Action(kind: Fetch, request: request), chan)
+  else:
+    chan[].url = $request.url
+
+    proc onload(arg: pointer, data: pointer, size: cint) {.cdecl.} =
+      var s = newString(size)
+      copyMem(s[0].addr, data, size)
+      let chan = cast[ptr Channel](arg)
+      if strutils.endsWith(chan[].url, ".ansiwavez"):
+        s = zippy.uncompress(cast[string](s), dataFormat = zippy.dfZlib)
+      chan[].data = flatty.toFlatty(Result[Response](kind: Valid, valid: Response(code: 200, body: s)))
+      chan[].dataAvailable = true
+
+    proc onerror(arg: pointer) {.cdecl.} =
+      let chan = cast[ptr Channel](arg)
+      chan[].data = flatty.toFlatty(Result[Response](kind: Error, error: ""))
+      chan[].dataAvailable = true
+
+    emscripten_async_wget_data($request.url, chan, onload, onerror)
 
 proc sendUserQuery*(client: Client, filename: string, publicKey: string, chan: ChannelRef) =
   sendAction(client, Action(kind: QueryUser, dbFilename: filename, publicKey: publicKey), chan)
