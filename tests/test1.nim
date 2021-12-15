@@ -232,6 +232,9 @@ test "query posts asynchronously":
       p4 = Post(parent: p2.content.sig, public_key: alice.public_key, content: initContent(aliceKeys, "How are you?"))
       discard entities.insertPost(conn, p4, p4.post_id)
       p1 = entities.selectPost(conn, p1.content.sig)
+      p2 = entities.selectPost(conn, p2.content.sig)
+      p3 = entities.selectPost(conn, p3.content.sig)
+      p4 = entities.selectPost(conn, p4.content.sig)
     # query db over http
     block:
       var response = client.queryPost(c, dbPath, p1.content.sig)

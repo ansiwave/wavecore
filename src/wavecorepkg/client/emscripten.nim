@@ -52,7 +52,6 @@ type
       publicKey*: string
     of QueryPost:
       postSig*: string
-      getContent*: bool
     of QueryPostChildren:
       postParentSig*: string
       sortByTs*: bool
@@ -250,8 +249,8 @@ proc sendFetch*(client: Client, request: Request, chan: ChannelRef) =
 proc sendUserQuery*(client: Client, filename: string, publicKey: string, chan: ChannelRef) =
   sendAction(client, Action(kind: QueryUser, dbFilename: filename, publicKey: publicKey), chan)
 
-proc sendPostQuery*(client: Client, filename: string, sig: string, getContent: bool, chan: ChannelRef) =
-  sendAction(client, Action(kind: QueryPost, dbFilename: filename, postSig: sig, getContent: getContent), chan)
+proc sendPostQuery*(client: Client, filename: string, sig: string, chan: ChannelRef) =
+  sendAction(client, Action(kind: QueryPost, dbFilename: filename, postSig: sig), chan)
 
 proc sendPostChildrenQuery*(client: Client, filename: string, sig: string, sortByTs: bool, offset: int, chan: ChannelRef) =
   sendAction(client, Action(kind: QueryPostChildren, dbFilename: filename, sortByTs: sortByTs, offset: offset, postParentSig: sig), chan)
@@ -302,7 +301,7 @@ proc recvAction(data: pointer, size: cint) {.exportc.} =
       try:
         var s: string
         db.withOpen(conn, action.dbFilename, true):
-          let post = entities.selectPost(conn, action.postSig, action.getContent)
+          let post = entities.selectPost(conn, action.postSig)
           s = flatty.toFlatty(Result[entities.Post](kind: Valid, valid: post))
         s
       except Exception as ex:

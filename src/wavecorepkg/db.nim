@@ -83,7 +83,6 @@ proc init*(conn: PSqlite3) =
         CREATE TABLE post (
           post_id INTEGER PRIMARY KEY AUTOINCREMENT,
           ts INTEGER,
-          content BLOB,
           content_sig TEXT UNIQUE,
           content_sig_last TEXT UNIQUE,
           public_key TEXT,
