@@ -49,9 +49,26 @@ from ./wavecorepkg/ed25519 import nil
 from ./wavecorepkg/paths import nil
 from ./wavecorepkg/common import nil
 
+import ./wavecorepkg/db
+import ./wavecorepkg/db/entities
+import ./wavecorepkg/db/vfs
+from os import `/`
+import sets
+
 const
   port = 3001
   address = "http://localhost:" & $port
+
+let
+  sysopKeys = ed25519.initKeyPair()
+  sysopPublicKey = paths.encode(sysopKeys.public)
+  bbsDir = "bbstest"
+  dbDirs = paths.db(sysopPublicKey)
+  dbPath = bbsDir / dbDirs
+os.createDir(bbsDir / paths.boardsDir / sysopPublicKey / paths.gitDir / paths.ansiwavesDir)
+os.createDir(bbsDir / paths.boardsDir / sysopPublicKey / paths.gitDir / paths.dbDir)
+paths.readUrl = "http://localhost:" & $port & "/" & dbDirs
+vfs.register()
 
 test "Full lifecycle":
   var s = server.initServer("localhost", port)
@@ -89,23 +106,6 @@ test "Request static file asynchronously":
   finally:
     server.stop(s)
     client.stop(c)
-
-import ./wavecorepkg/db
-import ./wavecorepkg/db/entities
-import ./wavecorepkg/db/vfs
-from os import `/`
-import sets
-
-let
-  sysopKeys = ed25519.initKeyPair()
-  sysopPublicKey = paths.encode(sysopKeys.public)
-  bbsDir = "bbstest"
-  dbDirs = paths.db(sysopPublicKey)
-  dbPath = bbsDir / dbDirs
-os.createDir(bbsDir / paths.boardsDir / sysopPublicKey / paths.gitDir / paths.ansiwavesDir)
-os.createDir(bbsDir / paths.boardsDir / sysopPublicKey / paths.gitDir / paths.dbDir)
-paths.readUrl = "http://localhost:" & $port & "/" & dbDirs
-vfs.register()
 
 proc initUser(publicKey: string): User =
   entities.User(public_key: publicKey, tags: entities.Tags(sig: publicKey))
