@@ -15,10 +15,10 @@ from logging import nil
 type
   State = object
   ActionKind = enum
-    Stop, Log, Init, InsertPost, EditPost, EditTags,
+    Stop, Log, InsertPost, EditPost, EditTags,
   Action = object
     case kind: ActionKind
-    of Stop, Init:
+    of Stop:
       discard
     of Log:
       message: string
@@ -41,6 +41,7 @@ type
     listenStopped, listenReady, stateReady: ptr Channel[bool]
     action: ptr Channel[Action]
     state: ptr State
+    initialized: bool
   Request = object
     uri: uri.Uri
     reqMethod: httpcore.HttpMethod
@@ -123,10 +124,6 @@ proc ansiwavePost(server: Server, request: Request, headers: var string, body: v
     raise newException(BadRequestException, "Invalid value in /board")
   if not os.dirExists(server.staticFileDir / paths.boardsDir / board):
     raise newException(BadRequestException, "Board does not exist")
-  elif not os.fileExists(paths.db(board)):
-    let error = sendAction(server, Action(kind: Init, board: board))
-    if error != "":
-      raise newException(Exception, error)
 
   # check the sig
   if cmds["/algo"] != "ed25519":
@@ -312,38 +309,40 @@ proc recvAction(server: Server) {.thread.} =
   server.stateReady[].send(true)
   while true:
     let action = server.action[].recv()
-    var resp = ""
-    case action.kind:
-    of Stop:
-      break
-    of Log:
-      logging.log(logger, logging.lvlError, action.message)
-    of Init:
+    if not server.initialized:
       try:
         os.createDir(paths.staticFileDir / paths.boardsDir / action.board / paths.gitDir / paths.ansiwavesDir)
         os.createDir(paths.staticFileDir / paths.boardsDir / action.board / paths.gitDir / paths.dbDir)
         db.withOpen(conn, paths.staticFileDir / paths.db(action.board), false):
           db.init(conn)
+        server.initialized = true
       except Exception as ex:
-        resp = ex.msg
-    of InsertPost:
-      try:
-        {.cast(gcsafe).}:
-          insertPost(server, action.board, action.post)
-      except Exception as ex:
-        resp = ex.msg
-    of EditPost:
-      try:
-        {.cast(gcsafe).}:
-          editPost(server, action.board, action.content, action.key)
-      except Exception as ex:
-        resp = ex.msg
-    of EditTags:
-      try:
-        {.cast(gcsafe).}:
-          editTags(server, action.board, action.tags, action.tagsSigLast, action.key)
-      except Exception as ex:
-        resp = ex.msg
+        logging.log(logger, logging.lvlError, ex.msg)
+    var resp = ""
+    if server.initialized:
+      case action.kind:
+      of Stop:
+        break
+      of Log:
+        logging.log(logger, logging.lvlError, action.message)
+      of InsertPost:
+        try:
+          {.cast(gcsafe).}:
+            insertPost(server, action.board, action.post)
+        except Exception as ex:
+          resp = ex.msg
+      of EditPost:
+        try:
+          {.cast(gcsafe).}:
+            editPost(server, action.board, action.content, action.key)
+        except Exception as ex:
+          resp = ex.msg
+      of EditTags:
+        try:
+          {.cast(gcsafe).}:
+            editTags(server, action.board, action.tags, action.tagsSigLast, action.key)
+        except Exception as ex:
+          resp = ex.msg
     action.error[].send(resp)
 
 proc initShared(server: var Server) =
