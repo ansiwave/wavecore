@@ -66,6 +66,12 @@ proc init*(conn: PSqlite3) =
   withTransaction(conn):
     if version == 0:
       db_sqlite.exec conn, sql"""
+        pragma journal_mode = delete
+      """
+      db_sqlite.exec conn, sql"""
+        pragma page_size = 1024
+      """
+      db_sqlite.exec conn, sql"""
         CREATE TABLE user (
           user_id INTEGER PRIMARY KEY AUTOINCREMENT,
           ts INTEGER,
