@@ -213,7 +213,8 @@ proc handle(server: Server, client: Socket) =
     var firstLine = ""
     client.readLine(firstLine, recvTimeout)
     let parts = strutils.split(firstLine, ' ')
-    doAssert parts.len >= 3
+    if parts.len != 3:
+      raise newException(Exception, "Invalid first line: " & firstLine)
     # request method
     case parts[0]
     of "GET": request.reqMethod = httpcore.HttpGet
