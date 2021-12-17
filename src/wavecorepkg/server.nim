@@ -3,13 +3,14 @@ from uri import `$`
 from strutils import nil
 from parseutils import nil
 from os import `/`
+from osproc import nil
 import httpcore
 from ./db import nil
 from ./db/entities import nil
 from ./paths import nil
 from ./ed25519 import nil
 from ./common import nil
-import tables
+import tables, sets
 from logging import nil
 
 type
@@ -37,11 +38,12 @@ type
     port: int
     socket: Socket
     staticFileDir: string
+    outDir: string
     listenThread, stateThread: Thread[Server]
     listenStopped, listenReady, stateReady: ptr Channel[bool]
     action: ptr Channel[Action]
     state: ptr State
-    initialized: bool
+    initializedBoards: HashSet[string]
   Request = object
     uri: uri.Uri
     reqMethod: httpcore.HttpMethod
@@ -62,11 +64,10 @@ const
   maxContentLength = 200000
   maxHeaderCount = 100
 
-proc initServer*(hostname: string, port: int, staticFileDir: string = ""): Server =
-  Server(hostname: hostname, port: port, staticFileDir: staticFileDir)
+proc initServer*(hostname: string, port: int, staticFileDir: string = "", outDir: string = ""): Server =
+  Server(hostname: hostname, port: port, staticFileDir: staticFileDir, outDir: outDir)
 
 proc insertPost*(server: Server, board: string, entity: entities.Post) =
-  assert server.staticFileDir != ""
   db.withOpen(conn, server.staticFileDir / paths.db(board), false):
     db.withTransaction(conn):
       # if user doesn't exist in db, insert it
@@ -78,7 +79,6 @@ proc insertPost*(server: Server, board: string, entity: entities.Post) =
       writeFile(server.staticFileDir / paths.ansiwavez(board, sig), entity.content.value.compressed)
 
 proc editPost*(server: Server, board: string, content: entities.Content, key: string) =
-  assert server.staticFileDir != ""
   db.withOpen(conn, server.staticFileDir / paths.db(board), false):
     db.withTransaction(conn):
       # if user doesn't exist in db, insert it
@@ -90,7 +90,6 @@ proc editPost*(server: Server, board: string, content: entities.Content, key: st
       writeFile(server.staticFileDir / paths.ansiwavez(board, sig), content.value.compressed)
 
 proc editTags*(server: Server, board: string, tags: entities.Tags, tagsSigLast: string, key: string) =
-  assert server.staticFileDir != ""
   db.withOpen(conn, server.staticFileDir / paths.db(board), false):
     db.withTransaction(conn):
       entities.editTags(conn, tags, tagsSigLast, board, key)
@@ -153,19 +152,19 @@ proc ansiwavePost(server: Server, request: Request, headers: var string, body: v
         public_key: keyBase64,
         parent: cmds["/target"],
       )
-      error = sendAction(server, Action(kind: InsertPost, board: board, post: post))
+      error = sendAction(server, Action(kind: InsertPost, board: board, post: post, key: keyBase64))
     if error != "":
       raise newException(Exception, error)
   of "edit":
     let
       content = entities.Content(value: entities.initCompressedValue(request.body), sig: sigBase64, sig_last: cmds["/target"])
-      error = sendAction(server, Action(kind: EditPost, board: board, content: content, key: cmds["/key"]))
+      error = sendAction(server, Action(kind: EditPost, board: board, content: content, key: keyBase64))
     if error != "":
       raise newException(Exception, error)
   of "tags":
     let
       tags = entities.Tags(value: request.body, sig: sigBase64)
-      error = sendAction(server, Action(kind: EditTags, board: board, tags: tags, tagsSigLast: cmds["/target"], key: cmds["/key"]))
+      error = sendAction(server, Action(kind: EditTags, board: board, tags: tags, tagsSigLast: cmds["/target"], key: keyBase64))
     if error != "":
       raise newException(Exception, error)
   else:
@@ -310,17 +309,32 @@ proc recvAction(server: Server) {.thread.} =
   server.stateReady[].send(true)
   while true:
     let action = server.action[].recv()
-    if not server.initialized:
-      try:
-        os.createDir(paths.staticFileDir / paths.boardsDir / action.board / paths.gitDir / paths.ansiwavesDir)
-        os.createDir(paths.staticFileDir / paths.boardsDir / action.board / paths.gitDir / paths.dbDir)
-        db.withOpen(conn, paths.staticFileDir / paths.db(action.board), false):
-          db.init(conn)
-        server.initialized = true
-      except Exception as ex:
-        logging.log(logger, logging.lvlError, ex.msg)
     var resp = ""
-    if server.initialized:
+    if action.board != "":
+      # init board if necessary
+      try:
+        let bbsGitDir = os.absolutePath(server.staticFileDir / paths.boardsDir / action.board / paths.gitDir)
+        if not os.dirExists(bbsGitDir):
+          os.createDir(bbsGitDir / paths.ansiwavesDir)
+          os.createDir(bbsGitDir / paths.dbDir)
+          if server.outDir != "":
+            let outGitDir = os.absolutePath(server.outDir / paths.boardsDir / action.board / paths.gitDir)
+            if not os.dirExists(bbsGitDir / ".git"):
+              discard osproc.execProcess("git", bbsGitDir, args=["init"], options={osproc.poStdErrToStdOut, osproc.poUsePath})
+              discard osproc.execProcess("git", bbsGitDir, args=["remote", "add", "out", outGitDir], options={osproc.poStdErrToStdOut, osproc.poUsePath})
+              logging.log(logger, logging.lvlInfo, "Created " & bbsGitDir)
+            if not os.dirExists(outGitDir):
+              os.createDir(os.parentDir(outGitDir))
+              discard osproc.execProcess("git", args=["init", "--bare", outGitDir], options={osproc.poStdErrToStdOut, osproc.poUsePath})
+              logging.log(logger, logging.lvlInfo, "Created " & outGitDir)
+        if action.board notin server.initializedBoards:
+          db.withOpen(conn, server.staticFileDir / paths.db(action.board), false):
+            db.init(conn)
+          server.initializedBoards.incl(action.board)
+      except Exception as ex:
+        resp = "Error initializing board"
+        logging.log(logger, logging.lvlError, ex.msg)
+    if resp == "":
       case action.kind:
       of Stop:
         break
@@ -344,6 +358,16 @@ proc recvAction(server: Server) {.thread.} =
             editTags(server, action.board, action.tags, action.tagsSigLast, action.key)
         except Exception as ex:
           resp = ex.msg
+    if resp == "" and  server.outDir != "" and action.board != "" and action.key != "":
+      try:
+        let
+          bbsGitDir = os.absolutePath(server.staticFileDir / paths.boardsDir / action.board / paths.gitDir)
+          outGitDir = os.absolutePath(server.outDir / paths.boardsDir / action.board / paths.gitDir)
+        discard osproc.execProcess("git", bbsGitDir, args=["add", "."], options={osproc.poStdErrToStdOut, osproc.poUsePath})
+        discard osproc.execProcess("git", bbsGitDir, args=["commit", "-m", action.key], options={osproc.poStdErrToStdOut, osproc.poUsePath})
+        discard osproc.execProcess("git", bbsGitDir, args=["push", "out", "master"], options={osproc.poStdErrToStdOut, osproc.poUsePath})
+      except Exception as ex:
+        logging.log(logger, logging.lvlError, ex.msg)
     action.error[].send(resp)
 
 proc initShared(server: var Server) =

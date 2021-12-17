@@ -9,7 +9,7 @@ installExt    = @["nim", "c", "h"]
 bin           = @["wavecore"]
 
 task dev, "Run dev version":
-  exec "nimble run wavecore --testrun"
+  exec "nimble run wavecore --testrun --outdir=out"
 
 # Dependencies
 

@@ -23,8 +23,15 @@ when isMainModule:
       quit "Invalid args"
   if not os.dirExists(paths.staticFileDir):
     quit "Can't find directory: " & paths.staticFileDir
+  var outDir = ""
+  if "outdir" in options:
+    if os.dirExists(options["outdir"]):
+      outDir = options["outdir"]
+      echo "Using outdir: " & outDir
+    else:
+      quit "Can't find out directory: " & options["outdir"]
   vfs.register()
-  var s = server.initServer("localhost", port, paths.staticFileDir)
+  var s = server.initServer("localhost", port, paths.staticFileDir, outDir)
   server.start(s)
   if "testrun" in options:
     testrun.main(port)
