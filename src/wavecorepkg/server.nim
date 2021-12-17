@@ -314,12 +314,12 @@ proc recvAction(server: Server) {.thread.} =
     if action.board != "":
       # init board if necessary
       try:
-        let bbsGitDir = os.absolutePath(server.staticFileDir / paths.boardsDir / action.board / paths.gitDir)
-        if not os.dirExists(bbsGitDir):
+        let bbsGitDir = os.absolutePath(server.staticFileDir / paths.boardsDir / action.board)
+        if not os.dirExists(bbsGitDir / paths.ansiwavesDir) or not os.dirExists(bbsGitDir / paths.dbDir):
           os.createDir(bbsGitDir / paths.ansiwavesDir)
           os.createDir(bbsGitDir / paths.dbDir)
           if server.outDir != "":
-            let outGitDir = os.absolutePath(server.outDir / paths.boardsDir / action.board / paths.gitDir)
+            let outGitDir = os.absolutePath(server.outDir / paths.boardsDir / action.board)
             if not os.dirExists(bbsGitDir / ".git"):
               discard osproc.execProcess("git", bbsGitDir, args=["init"], options={osproc.poStdErrToStdOut, osproc.poUsePath})
               discard osproc.execProcess("git", bbsGitDir, args=["remote", "add", "out", outGitDir], options={osproc.poStdErrToStdOut, osproc.poUsePath})
@@ -365,7 +365,7 @@ proc recvAction(server: Server) {.thread.} =
           resp = ex.msg
     if resp == "" and  action.board != "" and action.key != "":
       try:
-        let bbsGitDir = os.absolutePath(server.staticFileDir / paths.boardsDir / action.board / paths.gitDir)
+        let bbsGitDir = os.absolutePath(server.staticFileDir / paths.boardsDir / action.board)
         if server.useGit:
           discard osproc.execProcess("git", bbsGitDir, args=["add", "."], options={osproc.poStdErrToStdOut, osproc.poUsePath})
           discard osproc.execProcess("git", bbsGitDir, args=["commit", "-m", action.key], options={osproc.poStdErrToStdOut, osproc.poUsePath})
