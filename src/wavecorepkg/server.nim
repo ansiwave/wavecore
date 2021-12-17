@@ -326,7 +326,8 @@ proc recvAction(server: Server) {.thread.} =
               logging.log(logger, logging.lvlInfo, "Created " & bbsGitDir)
             if not os.dirExists(outGitDir):
               os.createDir(os.parentDir(outGitDir))
-              discard osproc.execProcess("git", args=["init", "--bare", outGitDir], options={osproc.poStdErrToStdOut, osproc.poUsePath})
+              discard osproc.execProcess("git", args=["init", outGitDir], options={osproc.poStdErrToStdOut, osproc.poUsePath})
+              discard osproc.execProcess("git", outGitDir, args=["config", "--local", "receive.denyCurrentBranch", "updateInstead"], options={osproc.poStdErrToStdOut, osproc.poUsePath})
               logging.log(logger, logging.lvlInfo, "Created " & outGitDir)
           elif server.useGit:
             if not os.dirExists(bbsGitDir / ".git"):
