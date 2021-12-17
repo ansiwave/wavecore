@@ -39,6 +39,7 @@ type
     socket: Socket
     staticFileDir: string
     outDir: string
+    useGit: bool
     listenThread, stateThread: Thread[Server]
     listenStopped, listenReady, stateReady: ptr Channel[bool]
     action: ptr Channel[Action]
@@ -64,8 +65,8 @@ const
   maxContentLength = 200000
   maxHeaderCount = 100
 
-proc initServer*(hostname: string, port: int, staticFileDir: string = "", outDir: string = ""): Server =
-  Server(hostname: hostname, port: port, staticFileDir: staticFileDir, outDir: outDir)
+proc initServer*(hostname: string, port: int, staticFileDir: string = "", outDir: string = "", useGit: bool = false): Server =
+  Server(hostname: hostname, port: port, staticFileDir: staticFileDir, outDir: outDir, useGit: useGit)
 
 proc insertPost*(server: Server, board: string, entity: entities.Post) =
   db.withOpen(conn, server.staticFileDir / paths.db(board), false):
@@ -327,6 +328,10 @@ proc recvAction(server: Server) {.thread.} =
               os.createDir(os.parentDir(outGitDir))
               discard osproc.execProcess("git", args=["init", "--bare", outGitDir], options={osproc.poStdErrToStdOut, osproc.poUsePath})
               logging.log(logger, logging.lvlInfo, "Created " & outGitDir)
+          elif server.useGit:
+            if not os.dirExists(bbsGitDir / ".git"):
+              discard osproc.execProcess("git", bbsGitDir, args=["init"], options={osproc.poStdErrToStdOut, osproc.poUsePath})
+              logging.log(logger, logging.lvlInfo, "Created " & bbsGitDir)
         if action.board notin server.initializedBoards:
           db.withOpen(conn, server.staticFileDir / paths.db(action.board), false):
             db.init(conn)
@@ -358,14 +363,14 @@ proc recvAction(server: Server) {.thread.} =
             editTags(server, action.board, action.tags, action.tagsSigLast, action.key)
         except Exception as ex:
           resp = ex.msg
-    if resp == "" and  server.outDir != "" and action.board != "" and action.key != "":
+    if resp == "" and  action.board != "" and action.key != "":
       try:
-        let
-          bbsGitDir = os.absolutePath(server.staticFileDir / paths.boardsDir / action.board / paths.gitDir)
-          outGitDir = os.absolutePath(server.outDir / paths.boardsDir / action.board / paths.gitDir)
-        discard osproc.execProcess("git", bbsGitDir, args=["add", "."], options={osproc.poStdErrToStdOut, osproc.poUsePath})
-        discard osproc.execProcess("git", bbsGitDir, args=["commit", "-m", action.key], options={osproc.poStdErrToStdOut, osproc.poUsePath})
-        discard osproc.execProcess("git", bbsGitDir, args=["push", "out", "master"], options={osproc.poStdErrToStdOut, osproc.poUsePath})
+        let bbsGitDir = os.absolutePath(server.staticFileDir / paths.boardsDir / action.board / paths.gitDir)
+        if server.useGit:
+          discard osproc.execProcess("git", bbsGitDir, args=["add", "."], options={osproc.poStdErrToStdOut, osproc.poUsePath})
+          discard osproc.execProcess("git", bbsGitDir, args=["commit", "-m", action.key], options={osproc.poStdErrToStdOut, osproc.poUsePath})
+        if server.outDir != "":
+          discard osproc.execProcess("git", bbsGitDir, args=["push", "out", "master"], options={osproc.poStdErrToStdOut, osproc.poUsePath})
       except Exception as ex:
         logging.log(logger, logging.lvlError, ex.msg)
     action.error[].send(resp)
