@@ -369,7 +369,7 @@ proc recvAction(server: Server) {.thread.} =
         let bbsGitDir = os.absolutePath(server.staticFileDir / paths.boardsDir / action.board)
         if server.useGit:
           discard osproc.execProcess("git", bbsGitDir, args=["add", "."], options={osproc.poStdErrToStdOut, osproc.poUsePath})
-          discard osproc.execProcess("git", bbsGitDir, args=["commit", "-m", action.key], options={osproc.poStdErrToStdOut, osproc.poUsePath})
+          discard osproc.execProcess("git", bbsGitDir, args=["commit", "-m", $action.kind & " " & action.key], options={osproc.poStdErrToStdOut, osproc.poUsePath})
         if server.outDir != "":
           discard osproc.execProcess("git", bbsGitDir, args=["push", "out", "master"], options={osproc.poStdErrToStdOut, osproc.poUsePath})
       except Exception as ex:
