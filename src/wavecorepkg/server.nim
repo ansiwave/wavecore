@@ -350,8 +350,10 @@ proc recvAction(data: ThreadData) {.thread.} =
           if data.details.shouldClone:
             let outGitDir = os.absolutePath(paths.cloneDir / paths.boardsDir / action.board)
             if not os.dirExists(bbsGitDir / ".git"):
+              writeFile(bbsGitDir / ".gitignore", "misc/")
               discard osproc.execProcess("git", args=["init", bbsGitDir], options={osproc.poStdErrToStdOut, osproc.poUsePath})
-              discard osproc.execProcess("git", args=["-C", bbsGitDir, "remote", "add", "out", outGitDir], options={osproc.poStdErrToStdOut, osproc.poUsePath})
+              discard osproc.execProcess("git", args=["-C", bbsGitDir, "add", ".gitignore"], options={osproc.poStdErrToStdOut, osproc.poUsePath})
+              discard osproc.execProcess("git", args=["-C", bbsGitDir, "commit", "-m", "Add .gitignore"], options={osproc.poStdErrToStdOut, osproc.poUsePath})
               logging.log(logger, logging.lvlInfo, "Created " & bbsGitDir)
             if not os.dirExists(outGitDir):
               os.createDir(os.parentDir(outGitDir))
@@ -411,8 +413,10 @@ proc recvBackgroundAction(data: ThreadData) {.thread.} =
       break
     of BackgroundActionKind.CopyOut:
       try:
-        let bbsGitDir = os.absolutePath(data.details.staticFileDir / paths.boardsDir / action.board)
-        discard osproc.execProcess("git", args=["-C", bbsGitDir, "push", "out", "master"], options={osproc.poStdErrToStdOut, osproc.poUsePath})
+        let
+          bbsGitDir = os.absolutePath(data.details.staticFileDir / paths.boardsDir / action.board)
+          outGitDir = os.absolutePath(paths.cloneDir / paths.boardsDir / action.board)
+        discard osproc.execProcess("git", args=["-C", bbsGitDir, "push", outGitDir, "master"], options={osproc.poStdErrToStdOut, osproc.poUsePath})
       except Exception as ex:
         stderr.writeLine(ex.msg)
         stderr.writeLine(getStackTrace(ex))
