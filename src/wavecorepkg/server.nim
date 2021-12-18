@@ -50,7 +50,7 @@ type
     hostname: string
     port: int
     staticFileDir: string
-    outDir: string
+    shouldClone: bool
   ThreadData = tuple
     details: ServerDetails
     readyChan: ptr Channel[bool]
@@ -88,8 +88,8 @@ const
   maxContentLength = 200000
   maxHeaderCount = 100
 
-proc initServer*(hostname: string, port: int, staticFileDir: string = "", outDir: string = ""): Server =
-  Server(details: (hostname: hostname, port: port, staticFileDir: staticFileDir, outDir: outDir))
+proc initServer*(hostname: string, port: int, staticFileDir: string = "", shouldClone: bool = false): Server =
+  Server(details: (hostname: hostname, port: port, staticFileDir: staticFileDir, shouldClone: shouldClone))
 
 proc insertPost*(details: ServerDetails, board: string, entity: entities.Post) =
   db.withOpen(conn, details.staticFileDir / paths.db(board), false):
@@ -347,8 +347,8 @@ proc recvAction(data: ThreadData) {.thread.} =
         if not os.dirExists(bbsGitDir / paths.ansiwavesDir) or not os.dirExists(bbsGitDir / paths.dbDir):
           os.createDir(bbsGitDir / paths.ansiwavesDir)
           os.createDir(bbsGitDir / paths.dbDir)
-          if data.details.outDir != "":
-            let outGitDir = os.absolutePath(data.details.outDir / paths.boardsDir / action.board)
+          if data.details.shouldClone:
+            let outGitDir = os.absolutePath(paths.cloneDir / paths.boardsDir / action.board)
             if not os.dirExists(bbsGitDir / ".git"):
               discard osproc.execProcess("git", args=["init", bbsGitDir], options={osproc.poStdErrToStdOut, osproc.poUsePath})
               discard osproc.execProcess("git", args=["-C", bbsGitDir, "remote", "add", "out", outGitDir], options={osproc.poStdErrToStdOut, osproc.poUsePath})
@@ -393,7 +393,7 @@ proc recvAction(data: ThreadData) {.thread.} =
     if resp == "" and  action.board != "" and action.key != "":
       try:
         let bbsGitDir = os.absolutePath(data.details.staticFileDir / paths.boardsDir / action.board)
-        if data.details.outDir != "":
+        if data.details.shouldClone:
           discard osproc.execProcess("git", args=["-C", bbsGitDir, "add", "."], options={osproc.poStdErrToStdOut, osproc.poUsePath})
           discard osproc.execProcess("git", args=["-C", bbsGitDir, "commit", "-m", $action.kind & " " & action.key], options={osproc.poStdErrToStdOut, osproc.poUsePath})
           data.backgroundAction[].send(BackgroundAction(kind: BackgroundActionKind.CopyOut, board: action.board))
@@ -437,7 +437,7 @@ proc initShared(server: var Server) =
   )
   server.stateAction[].open()
   # background
-  if server.details.outDir != "":
+  if server.details.shouldClone:
     server.backgroundReady = cast[ptr Channel[bool]](
       allocShared0(sizeof(Channel[bool]))
     )
@@ -458,7 +458,7 @@ proc deinitShared(server: var Server) =
   deallocShared(server.stateReady)
   server.stateAction[].close()
   deallocShared(server.stateAction)
-  if server.details.outDir != "":
+  if server.details.shouldClone:
     # background
     server.backgroundReady[].close()
     deallocShared(server.backgroundReady)
@@ -470,7 +470,7 @@ proc initThreads(server: var Server) =
   discard server.listenReady[].recv()
   createThread(server.stateThread, recvAction, (server.details, server.stateReady, server.listenAction, server.stateAction, server.backgroundAction))
   discard server.stateReady[].recv()
-  if server.details.outDir != "":
+  if server.details.shouldClone:
     createThread(server.backgroundThread, recvBackgroundAction, (server.details, server.backgroundReady, server.listenAction, server.stateAction, server.backgroundAction))
     discard server.backgroundReady[].recv()
 
@@ -479,7 +479,7 @@ proc deinitThreads(server: var Server) =
   server.listenThread.joinThread()
   server.stateAction[].send(StateAction(kind: StateActionKind.Stop))
   server.stateThread.joinThread()
-  if server.details.outDir != "":
+  if server.details.shouldClone:
     server.backgroundAction[].send(BackgroundAction(kind: BackgroundActionKind.Stop))
     server.backgroundThread.joinThread()
 

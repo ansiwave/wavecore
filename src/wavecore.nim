@@ -23,15 +23,14 @@ when isMainModule:
       quit "Invalid args"
   if not os.dirExists(paths.staticFileDir):
     quit "Can't find directory: " & paths.staticFileDir
-  var outDir = ""
-  if "outdir" in options:
-    if os.dirExists(options["outdir"]):
-      outDir = options["outdir"]
-      echo "Using outdir: " & outDir
+  let shouldClone = "clone" in options
+  if shouldClone:
+    if os.dirExists(paths.cloneDir):
+      echo "Cloning enabled"
     else:
-      quit "Can't find out directory: " & options["outdir"]
+      quit "Can't find directory: " & paths.cloneDir
   vfs.register()
-  var s = server.initServer("localhost", port, paths.staticFileDir, outDir)
+  var s = server.initServer("localhost", port, paths.staticFileDir, shouldClone)
   server.start(s)
   if "testrun" in options:
     testrun.main(port)
