@@ -30,7 +30,7 @@ when isMainModule:
     else:
       quit "Can't find directory: " & paths.cloneDir
   vfs.register()
-  var s = server.initServer("localhost", port, paths.staticFileDir, shouldClone)
+  var s = server.initServer("localhost", port, paths.staticFileDir, options)
   server.start(s)
   if "testrun" in options:
     testrun.main(port)

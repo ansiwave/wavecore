@@ -51,6 +51,7 @@ type
     hostname: string
     port: int
     staticFileDir: string
+    options: Table[string, string]
     shouldClone: bool
   ThreadData = tuple
     details: ServerDetails
@@ -89,8 +90,8 @@ const
   maxContentLength = 200000
   maxHeaderCount = 100
 
-proc initServer*(hostname: string, port: int, staticFileDir: string = "", shouldClone: bool = false): Server =
-  Server(details: (hostname: hostname, port: port, staticFileDir: staticFileDir, shouldClone: shouldClone))
+proc initServer*(hostname: string, port: int, staticFileDir: string = "", options: Table[string, string] = initTable[string, string]()): Server =
+  Server(details: (hostname: hostname, port: port, staticFileDir: staticFileDir, options: options, shouldClone: "clone" in options))
 
 proc insertPost*(details: ServerDetails, board: string, entity: entities.Post) =
   db.withOpen(conn, details.staticFileDir / paths.db(board), false):
@@ -385,11 +386,12 @@ proc recvAction(data: ThreadData) {.thread.} =
       of StateActionKind.InsertPost:
         try:
           when defined(release):
-            const minInterval = 15
-            let ts = times.epochTime()
-            if action.key != action.board and action.key in keyToLastTs and keyToLastTs[action.key] - ts < minInterval:
-              raise newException(Exception, "Posting too fast! Wait a few seconds.")
-            keyToLastTs[action.key] = ts
+            if "testrun" notin data.details.options:
+              const minInterval = 15
+              let ts = times.epochTime()
+              if action.key != action.board and action.key in keyToLastTs and keyToLastTs[action.key] - ts < minInterval:
+                raise newException(Exception, "Posting too fast! Wait a few seconds.")
+              keyToLastTs[action.key] = ts
           {.cast(gcsafe).}:
             insertPost(data.details, action.board, action.post)
         except Exception as ex:
