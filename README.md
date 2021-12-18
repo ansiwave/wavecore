@@ -12,7 +12,7 @@ On the server, you now should create a directory called `bbs`, and inside of it,
 mkdir -p ~/bbs/boards/Q8BTY324cY7nl5kce6ctEfk8IRIrtsM8NfKL29B-3UE
 ```
 
-Now run the wavecore server in the same working directory as `bbs`. If it can't find the `bbs` directory, it will quit with an error. This directory will contain all the public files that must be served to users.
+Now run the wavecore server in the same working directory as `bbs` with no arguments. If it can't find the `bbs` directory, it will quit with an error. This directory will contain all the public files that must be served to users.
 
 Never expose the wavecore server directly to external connections. Instead, put it behind a proxy server like nginx. Make your proxy server serve the `bbs` directory as static files, and additionally forward the `/ansiwave` endpoint to the wavecore server. For example, if you're using nginx, edit the config at `/etc/nginx/sites-enabled/default` and somewhere in the `server` block add:
 
