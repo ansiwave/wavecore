@@ -200,7 +200,7 @@ proc ansiwavePost(data: ThreadData, request: Request, headers: var string, body:
 proc handleStatic(details: ServerDetails, request: Request, headers: var string, body: var string): bool =
   var filePath = ""
   if request.reqMethod == httpcore.HttpGet and details.staticFileDir != "":
-    let path = details.staticFileDir / request.uri.path
+    let path = details.staticFileDir / $request.uri
     if fileExists(path):
       filePath = path
     else:

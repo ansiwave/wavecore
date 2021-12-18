@@ -70,8 +70,14 @@ type
   WorkerResponse = object
     data: string
     channel: int64
+  ClientKind* = enum
+    Online, Offline,
   Client* = ref object
-    address*: string
+    case kind*: ClientKind
+    of Online:
+      address*: string
+    of Offline:
+      discard
     postAddress*: string
     worker: cint
   ChannelValue*[T] = object

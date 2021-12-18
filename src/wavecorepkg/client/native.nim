@@ -1,8 +1,9 @@
 import puppy
 from zippy import nil
-from urlly import nil
+from urlly import `$`
 from strutils import nil
 from times import nil
+from os import `/`
 
 from ../db import nil
 from ../db/entities import nil
@@ -48,8 +49,14 @@ type
       searchResponse*: ChannelRef[Result[seq[entities.Post]]]
     dbFilename*: string
     offset: int
+  ClientKind* = enum
+    Online, Offline,
   Client* = ref object
-    address*: string
+    case kind*: ClientKind
+    of Online:
+      address*: string
+    of Offline:
+      path*: string
     postAddress*: string
     requestThread*: Thread[Client]
     action*: ChannelRef[Action]
@@ -112,6 +119,12 @@ proc sendUserRepliesQuery*(client: Client, filename: string, publicKey: string, 
 proc sendSearchQuery*(client: Client, filename: string, kind: entities.SearchKind, term: string, offset: int, chan: ChannelRef) =
   sendAction(client, Action(kind: SearchPosts, dbFilename: filename, searchKind: kind, searchTerm: term, offset: offset, searchResponse: chan))
 
+proc trimPath(path: string): string =
+  let parts = strutils.split(path, '/')
+  if parts.len < 3:
+    raise newException(Exception, "Invalid path")
+  strutils.join(parts[2 ..< parts.len], "/")
+
 proc recvAction(client: Client) {.thread.} =
   while true:
     let action = client.action[].recv()
@@ -120,49 +133,96 @@ proc recvAction(client: Client) {.thread.} =
       break
     of Fetch:
       try:
-        {.cast(gcsafe).}:
-          var req = fetch(action.request)
-        if req.code == 200:
+        case client.kind:
+        of Online:
+          {.cast(gcsafe).}:
+            var res = fetch(action.request)
+          if res.code == 200:
+            if strutils.endsWith(action.request.url.path, ".ansiwavez"):
+              res.body = zippy.uncompress(cast[string](res.body), dataFormat = zippy.dfZlib)
+            action.response[].send(Result[Response](kind: Valid, valid: res))
+          else:
+            action.response[].send(Result[Response](kind: Error, error: res.body))
+        of Offline:
+          let parts = strutils.split($action.request.url, '/')
+          if parts.len < 3:
+            raise newException(Exception, "Invalid path")
+          let path = client.path / strutils.join(parts[2 ..< parts.len], "/")
+          var res = Response(code: 200, body: readFile(path))
           if strutils.endsWith(action.request.url.path, ".ansiwavez"):
-            req.body = zippy.uncompress(cast[string](req.body), dataFormat = zippy.dfZlib)
-          action.response[].send(Result[Response](kind: Valid, valid: req))
-        else:
-          action.response[].send(Result[Response](kind: Error, error: req.body))
+            res.body = zippy.uncompress(cast[string](res.body), dataFormat = zippy.dfZlib)
+          action.response[].send(Result[Response](kind: Valid, valid: res))
       except Exception as ex:
         action.response[].send(Result[Response](kind: Error, error: ex.msg))
     of QueryUser:
       try:
-        db.withOpen(conn, action.dbFilename, true):
+        let (path, useHttp) =
+          case client.kind:
+          of Online:
+            (action.dbFilename, true)
+          of Offline:
+            (client.path / trimPath(action.dbFilename), false)
+        db.withOpen(conn, path, useHttp):
           action.userResponse[].send(Result[entities.User](kind: Valid, valid: entities.selectUser(conn, action.publicKey)))
       except Exception as ex:
         action.userResponse[].send(Result[entities.User](kind: Error, error: ex.msg))
     of QueryPost:
       try:
-        db.withOpen(conn, action.dbFilename, true):
+        let (path, useHttp) =
+          case client.kind:
+          of Online:
+            (action.dbFilename, true)
+          of Offline:
+            (client.path / trimPath(action.dbFilename), false)
+        db.withOpen(conn, path, useHttp):
           action.postResponse[].send(Result[entities.Post](kind: Valid, valid: entities.selectPost(conn, action.postSig)))
       except Exception as ex:
         action.postResponse[].send(Result[entities.Post](kind: Error, error: ex.msg))
     of QueryPostChildren:
       try:
-        db.withOpen(conn, action.dbFilename, true):
+        let (path, useHttp) =
+          case client.kind:
+          of Online:
+            (action.dbFilename, true)
+          of Offline:
+            (client.path / trimPath(action.dbFilename), false)
+        db.withOpen(conn, path, useHttp):
           action.postChildrenResponse[].send(Result[seq[entities.Post]](kind: Valid, valid: entities.selectPostChildren(conn, action.postParentSig, action.sortByTs, action.offset)))
       except Exception as ex:
         action.postChildrenResponse[].send(Result[seq[entities.Post]](kind: Error, error: ex.msg))
     of QueryUserPosts:
       try:
-        db.withOpen(conn, action.dbFilename, true):
+        let (path, useHttp) =
+          case client.kind:
+          of Online:
+            (action.dbFilename, true)
+          of Offline:
+            (client.path / trimPath(action.dbFilename), false)
+        db.withOpen(conn, path, useHttp):
           action.userPostsResponse[].send(Result[seq[entities.Post]](kind: Valid, valid: entities.selectUserPosts(conn, action.userPostsPublicKey, action.offset)))
       except Exception as ex:
         action.userPostsResponse[].send(Result[seq[entities.Post]](kind: Error, error: ex.msg))
     of QueryUserReplies:
       try:
-        db.withOpen(conn, action.dbFilename, true):
+        let (path, useHttp) =
+          case client.kind:
+          of Online:
+            (action.dbFilename, true)
+          of Offline:
+            (client.path / trimPath(action.dbFilename), false)
+        db.withOpen(conn, path, useHttp):
           action.userRepliesResponse[].send(Result[seq[entities.Post]](kind: Valid, valid: entities.selectUserReplies(conn, action.userRepliesPublicKey, action.offset)))
       except Exception as ex:
         action.userRepliesResponse[].send(Result[seq[entities.Post]](kind: Error, error: ex.msg))
     of SearchPosts:
       try:
-        db.withOpen(conn, action.dbFilename, true):
+        let (path, useHttp) =
+          case client.kind:
+          of Online:
+            (action.dbFilename, true)
+          of Offline:
+            (client.path / trimPath(action.dbFilename), false)
+        db.withOpen(conn, path, useHttp):
           action.searchResponse[].send(Result[seq[entities.Post]](kind: Valid, valid: entities.search(conn, action.searchKind, action.searchTerm, action.offset)))
       except Exception as ex:
         action.searchResponse[].send(Result[seq[entities.Post]](kind: Error, error: ex.msg))

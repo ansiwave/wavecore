@@ -63,6 +63,7 @@ let
   sysopKeys = ed25519.initKeyPair()
   sysopPublicKey = paths.encode(sysopKeys.public)
   bbsDir = "bbstest"
+  boardDir = bbsDir / paths.boardsDir / sysopPublicKey
   dbDirs = paths.db(sysopPublicKey)
   dbPath = bbsDir / dbDirs
 os.createDir(bbsDir / paths.boardsDir / sysopPublicKey / paths.ansiwavesDir)
@@ -78,18 +79,6 @@ test "Full lifecycle":
   try:
     expect client.ClientException:
       discard client.post(c, "ansiwave", "Hello, world!")
-  finally:
-    server.stop(s)
-    client.stop(c)
-
-test "Request static file":
-  var s = server.initServer("localhost", port, "tests")
-  server.start(s)
-  var c = client.initClient(address)
-  client.start(c)
-  try:
-    discard client.get(c, "config.nims")
-    discard client.get(c, "config.nims", (0, 10))
   finally:
     server.stop(s)
     client.stop(c)
@@ -155,16 +144,16 @@ test "query users asynchronously":
       entities.insertUser(conn, bob, bob.user_id)
     # query db over http
     block:
-      var response = client.queryUser(c, dbPath, alice.publicKey)
+      var response = client.queryUser(c, dbDirs, alice.publicKey)
       client.get(response, true)
       check response.value.valid == alice
     block:
-      var response = client.queryUser(c, dbPath, bob.publicKey)
+      var response = client.queryUser(c, dbDirs, bob.publicKey)
       client.get(response, true)
       check response.value.valid == bob
     # query something invalid
     block:
-      var response = client.queryUser(c, dbPath, "STUFF")
+      var response = client.queryUser(c, dbDirs, "STUFF")
       client.get(response, true)
       check response.value.kind == client.Error
   finally:
@@ -237,30 +226,89 @@ test "query posts asynchronously":
       p4 = entities.selectPost(conn, p4.content.sig)
     # query db over http
     block:
-      var response = client.queryPost(c, dbPath, p1.content.sig)
+      var response = client.queryPost(c, dbDirs, p1.content.sig)
       client.get(response, true)
       check response.value.valid == p1
     block:
-      var response = client.queryPostChildren(c, dbPath, p2.content.sig)
+      var response = client.queryPostChildren(c, dbDirs, p2.content.sig)
       client.get(response, true)
       check response.value.valid == @[p4, p3]
     block:
-      var response = client.queryUserPosts(c, dbPath, alice.public_key)
+      var response = client.queryUserPosts(c, dbDirs, alice.public_key)
       client.get(response, true)
       check response.value.valid.toHashSet == [p4, p3, p1].toHashSet
     block:
-      var response = client.queryUserReplies(c, dbPath, bob.public_key)
+      var response = client.queryUserReplies(c, dbDirs, bob.public_key)
       client.get(response, true)
       check response.value.valid.toHashSet == [p4, p3].toHashSet
     # query something invalid
     block:
-      var response = client.queryPost(c, dbPath, "yo")
+      var response = client.queryPost(c, dbDirs, "yo")
       client.get(response, true)
       check response.value.kind == client.Error
   finally:
     os.removeFile(dbPath)
     server.stop(s)
     client.stop(c)
+
+test "query posts offline":
+  var s = server.initServer("localhost", port, bbsDir)
+  server.start(s)
+  var c = client.Client(kind: client.Offline, path: boardDir, postAddress: address)
+  client.start(c)
+  try:
+    var
+      alice, bob: User
+      p1, p2, p3, p4: Post
+    # create test db
+    db.withOpen(conn, dbPath, false):
+      db.init(conn)
+      let
+        aliceKeys = ed25519.initKeyPair()
+        bobKeys = ed25519.initKeyPair()
+      alice = initUser(paths.encode(aliceKeys.public))
+      bob = initUser(paths.encode(bobKeys.public))
+      entities.insertUser(conn, alice, alice.user_id)
+      entities.insertUser(conn, bob, bob.user_id)
+      p1 = Post(parent: alice.public_key, public_key: alice.public_key, content: initContent(aliceKeys, "Hello, i'm alice"))
+      discard entities.insertPost(conn, p1, p1.post_id)
+      p2 = Post(parent: p1.content.sig, public_key: bob.public_key, content: initContent(bobKeys, "Hello, i'm bob"))
+      discard entities.insertPost(conn, p2, p2.post_id)
+      p3 = Post(parent: p2.content.sig, public_key: alice.public_key, content: initContent(aliceKeys, "What's up"))
+      discard entities.insertPost(conn, p3, p3.post_id)
+      p4 = Post(parent: p2.content.sig, public_key: alice.public_key, content: initContent(aliceKeys, "How are you?"))
+      discard entities.insertPost(conn, p4, p4.post_id)
+      p1 = entities.selectPost(conn, p1.content.sig)
+      p2 = entities.selectPost(conn, p2.content.sig)
+      p3 = entities.selectPost(conn, p3.content.sig)
+      p4 = entities.selectPost(conn, p4.content.sig)
+    # query db on disk
+    block:
+      var response = client.queryPost(c, dbDirs, p1.content.sig)
+      client.get(response, true)
+      check response.value.valid == p1
+    block:
+      var response = client.queryPostChildren(c, dbDirs, p2.content.sig)
+      client.get(response, true)
+      check response.value.valid == @[p4, p3]
+    block:
+      var response = client.queryUserPosts(c, dbDirs, alice.public_key)
+      client.get(response, true)
+      check response.value.valid.toHashSet == [p4, p3, p1].toHashSet
+    block:
+      var response = client.queryUserReplies(c, dbDirs, bob.public_key)
+      client.get(response, true)
+      check response.value.valid.toHashSet == [p4, p3].toHashSet
+    # query something invalid
+    block:
+      var response = client.queryPost(c, dbDirs, "yo")
+      client.get(response, true)
+      check response.value.kind == client.Error
+  finally:
+    os.removeFile(dbPath)
+    server.stop(s)
+    client.stop(c)
+
 
 test "search posts":
   db.withOpen(conn, ":memory:", false):

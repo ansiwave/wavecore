@@ -2,6 +2,7 @@ from strutils import format
 from ./db/entities import nil
 from urlly import nil
 from paths import nil
+from os import `/`
 
 when defined(emscripten):
   import client/emscripten
@@ -11,14 +12,14 @@ else:
 type
   ClientException* = object of CatchableError
 
-export fetch, start, stop, get, Client, ChannelValue, Result, Request, Response, Header
+export fetch, start, stop, get, Client, ClientKind, ChannelValue, Result, Request, Response, Header
 
 const
   Valid* = ResultKind.Valid
   Error* = ResultKind.Error
 
 proc initClient*(address: string, postAddress: string = address): Client =
-  Client(address: address, postAddress: postAddress)
+  Client(kind: Online, address: address, postAddress: postAddress)
 
 proc initUrl(address: string; endpoint: string): string =
   if strutils.endsWith(address, "/"):
@@ -42,22 +43,14 @@ proc post*(client: Client, endpoint: string, data: string): string =
   let url = initUrl(client.postAddress, endpoint)
   request(url, data, "post")
 
-proc get*(client: Client, endpoint: string, range: (int, int) = (0, 0)): string =
-  let url = initUrl(client.address, endpoint)
-  var headers: seq[Header] = @[]
-  if range != (0, 0):
-    headers.add(Header(key: "Range", value: "range=$1-$2".format(range[0], range[1])))
-  let response: Response = fetch(Request(url: urlly.parseUrl(url), headers: headers, verb: "get", body: ""))
-  if not response.code in {200, 206}:
-    raise newException(ClientException, "Error code " & $response.code & ": " & response.body)
-  return response.body
-
-proc query*(client: Client, endpoint: string, range: (int, int) = (0, 0)): ChannelValue[Response] =
-  let url = initUrl(client.address, endpoint)
-  var headers: seq[Header] = @[]
-  if range != (0, 0):
-    headers.add(Header(key: "Range", value: "range=$1-$2".format(range[0], range[1])))
-  let request = Request(url: urlly.parseUrl(url), headers: headers, verb: "get", body: "")
+proc query*(client: Client, endpoint: string): ChannelValue[Response] =
+  let url =
+    case client.kind:
+    of Online:
+      initUrl(client.address, endpoint)
+    of Offline:
+      endpoint
+  let request = Request(url: urlly.parseUrl(url), verb: "get", body: "")
   result = initChannelValue[Response]()
   sendFetch(client, request, result.chan)
 
