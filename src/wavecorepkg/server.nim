@@ -12,6 +12,7 @@ from ./ed25519 import nil
 from ./common import nil
 import tables, sets
 from logging import nil
+from times import nil
 
 type
   ListenActionKind {.pure.} = enum
@@ -341,7 +342,9 @@ proc execCmd(command: string) =
 proc recvAction(data: ThreadData) {.thread.} =
   var logger = logging.newConsoleLogger(fmtStr="[$datetime] - $levelname: ")
   data.readyChan[].send(true)
-  var initializedBoards: HashSet[string]
+  var
+    initializedBoards: HashSet[string]
+    keyToLastTs: Table[string, float]
   while true:
     let action = data.stateAction[].recv()
     var resp = ""
@@ -381,6 +384,12 @@ proc recvAction(data: ThreadData) {.thread.} =
         logging.log(logger, logging.lvlError, action.message)
       of StateActionKind.InsertPost:
         try:
+          when defined(release):
+            const minInterval = 15
+            let ts = times.epochTime()
+            if action.key != action.board and action.key in keyToLastTs and keyToLastTs[action.key] - ts < minInterval:
+              raise newException(Exception, "Posting too fast! Wait a few seconds.")
+            keyToLastTs[action.key] = ts
           {.cast(gcsafe).}:
             insertPost(data.details, action.board, action.post)
         except Exception as ex:
