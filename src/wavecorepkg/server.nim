@@ -41,7 +41,7 @@ type
     outDir: string
     useGit: bool
     listenThread, stateThread: Thread[Server]
-    listenStopped: ptr Channel[bool]
+    listenStopped, listenReady, stateReady: ptr Channel[bool]
     action: ptr Channel[Action]
     initializedBoards: HashSet[string]
   Request = object
@@ -285,6 +285,7 @@ proc handle(server: Server, client: Socket) =
 proc loop(server: Server) =
   var selector = newSelector[int]()
   selector.registerHandle(server.socket.getFD, {Event.Read}, 0)
+  server.listenReady[].send(true)
   while not server.listenStopped[].tryRecv().dataAvailable:
     if selector.select(selectTimeout).len > 0:
       var client: Socket = Socket()
@@ -305,6 +306,7 @@ proc listen(server: Server) {.thread.} =
 
 proc recvAction(server: Server) {.thread.} =
   var logger = logging.newConsoleLogger(fmtStr="[$datetime] - $levelname: ")
+  server.stateReady[].send(true)
   while true:
     let action = server.action[].recv()
     var resp = ""
@@ -377,21 +379,35 @@ proc initShared(server: var Server) =
   server.listenStopped = cast[ptr Channel[bool]](
     allocShared0(sizeof(Channel[bool]))
   )
+  server.listenStopped[].open()
   server.action = cast[ptr Channel[Action]](
     allocShared0(sizeof(Channel[Action]))
   )
-  server.listenStopped[].open()
   server.action[].open()
+  server.listenReady = cast[ptr Channel[bool]](
+    allocShared0(sizeof(Channel[bool]))
+  )
+  server.listenReady[].open()
+  server.stateReady = cast[ptr Channel[bool]](
+    allocShared0(sizeof(Channel[bool]))
+  )
+  server.stateReady[].open()
 
 proc deinitShared(server: var Server) =
   server.listenStopped[].close()
   server.action[].close()
+  server.listenReady[].close()
+  server.stateReady[].close()
   deallocShared(server.listenStopped)
   deallocShared(server.action)
+  deallocShared(server.listenReady)
+  deallocShared(server.stateReady)
 
 proc initThreads(server: var Server) =
   createThread(server.listenThread, listen, server)
   createThread(server.stateThread, recvAction, server)
+  discard server.listenReady[].recv()
+  discard server.stateReady[].recv()
 
 proc deinitThreads(server: var Server) =
   server.listenStopped[].send(true)
