@@ -25,6 +25,7 @@ type
     tags*: Tags
   Post* = object
     post_id*: int64
+    ts*: int64
     content*: Content
     public_key*: string
     parent*: string
@@ -47,6 +48,8 @@ proc initPost(stmt: PStmt): Post =
     case colName:
     of "post_id":
       result.post_id = sqlite3.column_int(stmt, col)
+    of "ts":
+      result.ts = sqlite3.column_int(stmt, col)
     of "content_sig":
       result.content.sig = $sqlite3.column_text(stmt, col)
     of "content_sig_last":
@@ -67,7 +70,7 @@ proc initPost(stmt: PStmt): Post =
 proc selectPost*(conn: PSqlite3, sig: string): Post =
   let query =
     """
-      SELECT post_id, content_sig, content_sig_last, public_key, parent, reply_count, score, tags FROM post
+      SELECT post_id, ts, content_sig, content_sig_last, public_key, parent, reply_count, score, tags FROM post
       WHERE content_sig = ?
     """
   #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), sig):
@@ -96,7 +99,7 @@ proc selectPostParentIds(conn: PSqlite3, id: int64): string =
 proc selectPostChildren*(conn: PSqlite3, sig: string, sortByTs: bool = false, offset: int = 0): seq[Post] =
   let query =
     """
-      SELECT post_id, content_sig, content_sig_last, public_key, parent, reply_count, score, tags FROM post
+      SELECT post_id, ts, content_sig, content_sig_last, public_key, parent, reply_count, score, tags FROM post
       WHERE parent = ? AND visibility = 1
       ORDER BY $1 DESC
       LIMIT $2
@@ -109,7 +112,7 @@ proc selectPostChildren*(conn: PSqlite3, sig: string, sortByTs: bool = false, of
 proc selectUserPosts*(conn: PSqlite3, publicKey: string, offset: int = 0): seq[Post] =
   let query =
     """
-      SELECT post_id, content_sig, content_sig_last, public_key, parent, reply_count, score, tags FROM post
+      SELECT post_id, ts, content_sig, content_sig_last, public_key, parent, reply_count, score, tags FROM post
       WHERE public_key = ? AND parent != ''
       ORDER BY ts DESC
       LIMIT $1
@@ -122,7 +125,7 @@ proc selectUserPosts*(conn: PSqlite3, publicKey: string, offset: int = 0): seq[P
 proc selectUserReplies*(conn: PSqlite3, publicKey: string, offset: int = 0): seq[Post] =
   let query =
     """
-      SELECT post_id, content_sig, content_sig_last, public_key, parent, reply_count, score, tags FROM post
+      SELECT post_id, ts, content_sig, content_sig_last, public_key, parent, reply_count, score, tags FROM post
       WHERE visibility = 1 AND parent_public_key = ? AND parent_public_key != public_key
       ORDER BY ts DESC
       LIMIT $1
