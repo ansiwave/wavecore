@@ -43,7 +43,6 @@ type
     listenThread, stateThread: Thread[Server]
     listenStopped: ptr Channel[bool]
     action: ptr Channel[Action]
-    state: ptr State
     initializedBoards: HashSet[string]
   Request = object
     uri: uri.Uri
@@ -383,16 +382,12 @@ proc initShared(server: var Server) =
   )
   server.listenStopped[].open()
   server.action[].open()
-  server.state = cast[ptr State](
-    allocShared0(sizeof(State))
-  )
 
 proc deinitShared(server: var Server) =
   server.listenStopped[].close()
   server.action[].close()
   deallocShared(server.listenStopped)
   deallocShared(server.action)
-  deallocShared(server.state)
 
 proc initThreads(server: var Server) =
   createThread(server.listenThread, listen, server)
