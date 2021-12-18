@@ -1,6 +1,6 @@
 import threadpool, net, os, selectors
 from uri import `$`
-from strutils import nil
+from strutils import format
 from parseutils import nil
 from os import `/`
 from osproc import nil
@@ -333,6 +333,11 @@ proc listen(data: ThreadData) {.thread.} =
     echo("Server closing on port " & $data.details.port)
     socket.close()
 
+proc execCmd(command: string) =
+  let res = osproc.execCmdEx(command)
+  if res.exitCode != 0:
+    raise newException(Exception, "Command failed: " & command & "\n" & res.output)
+
 proc recvAction(data: ThreadData) {.thread.} =
   var logger = logging.newConsoleLogger(fmtStr="[$datetime] - $levelname: ")
   data.readyChan[].send(true)
@@ -351,14 +356,14 @@ proc recvAction(data: ThreadData) {.thread.} =
             let outGitDir = os.absolutePath(paths.cloneDir / paths.boardsDir / action.board)
             if not os.dirExists(bbsGitDir / ".git"):
               writeFile(bbsGitDir / ".gitignore", "misc/")
-              discard osproc.execProcess("git", args=["init", bbsGitDir], options={osproc.poStdErrToStdOut, osproc.poUsePath})
-              discard osproc.execProcess("git", args=["-C", bbsGitDir, "add", ".gitignore"], options={osproc.poStdErrToStdOut, osproc.poUsePath})
-              discard osproc.execProcess("git", args=["-C", bbsGitDir, "commit", "-m", "Add .gitignore"], options={osproc.poStdErrToStdOut, osproc.poUsePath})
+              execCmd("git init $1".format(bbsGitDir))
+              execCmd("git -C $1 add .gitignore".format(bbsGitDir))
+              execCmd("git -C $1 commit -m \"Add .gitignore\"".format(bbsGitDir))
               logging.log(logger, logging.lvlInfo, "Created " & bbsGitDir)
             if not os.dirExists(outGitDir):
               os.createDir(os.parentDir(outGitDir))
-              discard osproc.execProcess("git", args=["init", outGitDir], options={osproc.poStdErrToStdOut, osproc.poUsePath})
-              discard osproc.execProcess("git", args=["-C", outGitDir, "config", "--local", "receive.denyCurrentBranch", "updateInstead"], options={osproc.poStdErrToStdOut, osproc.poUsePath})
+              execCmd("git init $1".format(outGitDir))
+              execCmd("git -C $1 config --local receive.denyCurrentBranch updateInstead".format(outGitDir))
               logging.log(logger, logging.lvlInfo, "Created " & outGitDir)
         if action.board notin initializedBoards:
           db.withOpen(conn, data.details.staticFileDir / paths.db(action.board), false):
@@ -396,8 +401,8 @@ proc recvAction(data: ThreadData) {.thread.} =
       try:
         let bbsGitDir = os.absolutePath(data.details.staticFileDir / paths.boardsDir / action.board)
         if data.details.shouldClone:
-          discard osproc.execProcess("git", args=["-C", bbsGitDir, "add", "."], options={osproc.poStdErrToStdOut, osproc.poUsePath})
-          discard osproc.execProcess("git", args=["-C", bbsGitDir, "commit", "-m", $action.kind & " " & action.key], options={osproc.poStdErrToStdOut, osproc.poUsePath})
+          execCmd("git -C $1 add .".format(bbsGitDir))
+          execCmd("git -C $1 commit -m \"$2\"".format(bbsGitDir, $action.kind & " " & action.key))
           data.backgroundAction[].send(BackgroundAction(kind: BackgroundActionKind.CopyOut, board: action.board))
       except Exception as ex:
         stderr.writeLine(ex.msg)
@@ -416,7 +421,7 @@ proc recvBackgroundAction(data: ThreadData) {.thread.} =
         let
           bbsGitDir = os.absolutePath(data.details.staticFileDir / paths.boardsDir / action.board)
           outGitDir = os.absolutePath(paths.cloneDir / paths.boardsDir / action.board)
-        discard osproc.execProcess("git", args=["-C", bbsGitDir, "push", outGitDir, "master"], options={osproc.poStdErrToStdOut, osproc.poUsePath})
+        execCmd("git -C $1 push $2 master".format(bbsGitDir, outGitDir))
       except Exception as ex:
         stderr.writeLine(ex.msg)
         stderr.writeLine(getStackTrace(ex))
