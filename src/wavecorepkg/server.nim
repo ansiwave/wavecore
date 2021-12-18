@@ -14,36 +14,60 @@ import tables, sets
 from logging import nil
 
 type
-  State = object
-  ActionKind = enum
-    Stop, Log, InsertPost, EditPost, EditTags,
-  Action = object
-    case kind: ActionKind
-    of Stop:
+  ListenActionKind {.pure.} = enum
+    Stop,
+  ListenAction = object
+    case kind: ListenActionKind
+    of ListenActionKind.Stop:
       discard
-    of Log:
+  StateActionKind {.pure.} = enum
+    Stop, Log, InsertPost, EditPost, EditTags,
+  StateAction = object
+    case kind: StateActionKind
+    of StateActionKind.Stop:
+      discard
+    of StateActionKind.Log:
       message: string
-    of InsertPost:
+    of StateActionKind.InsertPost:
       post: entities.Post
-    of EditPost:
+    of StateActionKind.EditPost:
       content: entities.Content
-    of EditTags:
+    of StateActionKind.EditTags:
       tags: entities.Tags
       tagsSigLast: string
     board: string
     key: string
     error: ptr Channel[string]
-  Server* = ref object
+  BackgroundActionKind {.pure.} = enum
+    Stop, CopyOut,
+  BackgroundAction = object
+    case kind: BackgroundActionKind
+    of BackgroundActionKind.Stop:
+      discard
+    of BackgroundActionKind.CopyOut:
+      board: string
+  ServerDetails = tuple
     hostname: string
     port: int
-    socket: Socket
     staticFileDir: string
     outDir: string
-    useGit: bool
-    listenThread, stateThread: Thread[Server]
-    listenStopped, listenReady, stateReady: ptr Channel[bool]
-    action: ptr Channel[Action]
-    initializedBoards: HashSet[string]
+  ThreadData = tuple
+    details: ServerDetails
+    readyChan: ptr Channel[bool]
+    listenAction: ptr Channel[ListenAction]
+    stateAction: ptr Channel[StateAction]
+    backgroundAction: ptr Channel[BackgroundAction]
+  Server* = object
+    details*: ServerDetails
+    listenThread: Thread[ThreadData]
+    listenReady: ptr Channel[bool]
+    listenAction: ptr Channel[ListenAction]
+    stateThread: Thread[ThreadData]
+    stateAction: ptr Channel[StateAction]
+    stateReady: ptr Channel[bool]
+    backgroundThread: Thread[ThreadData]
+    backgroundReady: ptr Channel[bool]
+    backgroundAction: ptr Channel[BackgroundAction]
   Request = object
     uri: uri.Uri
     reqMethod: httpcore.HttpMethod
@@ -64,11 +88,11 @@ const
   maxContentLength = 200000
   maxHeaderCount = 100
 
-proc initServer*(hostname: string, port: int, staticFileDir: string = "", outDir: string = "", useGit: bool = false): Server =
-  Server(hostname: hostname, port: port, staticFileDir: staticFileDir, outDir: outDir, useGit: useGit)
+proc initServer*(hostname: string, port: int, staticFileDir: string = "", outDir: string = ""): Server =
+  Server(details: (hostname: hostname, port: port, staticFileDir: staticFileDir, outDir: outDir))
 
-proc insertPost*(server: Server, board: string, entity: entities.Post) =
-  db.withOpen(conn, server.staticFileDir / paths.db(board), false):
+proc insertPost*(details: ServerDetails, board: string, entity: entities.Post) =
+  db.withOpen(conn, details.staticFileDir / paths.db(board), false):
     db.withTransaction(conn):
       # if user doesn't exist in db, insert it
       try:
@@ -76,10 +100,10 @@ proc insertPost*(server: Server, board: string, entity: entities.Post) =
       except Exception as ex:
         entities.insertUser(conn, entities.User(public_key: entity.public_key))
       let sig = entities.insertPost(conn, entity)
-      writeFile(server.staticFileDir / paths.ansiwavez(board, sig), entity.content.value.compressed)
+      writeFile(details.staticFileDir / paths.ansiwavez(board, sig), entity.content.value.compressed)
 
-proc editPost*(server: Server, board: string, content: entities.Content, key: string) =
-  db.withOpen(conn, server.staticFileDir / paths.db(board), false):
+proc editPost*(details: ServerDetails, board: string, content: entities.Content, key: string) =
+  db.withOpen(conn, details.staticFileDir / paths.db(board), false):
     db.withTransaction(conn):
       # if user doesn't exist in db, insert it
       try:
@@ -87,26 +111,26 @@ proc editPost*(server: Server, board: string, content: entities.Content, key: st
       except Exception as ex:
         entities.insertUser(conn, entities.User(public_key: key))
       let sig = entities.editPost(conn, content, key)
-      writeFile(server.staticFileDir / paths.ansiwavez(board, sig), content.value.compressed)
+      writeFile(details.staticFileDir / paths.ansiwavez(board, sig), content.value.compressed)
 
-proc editTags*(server: Server, board: string, tags: entities.Tags, tagsSigLast: string, key: string) =
-  db.withOpen(conn, server.staticFileDir / paths.db(board), false):
+proc editTags*(details: ServerDetails, board: string, tags: entities.Tags, tagsSigLast: string, key: string) =
+  db.withOpen(conn, details.staticFileDir / paths.db(board), false):
     db.withTransaction(conn):
       entities.editTags(conn, tags, tagsSigLast, board, key)
 
-proc sendAction(server: Server, action: Action): string =
+proc sendAction[T](actionChan: ptr Channel[T], action: T): string =
   let error = cast[ptr Channel[string]](
     allocShared0(sizeof(Channel[string]))
   )
   error[].open()
   var newAction = action
   newAction.error = error
-  server.action[].send(newAction)
+  actionChan[].send(newAction)
   result = error[].recv()
   error[].close()
   deallocShared(error)
 
-proc ansiwavePost(server: Server, request: Request, headers: var string, body: var string) =
+proc ansiwavePost(data: ThreadData, request: Request, headers: var string, body: var string) =
   if request.body.len == 0:
     raise newException(BadRequestException, "Invalid request")
 
@@ -121,7 +145,7 @@ proc ansiwavePost(server: Server, request: Request, headers: var string, body: v
   let board = cmds["/board"]
   if board != paths.encode(paths.decode(board)):
     raise newException(BadRequestException, "Invalid value in /board")
-  if not os.dirExists(server.staticFileDir / paths.boardsDir / board):
+  if not os.dirExists(data.details.staticFileDir / paths.boardsDir / board):
     raise newException(BadRequestException, "Board does not exist")
 
   # check the sig
@@ -152,19 +176,19 @@ proc ansiwavePost(server: Server, request: Request, headers: var string, body: v
         public_key: keyBase64,
         parent: cmds["/target"],
       )
-      error = sendAction(server, Action(kind: InsertPost, board: board, post: post, key: keyBase64))
+      error = sendAction(data.stateAction, StateAction(kind: InsertPost, board: board, post: post, key: keyBase64))
     if error != "":
       raise newException(Exception, error)
   of "edit":
     let
       content = entities.Content(value: entities.initCompressedValue(request.body), sig: sigBase64, sig_last: cmds["/target"])
-      error = sendAction(server, Action(kind: EditPost, board: board, content: content, key: keyBase64))
+      error = sendAction(data.stateAction, StateAction(kind: EditPost, board: board, content: content, key: keyBase64))
     if error != "":
       raise newException(Exception, error)
   of "tags":
     let
       tags = entities.Tags(value: request.body, sig: sigBase64)
-      error = sendAction(server, Action(kind: EditTags, board: board, tags: tags, tagsSigLast: cmds["/target"], key: keyBase64))
+      error = sendAction(data.stateAction, StateAction(kind: EditTags, board: board, tags: tags, tagsSigLast: cmds["/target"], key: keyBase64))
     if error != "":
       raise newException(Exception, error)
   else:
@@ -173,10 +197,10 @@ proc ansiwavePost(server: Server, request: Request, headers: var string, body: v
   body = ""
   headers = "HTTP/1.1 200 OK\r\LContent-Length: " & $body.len
 
-proc handleStatic(server: Server, request: Request, headers: var string, body: var string): bool =
+proc handleStatic(details: ServerDetails, request: Request, headers: var string, body: var string): bool =
   var filePath = ""
-  if request.reqMethod == httpcore.HttpGet and server.staticFileDir != "":
-    let path = server.staticFileDir / request.uri.path
+  if request.reqMethod == httpcore.HttpGet and details.staticFileDir != "":
+    let path = details.staticFileDir / request.uri.path
     if fileExists(path):
       filePath = path
     else:
@@ -205,7 +229,7 @@ proc handleStatic(server: Server, request: Request, headers: var string, body: v
     return true
   return false
 
-proc handle(server: Server, client: Socket) =
+proc handle(data: ThreadData, client: Socket) =
   var headers, body: string
   try:
     var request = Request(headers: httpcore.newHttpHeaders())
@@ -252,29 +276,29 @@ proc handle(server: Server, client: Socket) =
     # handle requests
     let dispatch = (reqMethod: request.reqMethod, path: request.uri.path)
     if dispatch == (httpcore.HttpPost, "/ansiwave"):
-      ansiwavePost(server, request, headers, body)
+      ansiwavePost(data, request, headers, body)
     else:
       when not defined(release):
-        if not handleStatic(server, request, headers, body):
+        if not handleStatic(data.details, request, headers, body):
           raise newException(NotFoundException, "Unhandled request: " & $dispatch)
       else:
         raise newException(NotFoundException, "Unhandled request: " & $dispatch)
   except BadRequestException as ex:
     headers = "HTTP/1.1 400 Bad Request"
     body = ex.msg
-    discard sendAction(server, Action(kind: Log, message: headers & " - " & body))
+    discard sendAction(data.stateAction, StateAction(kind: Log, message: headers & " - " & body))
   except ForbiddenException as ex:
     headers = "HTTP/1.1 403 Forbidden"
     body = ex.msg
-    discard sendAction(server, Action(kind: Log, message: headers & " - " & body))
+    discard sendAction(data.stateAction, StateAction(kind: Log, message: headers & " - " & body))
   except NotFoundException as ex:
     headers = "HTTP/1.1 404 Not Found"
     body = ex.msg
-    discard sendAction(server, Action(kind: Log, message: headers & " - " & body))
+    discard sendAction(data.stateAction, StateAction(kind: Log, message: headers & " - " & body))
   except Exception as ex:
     headers = "HTTP/1.1 500 Internal Server Error"
     body = ex.msg
-    discard sendAction(server, Action(kind: Log, message: headers & " - " & body))
+    discard sendAction(data.stateAction, StateAction(kind: Log, message: headers & " - " & body))
   finally:
     try:
       client.send(headers & "\r\L\r\L" & body)
@@ -282,138 +306,182 @@ proc handle(server: Server, client: Socket) =
       discard
     client.close()
 
-proc loop(server: Server) =
+proc loop(data: ThreadData, socket: Socket) =
   var selector = newSelector[int]()
-  selector.registerHandle(server.socket.getFD, {Event.Read}, 0)
-  server.listenReady[].send(true)
-  while not server.listenStopped[].tryRecv().dataAvailable:
-    if selector.select(selectTimeout).len > 0:
-      var client: Socket = Socket()
-      accept(server.socket, client)
-      spawn handle(server, client)
-
-proc listen(server: Server) {.thread.} =
-  server.socket = newSocket()
-  try:
-    server.socket.setSockOpt(OptReuseAddr, true)
-    server.socket.bindAddr(port = Port(server.port))
-    server.socket.listen()
-    echo("Server listening on port " & $server.port)
-    server.loop()
-  finally:
-    echo("Server closing on port " & $server.port)
-    server.socket.close()
-
-proc recvAction(server: Server) {.thread.} =
-  var logger = logging.newConsoleLogger(fmtStr="[$datetime] - $levelname: ")
-  server.stateReady[].send(true)
+  selector.registerHandle(socket.getFD, {Event.Read}, 0)
+  data.readyChan[].send(true)
   while true:
-    let action = server.action[].recv()
+    let (dataAvailable, action) = data.listenAction[].tryRecv()
+    if dataAvailable:
+      case action.kind:
+      of ListenActionKind.Stop:
+        break
+    elif selector.select(selectTimeout).len > 0:
+      var client: Socket = Socket()
+      accept(socket, client)
+      spawn handle(data, client)
+
+proc listen(data: ThreadData) {.thread.} =
+  var socket = newSocket()
+  try:
+    socket.setSockOpt(OptReuseAddr, true)
+    socket.bindAddr(port = Port(data.details.port))
+    socket.listen()
+    echo("Server listening on port " & $data.details.port)
+    loop(data, socket)
+  finally:
+    echo("Server closing on port " & $data.details.port)
+    socket.close()
+
+proc recvAction(data: ThreadData) {.thread.} =
+  var logger = logging.newConsoleLogger(fmtStr="[$datetime] - $levelname: ")
+  data.readyChan[].send(true)
+  var initializedBoards: HashSet[string]
+  while true:
+    let action = data.stateAction[].recv()
     var resp = ""
     if action.board != "":
       # init board if necessary
       try:
-        let bbsGitDir = os.absolutePath(server.staticFileDir / paths.boardsDir / action.board)
+        let bbsGitDir = os.absolutePath(data.details.staticFileDir / paths.boardsDir / action.board)
         if not os.dirExists(bbsGitDir / paths.ansiwavesDir) or not os.dirExists(bbsGitDir / paths.dbDir):
           os.createDir(bbsGitDir / paths.ansiwavesDir)
           os.createDir(bbsGitDir / paths.dbDir)
-          if server.outDir != "":
-            let outGitDir = os.absolutePath(server.outDir / paths.boardsDir / action.board)
+          if data.details.outDir != "":
+            let outGitDir = os.absolutePath(data.details.outDir / paths.boardsDir / action.board)
             if not os.dirExists(bbsGitDir / ".git"):
-              discard osproc.execProcess("git", bbsGitDir, args=["init"], options={osproc.poStdErrToStdOut, osproc.poUsePath})
-              discard osproc.execProcess("git", bbsGitDir, args=["remote", "add", "out", outGitDir], options={osproc.poStdErrToStdOut, osproc.poUsePath})
+              discard osproc.execProcess("git", args=["init", bbsGitDir], options={osproc.poStdErrToStdOut, osproc.poUsePath})
+              discard osproc.execProcess("git", args=["-C", bbsGitDir, "remote", "add", "out", outGitDir], options={osproc.poStdErrToStdOut, osproc.poUsePath})
               logging.log(logger, logging.lvlInfo, "Created " & bbsGitDir)
             if not os.dirExists(outGitDir):
               os.createDir(os.parentDir(outGitDir))
               discard osproc.execProcess("git", args=["init", outGitDir], options={osproc.poStdErrToStdOut, osproc.poUsePath})
-              discard osproc.execProcess("git", outGitDir, args=["config", "--local", "receive.denyCurrentBranch", "updateInstead"], options={osproc.poStdErrToStdOut, osproc.poUsePath})
+              discard osproc.execProcess("git", args=["-C", outGitDir, "config", "--local", "receive.denyCurrentBranch", "updateInstead"], options={osproc.poStdErrToStdOut, osproc.poUsePath})
               logging.log(logger, logging.lvlInfo, "Created " & outGitDir)
-          elif server.useGit:
-            if not os.dirExists(bbsGitDir / ".git"):
-              discard osproc.execProcess("git", bbsGitDir, args=["init"], options={osproc.poStdErrToStdOut, osproc.poUsePath})
-              logging.log(logger, logging.lvlInfo, "Created " & bbsGitDir)
-        if action.board notin server.initializedBoards:
-          db.withOpen(conn, server.staticFileDir / paths.db(action.board), false):
+        if action.board notin initializedBoards:
+          db.withOpen(conn, data.details.staticFileDir / paths.db(action.board), false):
             db.init(conn)
-          server.initializedBoards.incl(action.board)
+          initializedBoards.incl(action.board)
       except Exception as ex:
         resp = "Error initializing board"
-        logging.log(logger, logging.lvlError, ex.msg)
+        stderr.writeLine(ex.msg)
+        stderr.writeLine(getStackTrace(ex))
     if resp == "":
       case action.kind:
-      of Stop:
+      of StateActionKind.Stop:
         break
-      of Log:
+      of StateActionKind.Log:
         logging.log(logger, logging.lvlError, action.message)
-      of InsertPost:
+      of StateActionKind.InsertPost:
         try:
           {.cast(gcsafe).}:
-            insertPost(server, action.board, action.post)
+            insertPost(data.details, action.board, action.post)
         except Exception as ex:
           resp = ex.msg
-      of EditPost:
+      of StateActionKind.EditPost:
         try:
           {.cast(gcsafe).}:
-            editPost(server, action.board, action.content, action.key)
+            editPost(data.details, action.board, action.content, action.key)
         except Exception as ex:
           resp = ex.msg
-      of EditTags:
+      of StateActionKind.EditTags:
         try:
           {.cast(gcsafe).}:
-            editTags(server, action.board, action.tags, action.tagsSigLast, action.key)
+            editTags(data.details, action.board, action.tags, action.tagsSigLast, action.key)
         except Exception as ex:
           resp = ex.msg
     if resp == "" and  action.board != "" and action.key != "":
       try:
-        let bbsGitDir = os.absolutePath(server.staticFileDir / paths.boardsDir / action.board)
-        if server.useGit:
-          discard osproc.execProcess("git", bbsGitDir, args=["add", "."], options={osproc.poStdErrToStdOut, osproc.poUsePath})
-          discard osproc.execProcess("git", bbsGitDir, args=["commit", "-m", $action.kind & " " & action.key], options={osproc.poStdErrToStdOut, osproc.poUsePath})
-        if server.outDir != "":
-          discard osproc.execProcess("git", bbsGitDir, args=["push", "out", "master"], options={osproc.poStdErrToStdOut, osproc.poUsePath})
+        let bbsGitDir = os.absolutePath(data.details.staticFileDir / paths.boardsDir / action.board)
+        if data.details.outDir != "":
+          discard osproc.execProcess("git", args=["-C", bbsGitDir, "add", "."], options={osproc.poStdErrToStdOut, osproc.poUsePath})
+          discard osproc.execProcess("git", args=["-C", bbsGitDir, "commit", "-m", $action.kind & " " & action.key], options={osproc.poStdErrToStdOut, osproc.poUsePath})
+          data.backgroundAction[].send(BackgroundAction(kind: BackgroundActionKind.CopyOut, board: action.board))
       except Exception as ex:
-        logging.log(logger, logging.lvlError, ex.msg)
+        stderr.writeLine(ex.msg)
+        stderr.writeLine(getStackTrace(ex))
     action.error[].send(resp)
 
+proc recvBackgroundAction(data: ThreadData) {.thread.} =
+  data.readyChan[].send(true)
+  while true:
+    let action = data.backgroundAction[].recv()
+    case action.kind:
+    of BackgroundActionKind.Stop:
+      break
+    of BackgroundActionKind.CopyOut:
+      try:
+        let bbsGitDir = os.absolutePath(data.details.staticFileDir / paths.boardsDir / action.board)
+        discard osproc.execProcess("git", args=["-C", bbsGitDir, "push", "out", "master"], options={osproc.poStdErrToStdOut, osproc.poUsePath})
+      except Exception as ex:
+        stderr.writeLine(ex.msg)
+        stderr.writeLine(getStackTrace(ex))
+
 proc initShared(server: var Server) =
-  server.listenStopped = cast[ptr Channel[bool]](
-    allocShared0(sizeof(Channel[bool]))
-  )
-  server.listenStopped[].open()
-  server.action = cast[ptr Channel[Action]](
-    allocShared0(sizeof(Channel[Action]))
-  )
-  server.action[].open()
+  # listen
   server.listenReady = cast[ptr Channel[bool]](
     allocShared0(sizeof(Channel[bool]))
   )
   server.listenReady[].open()
+  server.listenAction = cast[ptr Channel[ListenAction]](
+    allocShared0(sizeof(Channel[ListenAction]))
+  )
+  server.listenAction[].open()
+  # state
   server.stateReady = cast[ptr Channel[bool]](
     allocShared0(sizeof(Channel[bool]))
   )
   server.stateReady[].open()
+  server.stateAction = cast[ptr Channel[StateAction]](
+    allocShared0(sizeof(Channel[StateAction]))
+  )
+  server.stateAction[].open()
+  # background
+  if server.details.outDir != "":
+    server.backgroundReady = cast[ptr Channel[bool]](
+      allocShared0(sizeof(Channel[bool]))
+    )
+    server.backgroundReady[].open()
+    server.backgroundAction = cast[ptr Channel[BackgroundAction]](
+      allocShared0(sizeof(Channel[BackgroundAction]))
+    )
+    server.backgroundAction[].open()
 
 proc deinitShared(server: var Server) =
-  server.listenStopped[].close()
-  server.action[].close()
+  # listen
   server.listenReady[].close()
-  server.stateReady[].close()
-  deallocShared(server.listenStopped)
-  deallocShared(server.action)
   deallocShared(server.listenReady)
+  server.listenAction[].close()
+  deallocShared(server.listenAction)
+  # state
+  server.stateReady[].close()
   deallocShared(server.stateReady)
+  server.stateAction[].close()
+  deallocShared(server.stateAction)
+  if server.details.outDir != "":
+    # background
+    server.backgroundReady[].close()
+    deallocShared(server.backgroundReady)
+    server.backgroundAction[].close()
+    deallocShared(server.backgroundAction)
 
 proc initThreads(server: var Server) =
-  createThread(server.listenThread, listen, server)
-  createThread(server.stateThread, recvAction, server)
+  createThread(server.listenThread, listen, (server.details, server.listenReady, server.listenAction, server.stateAction, server.backgroundAction))
   discard server.listenReady[].recv()
+  createThread(server.stateThread, recvAction, (server.details, server.stateReady, server.listenAction, server.stateAction, server.backgroundAction))
   discard server.stateReady[].recv()
+  if server.details.outDir != "":
+    createThread(server.backgroundThread, recvBackgroundAction, (server.details, server.backgroundReady, server.listenAction, server.stateAction, server.backgroundAction))
+    discard server.backgroundReady[].recv()
 
 proc deinitThreads(server: var Server) =
-  server.listenStopped[].send(true)
-  server.action[].send(Action(kind: Stop))
+  server.listenAction[].send(ListenAction(kind: ListenActionKind.Stop))
   server.listenThread.joinThread()
+  server.stateAction[].send(StateAction(kind: StateActionKind.Stop))
   server.stateThread.joinThread()
+  if server.details.outDir != "":
+    server.backgroundAction[].send(BackgroundAction(kind: BackgroundActionKind.Stop))
+    server.backgroundThread.joinThread()
 
 proc start*(server: var Server) =
   initShared(server)

@@ -31,7 +31,7 @@ when isMainModule:
     else:
       quit "Can't find out directory: " & options["outdir"]
   vfs.register()
-  var s = server.initServer("localhost", port, paths.staticFileDir, outDir, outDir != "" or "git" in options)
+  var s = server.initServer("localhost", port, paths.staticFileDir, outDir)
   server.start(s)
   if "testrun" in options:
     testrun.main(port)
