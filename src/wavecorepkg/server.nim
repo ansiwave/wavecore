@@ -389,7 +389,7 @@ proc recvAction(data: ThreadData) {.thread.} =
             if "testrun" notin data.details.options:
               const minInterval = 15
               let ts = times.epochTime()
-              if action.key != action.board and action.key in keyToLastTs and keyToLastTs[action.key] - ts < minInterval:
+              if action.key != action.board and action.key in keyToLastTs and ts - keyToLastTs[action.key] < minInterval:
                 raise newException(Exception, "Posting too fast! Wait a few seconds.")
               keyToLastTs[action.key] = ts
           {.cast(gcsafe).}:
