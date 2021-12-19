@@ -353,25 +353,34 @@ proc recvAction(data: ThreadData) {.thread.} =
       # init board if necessary
       try:
         let bbsGitDir = os.absolutePath(data.details.staticFileDir / paths.boardsDir / action.board)
-        if not os.dirExists(bbsGitDir / paths.ansiwavesDir) or not os.dirExists(bbsGitDir / paths.dbDir):
-          os.createDir(bbsGitDir / paths.ansiwavesDir)
-          os.createDir(bbsGitDir / paths.dbDir)
-          if data.details.shouldClone:
-            let outGitDir = os.absolutePath(paths.cloneDir / paths.boardsDir / action.board)
-            if not os.dirExists(bbsGitDir / ".git"):
-              writeFile(bbsGitDir / ".gitignore", "misc/")
-              execCmd("git init $1".format(bbsGitDir))
-              execCmd("git -C $1 add .gitignore".format(bbsGitDir))
-              execCmd("git -C $1 commit -m \"Add .gitignore\"".format(bbsGitDir))
-              logging.log(logger, logging.lvlInfo, "Created " & bbsGitDir)
-            if not os.dirExists(outGitDir):
-              os.createDir(os.parentDir(outGitDir))
-              execCmd("git init $1".format(outGitDir))
-              execCmd("git -C $1 config --local receive.denyCurrentBranch updateInstead".format(outGitDir))
-              logging.log(logger, logging.lvlInfo, "Created " & outGitDir)
+        os.createDir(bbsGitDir / paths.ansiwavesDir)
+        os.createDir(bbsGitDir / paths.dbDir)
+        os.createDir(bbsGitDir / paths.miscDir)
+        if data.details.shouldClone:
+          let outGitDir = os.absolutePath(paths.cloneDir / paths.boardsDir / action.board)
+          if not os.dirExists(bbsGitDir / ".git"):
+            writeFile(bbsGitDir / ".gitignore", paths.miscDir & "/")
+            execCmd("git init $1".format(bbsGitDir))
+            execCmd("git -C $1 add .gitignore".format(bbsGitDir))
+            execCmd("git -C $1 commit -m \"Add .gitignore\"".format(bbsGitDir))
+            logging.log(logger, logging.lvlInfo, "Created " & bbsGitDir)
+          if not os.dirExists(bbsGitDir / paths.miscDir / ".git"):
+            execCmd("git init $1".format(bbsGitDir / paths.miscDir))
+          if not os.dirExists(outGitDir):
+            os.createDir(os.parentDir(outGitDir))
+            execCmd("git init $1".format(outGitDir))
+            execCmd("git -C $1 config --local receive.denyCurrentBranch updateInstead".format(outGitDir))
+            logging.log(logger, logging.lvlInfo, "Created " & outGitDir)
+          if not os.dirExists(outGitDir / paths.miscDir / ".git"):
+            execCmd("git init $1".format(outGitDir / paths.miscDir))
+            execCmd("git -C $1 config --local receive.denyCurrentBranch updateInstead".format(outGitDir / paths.miscDir))
         if action.board notin initializedBoards:
           db.withOpen(conn, data.details.staticFileDir / paths.db(action.board), false):
             db.init(conn)
+          db.withOpen(conn, data.details.staticFileDir / paths.misc(action.board, paths.purgatoryDb), false):
+            db.initMisc(conn)
+          db.withOpen(conn, data.details.staticFileDir / paths.misc(action.board, paths.historyDb), false):
+            db.initMisc(conn)
           initializedBoards.incl(action.board)
       except Exception as ex:
         resp = "Error initializing board"
@@ -408,7 +417,7 @@ proc recvAction(data: ThreadData) {.thread.} =
             editTags(data.details, action.board, action.tags, action.tagsSigLast, action.key)
         except Exception as ex:
           resp = ex.msg
-    if resp == "" and  action.board != "" and action.key != "":
+    if resp == "" and  action.kind in {StateActionKind.InsertPost, StateActionKind.EditPost, StateActionKind.EditTags}:
       try:
         let bbsGitDir = os.absolutePath(data.details.staticFileDir / paths.boardsDir / action.board)
         if data.details.shouldClone:

@@ -112,3 +112,37 @@ proc init*(conn: PSqlite3) =
       version += 1
       db_sqlite.exec conn, sql("PRAGMA user_version = " & $version)
 
+proc initMisc*(conn: PSqlite3) =
+  var version =
+    select[tuple[version: int]](
+      conn,
+      proc (stmt: PStmt): tuple[version: int] =
+        var cols = sqlite3.column_count(stmt)
+        for col in 0 .. cols-1:
+          let colName = $sqlite3.column_name(stmt, col)
+          case colName:
+          of "user_version":
+            result.version = sqlite3.column_int(stmt, col)
+      ,
+      "PRAGMA user_version"
+    )[0].version
+  withTransaction(conn):
+    if version == 0:
+      db_sqlite.exec conn, sql"""
+        pragma journal_mode = delete
+      """
+      db_sqlite.exec conn, sql"""
+        pragma page_size = 1024
+      """
+      db_sqlite.exec conn, sql"""
+        CREATE TABLE post (
+          post_id INTEGER PRIMARY KEY AUTOINCREMENT,
+          ts INTEGER,
+          public_key TEXT,
+          content BLOB,
+          approved INTEGER
+        ) STRICT
+      """
+      version += 1
+      db_sqlite.exec conn, sql("PRAGMA user_version = " & $version)
+
