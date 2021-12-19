@@ -379,8 +379,6 @@ proc recvAction(data: ThreadData) {.thread.} =
             db.init(conn)
           db.withOpen(conn, data.details.staticFileDir / paths.misc(action.board, paths.purgatoryDb), false):
             db.initMisc(conn)
-          db.withOpen(conn, data.details.staticFileDir / paths.misc(action.board, paths.historyDb), false):
-            db.initMisc(conn)
           initializedBoards.incl(action.board)
       except Exception as ex:
         resp = "Error initializing board"

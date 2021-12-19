@@ -23,7 +23,6 @@ const
   defaultBoard* = "Q8BTY324cY7nl5kce6ctEfk8IRIrtsM8NfKL29B-3UE"
   miscDir* = "misc"
   purgatoryDb* = "purgatory.db"
-  historyDb* = "history.db"
 
 proc db*(board: string): string =
   boardsDir / board / dbDir / dbFilename
