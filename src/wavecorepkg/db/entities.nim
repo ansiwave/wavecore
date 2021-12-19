@@ -239,7 +239,7 @@ proc insertPost*(conn: PSqlite3, e: Post, id: var int64): string =
     let partitionQuery =
       """
       UPDATE post
-      SET partition = 1000000000 - (((? - ts) / ?) * 1000000)
+      SET partition = 1000000000 - (((? - ts) / ?) * 1000)
       WHERE parent = ?
       """
     db_sqlite.exec(conn, sql partitionQuery, ts, partitionSize, e.parent)
