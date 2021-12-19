@@ -186,9 +186,9 @@ test "query posts":
     p2 = entities.selectPost(conn, p2.content.sig)
     p3 = entities.selectPost(conn, p3.content.sig)
     p4 = entities.selectPost(conn, p4.content.sig)
-    check @[p2] == entities.selectPostChildren(conn, p1.content.sig)
+    check [p2].toHashSet == entities.selectPostChildren(conn, p1.content.sig).toHashSet
     check 3 == entities.selectPost(conn, p1.content.sig).reply_count
-    check @[p4, p3] == entities.selectPostChildren(conn, p2.content.sig)
+    check [p4, p3].toHashSet == entities.selectPostChildren(conn, p2.content.sig).toHashSet
     check 2 == entities.selectPost(conn, p2.content.sig).reply_count
     check [p1, p3, p4].toHashSet == entities.selectUserPosts(conn, alice.public_key).toHashSet
     check [p3, p4].toHashSet == entities.selectUserReplies(conn, bob.public_key).toHashSet
@@ -232,7 +232,7 @@ test "query posts asynchronously":
     block:
       var response = client.queryPostChildren(c, dbDirs, p2.content.sig)
       client.get(response, true)
-      check response.value.valid == @[p4, p3]
+      check response.value.valid.toHashSet == [p4, p3].toHashSet
     block:
       var response = client.queryUserPosts(c, dbDirs, alice.public_key)
       client.get(response, true)
@@ -290,7 +290,7 @@ test "query posts offline":
     block:
       var response = client.queryPostChildren(c, dbDirs, p2.content.sig)
       client.get(response, true)
-      check response.value.valid == @[p4, p3]
+      check response.value.valid.toHashSet == [p4, p3].toHashSet
     block:
       var response = client.queryUserPosts(c, dbDirs, alice.public_key)
       client.get(response, true)
@@ -335,6 +335,9 @@ test "search posts":
     check entities.search(conn, entities.UserTags, "stuff").len == 0
     check entities.search(conn, entities.UserTags, "moderator").len == 1
 
+from ./wavecorepkg/db/db_sqlite import sql
+from times import nil
+
 test "score":
   db.withOpen(conn, ":memory:", false):
     db.init(conn)
@@ -346,15 +349,22 @@ test "score":
       bob = initUser(paths.encode(bobKeys.public))
     entities.insertUser(conn, alice, alice.user_id)
     entities.insertUser(conn, bob, bob.user_id)
-    let p1 = Post(parent: alice.public_key, public_key: alice.public_key, content: initContent(aliceKeys, "Hello, i'm alice"))
+    var p1 = Post(parent: alice.public_key, public_key: alice.public_key, content: initContent(aliceKeys, "Hello, i'm alice"))
     discard entities.insertPost(conn, p1)
-    let p2 = Post(parent: p1.content.sig, public_key: bob.public_key, content: initContent(bobKeys, "Hello, i'm bob"))
+    var p2 = Post(parent: p1.content.sig, public_key: bob.public_key, content: initContent(bobKeys, "Hello, i'm bob"))
     discard entities.insertPost(conn, p2)
-    let p3 = Post(parent: p2.content.sig, public_key: alice.public_key, content: initContent(aliceKeys, "What's up"))
+    var p3 = Post(parent: p2.content.sig, public_key: alice.public_key, content: initContent(aliceKeys, "What's up"))
     discard entities.insertPost(conn, p3)
-    let p4 = Post(parent: p2.content.sig, public_key: alice.public_key, content: initContent(aliceKeys, "How are you?"))
+    var p4 = Post(parent: p2.content.sig, public_key: alice.public_key, content: initContent(aliceKeys, "How are you?"))
     discard entities.insertPost(conn, p4)
-    check 2 == entities.selectPost(conn, p1.content.sig).score
+    p1 = entities.selectPost(conn, p1.content.sig)
+    p2 = entities.selectPost(conn, p2.content.sig)
+    p3 = entities.selectPost(conn, p3.content.sig)
+    p4 = entities.selectPost(conn, p4.content.sig)
+    check 2 == p1.score - p1.partition
+    check 1 == p2.score - p2.partition
+    check 0 == p3.score - p3.partition
+    check 0 == p4.score - p4.partition
 
 test "edit post and user":
   db.withOpen(conn, ":memory:", false):

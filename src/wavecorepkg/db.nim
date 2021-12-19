@@ -91,7 +91,9 @@ proc init*(conn: PSqlite3) =
           parent TEXT,
           parent_public_key TEXT,
           reply_count INTEGER,
+          distinct_reply_count INTEGER,
           score INTEGER,
+          partition INTEGER,
           visibility INTEGER,
           tags TEXT,
           extra TEXT

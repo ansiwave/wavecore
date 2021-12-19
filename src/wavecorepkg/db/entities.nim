@@ -31,6 +31,7 @@ type
     parent*: string
     reply_count*: int64
     score*: int64
+    partition*: int64
     tags*: string
   SearchKind* = enum
     Posts, Users, UserTags,
@@ -62,6 +63,8 @@ proc initPost(stmt: PStmt): Post =
       result.reply_count = sqlite3.column_int(stmt, col)
     of "score":
       result.score = sqlite3.column_int(stmt, col)
+    of "partition":
+      result.partition = sqlite3.column_int(stmt, col)
     of "tags":
       result.tags = $sqlite3.column_text(stmt, col)
     else:
@@ -70,7 +73,7 @@ proc initPost(stmt: PStmt): Post =
 proc selectPost*(conn: PSqlite3, sig: string): Post =
   let query =
     """
-      SELECT post_id, ts, content_sig, content_sig_last, public_key, parent, reply_count, score, tags FROM post
+      SELECT post_id, ts, content_sig, content_sig_last, public_key, parent, reply_count, score, partition, tags FROM post
       WHERE content_sig = ?
     """
   #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), sig):
@@ -99,7 +102,7 @@ proc selectPostParentIds(conn: PSqlite3, id: int64): string =
 proc selectPostChildren*(conn: PSqlite3, sig: string, sortByTs: bool = false, offset: int = 0): seq[Post] =
   let query =
     """
-      SELECT post_id, ts, content_sig, content_sig_last, public_key, parent, reply_count, score, tags FROM post
+      SELECT post_id, ts, content_sig, content_sig_last, public_key, parent, reply_count, score, partition, tags FROM post
       WHERE parent = ? AND visibility = 1
       ORDER BY $1 DESC
       LIMIT $2
@@ -112,7 +115,7 @@ proc selectPostChildren*(conn: PSqlite3, sig: string, sortByTs: bool = false, of
 proc selectUserPosts*(conn: PSqlite3, publicKey: string, offset: int = 0): seq[Post] =
   let query =
     """
-      SELECT post_id, ts, content_sig, content_sig_last, public_key, parent, reply_count, score, tags FROM post
+      SELECT post_id, ts, content_sig, content_sig_last, public_key, parent, reply_count, score, partition, tags FROM post
       WHERE public_key = ? AND parent != ''
       ORDER BY ts DESC
       LIMIT $1
@@ -125,7 +128,7 @@ proc selectUserPosts*(conn: PSqlite3, publicKey: string, offset: int = 0): seq[P
 proc selectUserReplies*(conn: PSqlite3, publicKey: string, offset: int = 0): seq[Post] =
   let query =
     """
-      SELECT post_id, ts, content_sig, content_sig_last, public_key, parent, reply_count, score, tags FROM post
+      SELECT post_id, ts, content_sig, content_sig_last, public_key, parent, reply_count, score, partition, tags FROM post
       WHERE visibility = 1 AND parent_public_key = ? AND parent_public_key != public_key
       ORDER BY ts DESC
       LIMIT $1
@@ -209,10 +212,12 @@ proc insertPost*(conn: PSqlite3, e: Post, id: var int64): string =
       else:
         e.content.sig
 
-  let visibility = if "modhide" in common.parseTags(sourceUser.tags.value): 0 else: 1
+  let
+    visibility = if "modhide" in common.parseTags(sourceUser.tags.value): 0 else: 1
+    ts = times.toUnix(times.getTime())
 
-  db.withStatement(conn, "INSERT INTO post (ts, content_sig, content_sig_last, public_key, parent, parent_public_key, reply_count, score, visibility, tags) VALUES (?, ?, ?, ?, ?, ?, 0, 0, ?, ?)", stmt):
-    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), times.toUnix(times.getTime()), sig, e.content.sig, e.public_key, e.parent, parentPublicKey, visibility, sourceUser.tags.value)
+  db.withStatement(conn, "INSERT INTO post (ts, content_sig, content_sig_last, public_key, parent, parent_public_key, reply_count, distinct_reply_count, score, visibility, tags) VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0, ?, ?)", stmt):
+    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), ts, sig, e.content.sig, e.public_key, e.parent, parentPublicKey, visibility, sourceUser.tags.value)
     if step(stmt) != SQLITE_DONE:
       db_sqlite.dbError(conn)
     id = sqlite3.last_insert_rowid(conn)
@@ -229,16 +234,40 @@ proc insertPost*(conn: PSqlite3, e: Post, id: var int64): string =
       db_sqlite.dbError(conn)
 
   if e.parent != "":
-    # update the parents' reply count and score
-    let query =
+    # update the partition and score for all sibling posts
+    const partitionSize = 60 * 60 * 24 # how many seconds for each partition
+    let partitionQuery =
+      """
+      UPDATE post
+      SET partition = 1000000000 - (((? - ts) / ?) * 1000000)
+      WHERE parent = ?
+      """
+    db_sqlite.exec(conn, sql partitionQuery, ts, partitionSize, e.parent)
+    let scoreQuery =
+      """
+      UPDATE post
+      SET score = partition + distinct_reply_count
+      WHERE parent = ?
+      """
+    db_sqlite.exec(conn, sql scoreQuery, e.parent)
+
+    # update the reply count and score for all parent posts
+    let parentReplyCountQuery =
       """
       UPDATE post
       SET
       reply_count = reply_count + 1,
-      score = (SELECT COUNT(DISTINCT user_id) FROM post_search WHERE attribute MATCH 'parentids' AND value MATCH post.post_id)
+      distinct_reply_count = (SELECT COUNT(DISTINCT user_id) FROM post_search WHERE attribute MATCH 'parentids' AND value MATCH post.post_id)
       WHERE post_id IN ($1)
       """.format(parentIds)
-    db_sqlite.exec(conn, sql query)
+    db_sqlite.exec(conn, sql parentReplyCountQuery)
+    let parentScoreQuery =
+      """
+      UPDATE post
+      SET score = partition + distinct_reply_count
+      WHERE post_id IN ($1)
+      """.format(parentIds)
+    db_sqlite.exec(conn, sql parentScoreQuery)
 
   return sig
 
@@ -252,7 +281,7 @@ proc search*(conn: PSqlite3, kind: SearchKind, term: string, offset: int = 0): s
       case kind:
       of Posts:
         """
-          SELECT post_id, ts, content_sig, content_sig_last, public_key, parent, reply_count, score, tags FROM post
+          SELECT post_id, ts, content_sig, content_sig_last, public_key, parent, reply_count, score, partition, tags FROM post
           WHERE parent != '' AND visibility = 1
           ORDER BY ts DESC
           LIMIT $1
@@ -284,7 +313,7 @@ proc search*(conn: PSqlite3, kind: SearchKind, term: string, offset: int = 0): s
       case kind:
       of Posts, Users:
         """
-          SELECT post_id, ts, content_sig, content_sig_last, public_key, parent, reply_count, score, tags FROM post
+          SELECT post_id, ts, content_sig, content_sig_last, public_key, parent, reply_count, score, partition, tags FROM post
           WHERE post_id IN (SELECT post_id FROM post_search WHERE attribute MATCH 'content' AND value MATCH ? ORDER BY rank)
           AND visibility = 1
           AND $1
@@ -322,7 +351,7 @@ proc editPost*(conn: PSqlite3, content: Content, key: string): string =
   proc selectPostByLastSig(conn: PSqlite3, sig: string): Post =
     const query =
       """
-        SELECT post_id, content_sig, content_sig_last, public_key, parent, reply_count, score, tags FROM post
+        SELECT post_id, content_sig, content_sig_last, public_key, parent, reply_count, score, partition, tags FROM post
         WHERE content_sig_last = ?
       """
     let ret = db.select[Post](conn, initPost, query, sig)
