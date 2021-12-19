@@ -234,6 +234,7 @@ proc main*(port: int) =
   discard client.submit(c, "ansiwave", common.signWithHeaders(aliceKeys, "Hi i'm alice", alice.public_key, common.Edit, board).body)
   discard client.submit(c, "ansiwave", common.signWithHeaders(bobKeys, "Hi i'm bob", bob.public_key, common.Edit, board).body)
   discard client.submit(c, "ansiwave", common.signWithHeaders(sysopKeys, "moderator", bob.public_key, common.Tags, board).body)
+  discard client.submit(c, "ansiwave", common.signWithHeaders(bobKeys, "", alice.public_key, common.Tags, board).body)
   discard client.submit(c, "ansiwave", common.signWithHeaders(bobKeys, aerith, subboard2.sig, common.New, board).body)
   let jabba = common.signWithHeaders(bobKeys, jabbaAnsi, subboard1.sig, common.New, board)
   discard client.submit(c, "ansiwave", jabba.body)

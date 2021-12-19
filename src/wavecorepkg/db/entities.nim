@@ -209,8 +209,10 @@ proc insertPost*(conn: PSqlite3, e: Post, id: var int64): string =
       else:
         e.content.sig
 
-  db.withStatement(conn, "INSERT INTO post (ts, content_sig, content_sig_last, public_key, parent, parent_public_key, reply_count, score, visibility, tags) VALUES (?, ?, ?, ?, ?, ?, 0, 0, 1, ?)", stmt):
-    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), times.toUnix(times.getTime()), sig, e.content.sig, e.public_key, e.parent, parentPublicKey, sourceUser.tags.value)
+  let visibility = if "modhide" in common.parseTags(sourceUser.tags.value): 0 else: 1
+
+  db.withStatement(conn, "INSERT INTO post (ts, content_sig, content_sig_last, public_key, parent, parent_public_key, reply_count, score, visibility, tags) VALUES (?, ?, ?, ?, ?, ?, 0, 0, ?, ?)", stmt):
+    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), times.toUnix(times.getTime()), sig, e.content.sig, e.public_key, e.parent, parentPublicKey, visibility, sourceUser.tags.value)
     if step(stmt) != SQLITE_DONE:
       db_sqlite.dbError(conn)
     id = sqlite3.last_insert_rowid(conn)
@@ -350,13 +352,13 @@ proc insertUser*(conn: PSqlite3, entity: User, id: var int64) =
   var stmt: PStmt
 
   db.withStatement(conn, "INSERT INTO user (ts, public_key, public_key_algo, tags, tags_sig) VALUES (?, ?, ?, ?, ?)", stmt):
-    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), times.toUnix(times.getTime()), entity.publicKey, "ed25519", "", entity.publicKey)
+    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), times.toUnix(times.getTime()), entity.publicKey, "ed25519", entity.tags.value, entity.publicKey)
     if step(stmt) != SQLITE_DONE:
       db_sqlite.dbError(conn)
     id = sqlite3.last_insert_rowid(conn)
 
   db.withStatement(conn, "INSERT INTO user_search (user_id, attribute, value) VALUES (?, ?, ?)", stmt):
-    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), id, "tags", "")
+    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), id, "tags", entity.tags.value)
     if step(stmt) != SQLITE_DONE:
       db_sqlite.dbError(conn)
 
