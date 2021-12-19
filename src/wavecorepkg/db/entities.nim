@@ -230,20 +230,15 @@ proc insertPost*(conn: PSqlite3, e: Post, id: var int64): string =
 
   if e.parent != "":
     # update the parents' reply count and score
-    let reply_count_query =
+    let query =
       """
       UPDATE post
-      SET reply_count = reply_count + 1
+      SET
+      reply_count = reply_count + 1,
+      score = (SELECT COUNT(DISTINCT user_id) FROM post_search WHERE attribute MATCH 'parentids' AND value MATCH post.post_id)
       WHERE post_id IN ($1)
       """.format(parentIds)
-    db_sqlite.exec(conn, sql reply_count_query)
-    let score_query =
-      """
-      UPDATE post
-      SET score = (SELECT COUNT(DISTINCT user_id) FROM post_search WHERE attribute MATCH 'parentids' AND value MATCH post.post_id)
-      WHERE post_id IN ($1)
-      """.format(parentIds)
-    db_sqlite.exec(conn, sql score_query)
+    db_sqlite.exec(conn, sql query)
 
   return sig
 
