@@ -108,25 +108,3 @@ proc init*(conn: PSqlite3) =
       version += 1
       db_sqlite.exec conn, sql("PRAGMA user_version = " & $version)
 
-proc initMisc*(conn: PSqlite3) =
-  var version = select[int](conn, getVersion, "PRAGMA user_version")[0]
-  withTransaction(conn):
-    if version == 0:
-      db_sqlite.exec conn, sql"""
-        pragma journal_mode = delete
-      """
-      db_sqlite.exec conn, sql"""
-        pragma page_size = 1024
-      """
-      db_sqlite.exec conn, sql"""
-        CREATE TABLE post (
-          post_id INTEGER PRIMARY KEY AUTOINCREMENT,
-          ts INTEGER,
-          public_key TEXT,
-          content BLOB,
-          approved INTEGER
-        ) STRICT
-      """
-      version += 1
-      db_sqlite.exec conn, sql("PRAGMA user_version = " & $version)
-
