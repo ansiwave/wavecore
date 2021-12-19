@@ -79,7 +79,7 @@ proc init*(conn: PSqlite3) =
           public_key_algo TEXT,
           tags TEXT,
           tags_sig TEXT UNIQUE,
-          misc TEXT
+          extra TEXT
         ) STRICT
       """
       db_sqlite.exec conn, sql"CREATE INDEX user__ts ON user(ts)"
@@ -98,7 +98,7 @@ proc init*(conn: PSqlite3) =
           score INTEGER,
           visibility INTEGER,
           tags TEXT,
-          misc TEXT
+          extra TEXT
         ) STRICT
       """
       db_sqlite.exec conn, sql"CREATE INDEX post__ts ON post(ts)"
