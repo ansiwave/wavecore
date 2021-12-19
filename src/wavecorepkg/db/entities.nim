@@ -257,7 +257,11 @@ proc insertPost*(conn: PSqlite3, e: Post, id: var int64): string =
       UPDATE post
       SET
       reply_count = reply_count + 1,
-      distinct_reply_count = (SELECT COUNT(DISTINCT user_id) FROM post_search WHERE attribute MATCH 'parentids' AND value MATCH post.post_id)
+      distinct_reply_count = (
+        SELECT COUNT(DISTINCT user_id) FROM post_search
+        INNER JOIN post AS child_post ON post_search.post_id = child_post.post_id
+        WHERE post_search.attribute MATCH 'parentids' AND post_search.value MATCH post.post_id AND child_post.visibility = 1
+      )
       WHERE post_id IN ($1)
       """.format(parentIds)
     db_sqlite.exec(conn, sql parentReplyCountQuery)

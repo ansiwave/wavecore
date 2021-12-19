@@ -347,6 +347,8 @@ test "score":
     var
       alice = initUser(paths.encode(aliceKeys.public))
       bob = initUser(paths.encode(bobKeys.public))
+    alice.tags.value = "modhide"
+    bob.tags.value = "modhide"
     entities.insertUser(conn, alice, alice.user_id)
     entities.insertUser(conn, bob, bob.user_id)
     var p1 = Post(parent: alice.public_key, public_key: alice.public_key, content: initContent(aliceKeys, "Hello, i'm alice"))
@@ -361,10 +363,22 @@ test "score":
     p2 = entities.selectPost(conn, p2.content.sig)
     p3 = entities.selectPost(conn, p3.content.sig)
     p4 = entities.selectPost(conn, p4.content.sig)
-    check 2 == p1.score - p1.partition
-    check 1 == p2.score - p2.partition
+    # the scores are 0 because the users are hidden right now
+    check 0 == p1.score - p1.partition
+    check 0 == p2.score - p2.partition
     check 0 == p3.score - p3.partition
     check 0 == p4.score - p4.partition
+    # now make the users visible
+    entities.editTags(conn, entities.Tags(value: "\n\n", sig: "bob1"), bob.public_key, sysopPublicKey, sysopPublicKey)
+    entities.editTags(conn, entities.Tags(value: "\n\n", sig: "alice1"), alice.public_key, sysopPublicKey, sysopPublicKey)
+    # insert new child posts so we can trigger the score to update
+    discard entities.insertPost(conn, Post(parent: p2.content.sig, public_key: alice.public_key, content: initContent(aliceKeys, "sup")))
+    discard entities.insertPost(conn, Post(parent: p1.content.sig, public_key: alice.public_key, content: initContent(aliceKeys, "yo")))
+    # the scores now are not 0
+    p2 = entities.selectPost(conn, p2.content.sig)
+    p1 = entities.selectPost(conn, p1.content.sig)
+    check 1 == p2.score - p2.partition
+    check 2 == p1.score - p1.partition
 
 test "edit post and user":
   db.withOpen(conn, ":memory:", false):
