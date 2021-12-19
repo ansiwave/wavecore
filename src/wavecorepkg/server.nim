@@ -364,16 +364,11 @@ proc recvAction(data: ThreadData) {.thread.} =
             execCmd("git -C $1 add .gitignore".format(bbsGitDir))
             execCmd("git -C $1 commit -m \"Add .gitignore\"".format(bbsGitDir))
             logging.log(logger, logging.lvlInfo, "Created " & bbsGitDir)
-          if not os.dirExists(bbsGitDir / paths.miscDir / ".git"):
-            execCmd("git init $1".format(bbsGitDir / paths.miscDir))
           if not os.dirExists(outGitDir):
             os.createDir(os.parentDir(outGitDir))
             execCmd("git init $1".format(outGitDir))
             execCmd("git -C $1 config --local receive.denyCurrentBranch updateInstead".format(outGitDir))
             logging.log(logger, logging.lvlInfo, "Created " & outGitDir)
-          if not os.dirExists(outGitDir / paths.miscDir / ".git"):
-            execCmd("git init $1".format(outGitDir / paths.miscDir))
-            execCmd("git -C $1 config --local receive.denyCurrentBranch updateInstead".format(outGitDir / paths.miscDir))
         if action.board notin initializedBoards:
           db.withOpen(conn, data.details.staticFileDir / paths.db(action.board), false):
             db.init(conn)
