@@ -255,7 +255,7 @@ proc search*(conn: PSqlite3, kind: SearchKind, term: string, offset: int = 0): s
       case kind:
       of Posts:
         """
-          SELECT post_id, content_sig, content_sig_last, public_key, parent, reply_count, score, tags FROM post
+          SELECT post_id, ts, content_sig, content_sig_last, public_key, parent, reply_count, score, tags FROM post
           WHERE parent != '' AND visibility = 1
           ORDER BY ts DESC
           LIMIT $1
@@ -287,7 +287,7 @@ proc search*(conn: PSqlite3, kind: SearchKind, term: string, offset: int = 0): s
       case kind:
       of Posts, Users:
         """
-          SELECT post_id, content_sig, content_sig_last, public_key, parent, reply_count, score, tags FROM post
+          SELECT post_id, ts, content_sig, content_sig_last, public_key, parent, reply_count, score, tags FROM post
           WHERE post_id IN (SELECT post_id FROM post_search WHERE attribute MATCH 'content' AND value MATCH ? ORDER BY rank)
           AND visibility = 1
           AND $1
