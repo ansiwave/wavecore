@@ -1,5 +1,5 @@
 import ./sqlite3
-from os import joinPath
+from os import `/`
 from strformat import fmt
 from strutils import nil
 from ../paths import nil
@@ -9,9 +9,7 @@ from urlly import nil
 import bitops
 import json
 
-const
-  chunkSize = bitand(262144 + 0xffff, bitnot 0xffff)
-  manifestFile = "manifest.json"
+const chunkSize = bitand(262144 + 0xffff, bitnot 0xffff)
 
 when defined(multiplexSqlite):
   {.passC: "-DSQLITE_MULTIPLEX_CHUNK_SIZE=" & $chunkSize.}
@@ -123,7 +121,7 @@ let customMethods = sqlite3_io_methods(
   xSync: proc (a1: ptr sqlite3_file; flags: cint): cint {.cdecl.} = SQLITE_OK,
   xFileSize: proc (a1: ptr sqlite3_file; pSize: ptr int64): cint {.cdecl.} =
     let res = fetch(Request(
-      url: urlly.parseUrl(paths.readUrl & "/../" & manifestFile),
+      url: urlly.parseUrl(paths.readUrl & ".json"),
       verb: "get",
       headers: @[
         Header(key: "Cache-Control", value: "no-store"),
@@ -197,6 +195,6 @@ when defined(multiplexSqlite):
   proc wavecore_save_manifest(fileName: cstring, fileSize: int64): cint {.cdecl, exportc.} =
     let name = $fileName
     if strutils.endsWith(name, "/" & paths.dbFilename): # make sure this is the main db file, not the journal file
-      writeFile(os.parentDir(name).joinPath(manifestFile), $ %* {"total-size": fileSize, "chunk-size": chunkSize})
+      writeFile(name & ".json", $ %* {"total-size": fileSize, "chunk-size": chunkSize})
     0
 
