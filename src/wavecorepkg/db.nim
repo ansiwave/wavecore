@@ -49,20 +49,16 @@ proc select*[T](conn: PSqlite3, init: proc (stmt: PStmt): T, query: string, args
     while step(stmt) == SQLITE_ROW:
       result.add(init(stmt))
 
+proc getVersion(stmt: PStmt): int =
+  var cols = sqlite3.column_count(stmt)
+  for col in 0 .. cols-1:
+    let colName = $sqlite3.column_name(stmt, col)
+    case colName:
+    of "user_version":
+      return sqlite3.column_int(stmt, col)
+
 proc init*(conn: PSqlite3) =
-  var version =
-    select[tuple[version: int]](
-      conn,
-      proc (stmt: PStmt): tuple[version: int] =
-        var cols = sqlite3.column_count(stmt)
-        for col in 0 .. cols-1:
-          let colName = $sqlite3.column_name(stmt, col)
-          case colName:
-          of "user_version":
-            result.version = sqlite3.column_int(stmt, col)
-      ,
-      "PRAGMA user_version"
-    )[0].version
+  var version = select[int](conn, getVersion, "PRAGMA user_version")[0]
   withTransaction(conn):
     if version == 0:
       db_sqlite.exec conn, sql"""
@@ -113,19 +109,7 @@ proc init*(conn: PSqlite3) =
       db_sqlite.exec conn, sql("PRAGMA user_version = " & $version)
 
 proc initMisc*(conn: PSqlite3) =
-  var version =
-    select[tuple[version: int]](
-      conn,
-      proc (stmt: PStmt): tuple[version: int] =
-        var cols = sqlite3.column_count(stmt)
-        for col in 0 .. cols-1:
-          let colName = $sqlite3.column_name(stmt, col)
-          case colName:
-          of "user_version":
-            result.version = sqlite3.column_int(stmt, col)
-      ,
-      "PRAGMA user_version"
-    )[0].version
+  var version = select[int](conn, getVersion, "PRAGMA user_version")[0]
   withTransaction(conn):
     if version == 0:
       db_sqlite.exec conn, sql"""
