@@ -100,7 +100,7 @@ proc insertPost*(details: ServerDetails, board: string, entity: entities.Post) =
       try:
         discard entities.selectUser(conn, entity.public_key)
       except Exception as ex:
-        let tags = if entity.public_key == board: "" else: "modhide"
+        let tags = if entity.public_key == board or not defined(release): "" else: "modhide"
         entities.insertUser(conn, entities.User(public_key: entity.public_key, tags: entities.Tags(value: tags)))
       let sig = entities.insertPost(conn, entity)
       writeFile(details.staticFileDir / paths.ansiwavez(board, sig), entity.content.value.compressed)
@@ -112,7 +112,7 @@ proc editPost*(details: ServerDetails, board: string, content: entities.Content,
       try:
         discard entities.selectUser(conn, key)
       except Exception as ex:
-        let tags = if key == board: "" else: "modhide"
+        let tags = if key == board or not defined(release): "" else: "modhide"
         entities.insertUser(conn, entities.User(public_key: key, tags: entities.Tags(value: tags)))
       let sig = entities.editPost(conn, content, key)
       writeFile(details.staticFileDir / paths.ansiwavez(board, sig), content.value.compressed)
