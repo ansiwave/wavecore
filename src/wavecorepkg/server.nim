@@ -28,6 +28,7 @@ type
     of StateActionKind.Stop:
       discard
     of StateActionKind.Log:
+      level: logging.Level
       message: string
     of StateActionKind.InsertPost:
       post: entities.Post
@@ -290,19 +291,19 @@ proc handle(data: ThreadData, client: Socket) =
   except BadRequestException as ex:
     headers = "HTTP/1.1 400 Bad Request"
     body = ex.msg
-    discard sendAction(data.stateAction, StateAction(kind: Log, message: headers & " - " & body))
+    discard sendAction(data.stateAction, StateAction(kind: Log, level: logging.lvlError, message: headers & " - " & body))
   except ForbiddenException as ex:
     headers = "HTTP/1.1 403 Forbidden"
     body = ex.msg
-    discard sendAction(data.stateAction, StateAction(kind: Log, message: headers & " - " & body))
+    discard sendAction(data.stateAction, StateAction(kind: Log, level: logging.lvlError, message: headers & " - " & body))
   except NotFoundException as ex:
     headers = "HTTP/1.1 404 Not Found"
     body = ex.msg
-    discard sendAction(data.stateAction, StateAction(kind: Log, message: headers & " - " & body))
+    discard sendAction(data.stateAction, StateAction(kind: Log, level: logging.lvlError, message: headers & " - " & body))
   except Exception as ex:
     headers = "HTTP/1.1 500 Internal Server Error"
     body = ex.msg
-    discard sendAction(data.stateAction, StateAction(kind: Log, message: headers & " - " & body))
+    discard sendAction(data.stateAction, StateAction(kind: Log, level: logging.lvlError, message: headers & " - " & body))
   finally:
     try:
       client.send(headers & "\r\L\r\L" & body)
@@ -337,10 +338,12 @@ proc listen(data: ThreadData) {.thread.} =
     echo("Server closing on port " & $data.details.port)
     socket.close()
 
-proc execCmd(command: string) =
+proc execCmd(command: string): string =
   let res = osproc.execCmdEx(command)
   if res.exitCode != 0:
     raise newException(Exception, "Command failed: " & command & "\n" & res.output)
+  else:
+    res.output
 
 proc recvAction(data: ThreadData) {.thread.} =
   var logger = logging.newConsoleLogger(fmtStr="[$datetime] - $levelname: ")
@@ -362,14 +365,14 @@ proc recvAction(data: ThreadData) {.thread.} =
           let outGitDir = os.absolutePath(paths.cloneDir / paths.boardsDir / action.board)
           if not os.dirExists(bbsGitDir / ".git"):
             writeFile(bbsGitDir / ".gitignore", paths.miscDir & "/")
-            execCmd("git init $1".format(bbsGitDir))
-            execCmd("git -C $1 add .gitignore".format(bbsGitDir))
-            execCmd("git -C $1 commit -m \"Add .gitignore\"".format(bbsGitDir))
+            discard execCmd("git init $1".format(bbsGitDir))
+            discard execCmd("git -C $1 add .gitignore".format(bbsGitDir))
+            discard execCmd("git -C $1 commit -m \"Add .gitignore\"".format(bbsGitDir))
             logging.log(logger, logging.lvlInfo, "Created " & bbsGitDir)
           if not os.dirExists(outGitDir):
             os.createDir(os.parentDir(outGitDir))
-            execCmd("git init $1".format(outGitDir))
-            execCmd("git -C $1 config --local receive.denyCurrentBranch updateInstead".format(outGitDir))
+            discard execCmd("git init $1".format(outGitDir))
+            discard execCmd("git -C $1 config --local receive.denyCurrentBranch updateInstead".format(outGitDir))
             logging.log(logger, logging.lvlInfo, "Created " & outGitDir)
         if action.board notin initializedBoards:
           db.withOpen(conn, data.details.staticFileDir / paths.db(action.board), false):
@@ -384,7 +387,7 @@ proc recvAction(data: ThreadData) {.thread.} =
       of StateActionKind.Stop:
         break
       of StateActionKind.Log:
-        logging.log(logger, logging.lvlError, action.message)
+        logging.log(logger, action.level, action.message)
       of StateActionKind.InsertPost:
         try:
           when defined(release):
@@ -414,8 +417,8 @@ proc recvAction(data: ThreadData) {.thread.} =
       try:
         let bbsGitDir = os.absolutePath(data.details.staticFileDir / paths.boardsDir / action.board)
         if data.details.shouldClone:
-          execCmd("git -C $1 add .".format(bbsGitDir))
-          execCmd("git -C $1 commit -m \"$2\"".format(bbsGitDir, $action.kind & " " & action.key))
+          discard execCmd("git -C $1 add .".format(bbsGitDir))
+          discard execCmd("git -C $1 commit -m \"$2\"".format(bbsGitDir, $action.kind & " " & action.key))
           data.backgroundAction[].send(BackgroundAction(kind: BackgroundActionKind.CopyOut, board: action.board))
       except Exception as ex:
         stderr.writeLine(ex.msg)
@@ -434,7 +437,9 @@ proc recvBackgroundAction(data: ThreadData) {.thread.} =
         let
           bbsGitDir = os.absolutePath(data.details.staticFileDir / paths.boardsDir / action.board)
           outGitDir = os.absolutePath(paths.cloneDir / paths.boardsDir / action.board)
-        execCmd("git -C $1 push $2 master".format(bbsGitDir, outGitDir))
+        discard execCmd("git -C $1 push $2 master".format(bbsGitDir, outGitDir))
+        let output = execCmd("rclone copy $1 $2/boards/$3/ --exclude .git/ --verbose --checksum --no-update-modtime".format(outGitDir, data.details.options["rclone"], action.board))
+        discard sendAction(data.stateAction, StateAction(kind: Log, level: logging.lvlInfo, message: "rclone output:\n" & output))
       except Exception as ex:
         stderr.writeLine(ex.msg)
         stderr.writeLine(getStackTrace(ex))

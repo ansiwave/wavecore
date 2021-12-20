@@ -5,6 +5,7 @@ from ./wavecorepkg/paths import nil
 from os import nil
 from parseopt import nil
 import tables
+from strutils import nil
 
 const port = 3000
 
@@ -29,6 +30,8 @@ when isMainModule:
       echo "Cloning enabled"
     else:
       quit "Can't find directory: " & paths.cloneDir
+    if strutils.split(options["rclone"], ":").len != 2:
+      quit "You must pass the config and bucket name to rclone, such as --rclone=configname:bucketname"
   vfs.register()
   var s = server.initServer("localhost", port, paths.staticFileDir, options)
   server.start(s)
