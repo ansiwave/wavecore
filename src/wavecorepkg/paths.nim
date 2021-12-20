@@ -5,11 +5,11 @@ from strutils import nil
 when defined(emscripten):
   const
     address* = ""
-    postAddress* = address
+    postAddress* = "http://post.ansiwave.net"
 else:
   var
-    address* = "http://test.ansiwave.net"
-    postAddress* = address
+    address* = "http://bbs.ansiwave.net"
+    postAddress* = "http://post.ansiwave.net"
 
 var readUrl*: string
 
