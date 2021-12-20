@@ -93,9 +93,11 @@ const
   ].toHashSet
   operatorCommands = ["/,"].toHashSet
   commands = initCommands()
+  stringCommands* = ["/section", "/link"].toHashSet
 
 proc initContext*(): Context =
   result.commands = commands
+  result.stringCommands = stringCommands
 
 proc getCommand(meta: var CommandMetadata, name: string): bool =
   if name in commands:
