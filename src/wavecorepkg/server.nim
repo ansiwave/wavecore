@@ -427,22 +427,36 @@ proc recvAction(data: ThreadData) {.thread.} =
 
 proc recvBackgroundAction(data: ThreadData) {.thread.} =
   data.readyChan[].send(true)
+  var
+    lastClone = 0.0
+    boardsToClone: HashSet[string]
   while true:
-    let action = data.backgroundAction[].recv()
-    case action.kind:
-    of BackgroundActionKind.Stop:
-      break
-    of BackgroundActionKind.CopyOut:
-      try:
+    let (dataAvailable, action) = data.backgroundAction[].tryRecv()
+    if dataAvailable:
+      case action.kind:
+      of BackgroundActionKind.Stop:
+        break
+      of BackgroundActionKind.CopyOut:
+        try:
+          let
+            bbsGitDir = os.absolutePath(data.details.staticFileDir / paths.boardsDir / action.board)
+            outGitDir = os.absolutePath(paths.cloneDir / paths.boardsDir / action.board)
+          discard execCmd("git -C $1 push $2 master".format(bbsGitDir, outGitDir))
+          boardsToClone.incl(action.board)
+        except Exception as ex:
+          stderr.writeLine(ex.msg)
+          stderr.writeLine(getStackTrace(ex))
+    else:
+      os.sleep(selectTimeout)
+    let ts = times.epochTime()
+    if boardsToClone.len > 0 and ts - lastClone >= 5:
+      lastClone = ts
+      for board in boardsToClone:
         let
-          bbsGitDir = os.absolutePath(data.details.staticFileDir / paths.boardsDir / action.board)
-          outGitDir = os.absolutePath(paths.cloneDir / paths.boardsDir / action.board)
-        discard execCmd("git -C $1 push $2 master".format(bbsGitDir, outGitDir))
-        let output = execCmd("rclone copy $1 $2/boards/$3/ --exclude .git/ --verbose --checksum --no-update-modtime".format(outGitDir, data.details.options["rclone"], action.board))
-        discard sendAction(data.stateAction, StateAction(kind: Log, level: logging.lvlInfo, message: "rclone output:\n" & output))
-      except Exception as ex:
-        stderr.writeLine(ex.msg)
-        stderr.writeLine(getStackTrace(ex))
+          outGitDir = os.absolutePath(paths.cloneDir / paths.boardsDir / board)
+          output = execCmd("rclone copy $1 $2/$3/$4/ --exclude .git/ --verbose --checksum --no-update-modtime".format(outGitDir, data.details.options["rclone"], paths.boardsDir, board))
+        discard sendAction(data.stateAction, StateAction(kind: Log, level: logging.lvlInfo, message: "rclone output for $1\n$2".format(board, output)))
+      boardsToClone.clear
 
 proc initShared(server: var Server) =
   # listen
