@@ -23,7 +23,7 @@ when isMainModule:
       quit "Invalid args"
   if not os.dirExists(paths.staticFileDir):
     quit "Can't find directory: " & paths.staticFileDir
-  let shouldClone = "clone" in options
+  let shouldClone = "rclone" in options
   if shouldClone:
     if os.dirExists(paths.cloneDir):
       echo "Cloning enabled"

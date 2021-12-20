@@ -91,7 +91,7 @@ const
   maxHeaderCount = 100
 
 proc initServer*(hostname: string, port: int, staticFileDir: string = "", options: Table[string, string] = initTable[string, string]()): Server =
-  Server(details: (hostname: hostname, port: port, staticFileDir: staticFileDir, options: options, shouldClone: "clone" in options))
+  Server(details: (hostname: hostname, port: port, staticFileDir: staticFileDir, options: options, shouldClone: "rclone" in options))
 
 proc insertPost*(details: ServerDetails, board: string, entity: entities.Post) =
   db.withOpen(conn, details.staticFileDir / paths.db(board), false):
