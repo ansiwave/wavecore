@@ -369,6 +369,11 @@ proc editPost*(conn: PSqlite3, content: Content, key: string): string =
   if post.public_key != key:
     raise newException(Exception, "Cannot edit this post")
 
+  db.withStatement(conn, "UPDATE post SET content_sig_last = ? WHERE post_id = ?", stmt):
+    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), content.sig, post.post_id)
+    if step(stmt) != SQLITE_DONE:
+      db_sqlite.dbError(conn)
+
   db.withStatement(conn, "UPDATE post_search SET value = ? WHERE post_id MATCH ? AND attribute MATCH 'content'", stmt):
     db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), common.stripUnsearchableText(content.value.uncompressed), post.post_id)
     if step(stmt) != SQLITE_DONE:
