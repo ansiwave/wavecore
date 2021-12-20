@@ -1,6 +1,6 @@
 from os import `/`
 from base64 import nil
-from strutils import nil
+from strutils import format
 
 when defined(emscripten):
   const
@@ -35,5 +35,11 @@ proc encode*[T](data: T): string =
   while i >= 0 and result[i] == '=':
     strutils.delete(result, i..i)
     i -= 1
+
+proc initUrl*(address: string; endpoint: string): string =
+  if strutils.endsWith(address, "/"):
+    "$1$2".format(address, endpoint)
+  else:
+    "$1/$2".format(address, endpoint)
 
 export base64.decode
