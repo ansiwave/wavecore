@@ -200,7 +200,7 @@ proc ansiwavePost(data: ThreadData, request: Request, headers: var string, body:
     raise newException(BadRequestException, "Invalid /type")
 
   body = ""
-  headers = "HTTP/1.1 200 OK\r\LContent-Length: " & $body.len
+  headers = "HTTP/1.1 200 OK\r\LContent-Length: " & $body.len & "\r\LAccess-Control-Allow-Origin: *"
 
 proc handleStatic(details: ServerDetails, request: Request, headers: var string, body: var string): bool =
   var filePath = ""
