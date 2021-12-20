@@ -397,6 +397,7 @@ test "edit post and user":
     var newContent = initContent(aliceKeys, newText)
     newContent.sig_last = p1.content.sig
     discard entities.editPost(conn, newContent, alice.public_key)
+    check p1.content.sig_last != entities.selectPost(conn, p1.content.sig).content.sig_last
     check entities.search(conn, entities.Posts, "like").len == 0
     check entities.search(conn, entities.Posts, "hate").len == 1
     expect Exception:
