@@ -1,6 +1,7 @@
 from os import `/`
 from base64 import nil
 from strutils import format
+from urlly import `$`
 
 when defined(emscripten):
   const
@@ -8,7 +9,7 @@ when defined(emscripten):
     postAddress* = "http://post.ansiwave.net"
 else:
   var
-    address* = "http://bbs.ansiwave.net"
+    address* = "http://bbs.ansiwave.net/bbs.html"
     postAddress* = "http://post.ansiwave.net"
 
 var readUrl*: string
@@ -37,9 +38,12 @@ proc encode*[T](data: T): string =
     i -= 1
 
 proc initUrl*(address: string; endpoint: string): string =
-  if strutils.endsWith(address, "/"):
-    "$1$2".format(address, endpoint)
+  var url = urlly.parseUrl(address)
+  url.path = ""
+  let s = $url
+  if strutils.endsWith(s, "/"):
+    "$1$2".format(s, endpoint)
   else:
-    "$1/$2".format(address, endpoint)
+    "$1/$2".format(s, endpoint)
 
 export base64.decode
