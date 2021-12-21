@@ -450,22 +450,21 @@ proc recvBackgroundAction(data: ThreadData) {.thread.} =
     else:
       os.sleep(selectTimeout)
     try:
-      let ts = times.epochTime()
-      if boardsToCopy.len > 0 and ts - lastClone >= 5:
-        lastClone = ts
+      if boardsToCopy.len > 0 and times.epochTime() - lastClone >= 5:
         for board in boardsToCopy:
           let outGitDir = os.absolutePath(paths.cloneDir / paths.boardsDir / board)
           let output = execCmd("rclone copy $1 $2/$3/$4/ --exclude .git/ --verbose --checksum --no-update-modtime".format(outGitDir, data.details.options["rclone"], paths.boardsDir, board))
           discard sendAction(data.stateAction, StateAction(kind: Log, message: "rclone copy output for $1\n$2".format(board, output)))
         boardsToCopy.clear
-      if boardsToSync.len > 0 and ts - lastSync >= 60:
-        lastSync = ts
+        lastClone = times.epochTime()
+      if boardsToSync.len > 0 and times.epochTime() - lastSync >= 60:
         for board in boardsToSync:
           let outGitDir = os.absolutePath(paths.cloneDir / paths.boardsDir / board)
           discard execCmd("git -C $1 update-server-info".format(outGitDir))
           let output = execCmd("rclone sync $1/.git $2/$3/$4/.git --verbose --checksum --no-update-modtime".format(outGitDir, data.details.options["rclone"], paths.boardsDir, board))
           discard sendAction(data.stateAction, StateAction(kind: Log, message: "rclone sync output for $1\n$2".format(board, output)))
         boardsToSync.clear
+        lastSync = times.epochTime()
     except Exception as ex:
       stderr.writeLine(ex.msg)
       stderr.writeLine(getStackTrace(ex))
