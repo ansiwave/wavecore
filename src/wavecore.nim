@@ -10,9 +10,6 @@ from strutils import nil
 const port = 3000
 
 when isMainModule:
-  when defined(release):
-    if os.fileExists("stop"):
-      quit "Refusing to start because stop file exists"
   var
     p = parseopt.initOptParser()
     options: Table[string, string]
