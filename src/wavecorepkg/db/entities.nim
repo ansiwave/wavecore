@@ -326,9 +326,8 @@ proc search*(conn: PSqlite3, kind: SearchKind, term: string, offset: int = 0): s
         """.format((if kind == Posts: "parent != ''" else: "parent = ''"), limit, offset)
       of UserTags:
         """
-          SELECT user.public_key AS content_sig, user.public_key, user.tags FROM user
-          LEFT JOIN post ON user.public_key = post.content_sig
-          WHERE user.user_id IN (SELECT user_id FROM user_search WHERE attribute MATCH 'tags' AND value MATCH ? ORDER BY rank)
+          SELECT public_key AS content_sig, public_key, tags FROM user
+          WHERE user_id IN (SELECT user_id FROM user_search WHERE attribute MATCH 'tags' AND value MATCH ? ORDER BY rank)
           LIMIT $1
           OFFSET $2
         """.format(limit, offset)
