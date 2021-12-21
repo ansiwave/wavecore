@@ -426,7 +426,9 @@ proc recvBackgroundAction(data: ThreadData) {.thread.} =
   data.readyChan[].send(true)
   var
     lastClone = 0.0
-    boardsToClone: HashSet[string]
+    lastSync = 0.0
+    boardsToCopy: HashSet[string]
+    boardsToSync: HashSet[string]
   while true:
     let (dataAvailable, action) = data.backgroundAction[].tryRecv()
     if dataAvailable:
@@ -439,21 +441,33 @@ proc recvBackgroundAction(data: ThreadData) {.thread.} =
             bbsGitDir = os.absolutePath(data.details.staticFileDir / paths.boardsDir / action.board)
             outGitDir = os.absolutePath(paths.cloneDir / paths.boardsDir / action.board)
           discard execCmd("git -C $1 push $2 master".format(bbsGitDir, outGitDir))
-          boardsToClone.incl(action.board)
+          boardsToCopy.incl(action.board)
+          boardsToSync.incl(action.board)
         except Exception as ex:
           stderr.writeLine(ex.msg)
           stderr.writeLine(getStackTrace(ex))
     else:
       os.sleep(selectTimeout)
-    let ts = times.epochTime()
-    if boardsToClone.len > 0 and ts - lastClone >= 5:
-      lastClone = ts
-      for board in boardsToClone:
-        let
-          outGitDir = os.absolutePath(paths.cloneDir / paths.boardsDir / board)
-          output = execCmd("rclone copy $1 $2/$3/$4/ --exclude .git/ --verbose --checksum --no-update-modtime".format(outGitDir, data.details.options["rclone"], paths.boardsDir, board))
-        discard sendAction(data.stateAction, StateAction(kind: Log, message: "rclone output for $1\n$2".format(board, output)))
-      boardsToClone.clear
+    try:
+      let ts = times.epochTime()
+      if boardsToCopy.len > 0 and ts - lastClone >= 5:
+        lastClone = ts
+        for board in boardsToCopy:
+          let outGitDir = os.absolutePath(paths.cloneDir / paths.boardsDir / board)
+          let output = execCmd("rclone copy $1 $2/$3/$4/ --exclude .git/ --verbose --checksum --no-update-modtime".format(outGitDir, data.details.options["rclone"], paths.boardsDir, board))
+          discard sendAction(data.stateAction, StateAction(kind: Log, message: "rclone copy output for $1\n$2".format(board, output)))
+        boardsToCopy.clear
+      if boardsToSync.len > 0 and ts - lastSync >= 60:
+        lastSync = ts
+        for board in boardsToSync:
+          let outGitDir = os.absolutePath(paths.cloneDir / paths.boardsDir / board)
+          discard execCmd("git -C $1 update-server-info".format(outGitDir))
+          let output = execCmd("rclone sync $1/.git $2/$3/$4/.git --verbose --checksum --no-update-modtime".format(outGitDir, data.details.options["rclone"], paths.boardsDir, board))
+          discard sendAction(data.stateAction, StateAction(kind: Log, message: "rclone sync output for $1\n$2".format(board, output)))
+        boardsToSync.clear
+    except Exception as ex:
+      stderr.writeLine(ex.msg)
+      stderr.writeLine(getStackTrace(ex))
 
 proc initShared(server: var Server) =
   # listen
