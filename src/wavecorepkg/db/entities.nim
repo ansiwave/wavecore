@@ -103,11 +103,11 @@ proc selectPostChildren*(conn: PSqlite3, sig: string, sortByTs: bool = false, of
   let query =
     """
       SELECT post_id, ts, content_sig, content_sig_last, public_key, parent, reply_count, score, partition, tags FROM post
-      WHERE parent = ? AND visibility = 1
-      ORDER BY $1 DESC
-      LIMIT $2
-      OFFSET $3
-    """.format((if sortByTs: "ts" else: "score"), limit, offset)
+      WHERE parent = ? $1
+      ORDER BY $2 DESC
+      LIMIT $3
+      OFFSET $4
+    """.format((if sortByTs: "" else: "AND visibility = 1"), (if sortByTs: "ts" else: "score"), limit, offset)
   #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), sig):
   #  echo x
   sequtils.toSeq(db.select[Post](conn, initPost, query, sig))

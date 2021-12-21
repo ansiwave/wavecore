@@ -100,6 +100,7 @@ proc init*(conn: PSqlite3) =
         ) STRICT
       """
       db_sqlite.exec conn, sql"CREATE INDEX post__ts ON post(ts)"
+      db_sqlite.exec conn, sql"CREATE INDEX post__parent__ts ON post(parent, ts)"
       db_sqlite.exec conn, sql"CREATE INDEX post__public_key__ts ON post(public_key, ts)"
       db_sqlite.exec conn, sql"CREATE INDEX post__visibility__ts ON post(visibility, ts)"
       db_sqlite.exec conn, sql"CREATE INDEX post__visibility__parent__ts ON post(visibility, parent, ts)"
