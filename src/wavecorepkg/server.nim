@@ -11,7 +11,6 @@ from ./paths import nil
 from ./ed25519 import nil
 from ./common import nil
 import tables, sets
-from logging import nil
 from times import nil
 
 type
@@ -28,7 +27,6 @@ type
     of StateActionKind.Stop:
       discard
     of StateActionKind.Log:
-      level: logging.Level
       message: string
     of StateActionKind.InsertPost:
       post: entities.Post
@@ -291,19 +289,19 @@ proc handle(data: ThreadData, client: Socket) =
   except BadRequestException as ex:
     headers = "HTTP/1.1 400 Bad Request"
     body = ex.msg
-    discard sendAction(data.stateAction, StateAction(kind: Log, level: logging.lvlError, message: headers & " - " & body))
+    discard sendAction(data.stateAction, StateAction(kind: Log, message: headers & " - " & body))
   except ForbiddenException as ex:
     headers = "HTTP/1.1 403 Forbidden"
     body = ex.msg
-    discard sendAction(data.stateAction, StateAction(kind: Log, level: logging.lvlError, message: headers & " - " & body))
+    discard sendAction(data.stateAction, StateAction(kind: Log, message: headers & " - " & body))
   except NotFoundException as ex:
     headers = "HTTP/1.1 404 Not Found"
     body = ex.msg
-    discard sendAction(data.stateAction, StateAction(kind: Log, level: logging.lvlError, message: headers & " - " & body))
+    discard sendAction(data.stateAction, StateAction(kind: Log, message: headers & " - " & body))
   except Exception as ex:
     headers = "HTTP/1.1 500 Internal Server Error"
     body = ex.msg
-    discard sendAction(data.stateAction, StateAction(kind: Log, level: logging.lvlError, message: headers & " - " & body))
+    discard sendAction(data.stateAction, StateAction(kind: Log, message: headers & " - " & body))
   finally:
     try:
       client.send(headers & "\r\L\r\L" & body)
@@ -346,7 +344,6 @@ proc execCmd(command: string): string =
     res.output
 
 proc recvAction(data: ThreadData) {.thread.} =
-  var logger = logging.newConsoleLogger(fmtStr="[$datetime] - $levelname: ")
   data.readyChan[].send(true)
   var
     initializedBoards: HashSet[string]
@@ -368,12 +365,12 @@ proc recvAction(data: ThreadData) {.thread.} =
             discard execCmd("git init $1".format(bbsGitDir))
             discard execCmd("git -C $1 add .gitignore".format(bbsGitDir))
             discard execCmd("git -C $1 commit -m \"Add .gitignore\"".format(bbsGitDir))
-            logging.log(logger, logging.lvlInfo, "Created " & bbsGitDir)
+            echo "Created " & bbsGitDir
           if not os.dirExists(outGitDir):
             os.createDir(os.parentDir(outGitDir))
             discard execCmd("git init $1".format(outGitDir))
             discard execCmd("git -C $1 config --local receive.denyCurrentBranch updateInstead".format(outGitDir))
-            logging.log(logger, logging.lvlInfo, "Created " & outGitDir)
+            echo "Created " & outGitDir
         if action.board notin initializedBoards:
           db.withOpen(conn, data.details.staticFileDir / paths.db(action.board), false):
             db.init(conn)
@@ -387,7 +384,7 @@ proc recvAction(data: ThreadData) {.thread.} =
       of StateActionKind.Stop:
         break
       of StateActionKind.Log:
-        logging.log(logger, action.level, action.message)
+        echo action.message
       of StateActionKind.InsertPost:
         try:
           when defined(release):
@@ -455,7 +452,7 @@ proc recvBackgroundAction(data: ThreadData) {.thread.} =
         let
           outGitDir = os.absolutePath(paths.cloneDir / paths.boardsDir / board)
           output = execCmd("rclone copy $1 $2/$3/$4/ --exclude .git/ --verbose --checksum --no-update-modtime".format(outGitDir, data.details.options["rclone"], paths.boardsDir, board))
-        discard sendAction(data.stateAction, StateAction(kind: Log, level: logging.lvlInfo, message: "rclone output for $1\n$2".format(board, output)))
+        discard sendAction(data.stateAction, StateAction(kind: Log, message: "rclone output for $1\n$2".format(board, output)))
       boardsToClone.clear
 
 proc initShared(server: var Server) =
