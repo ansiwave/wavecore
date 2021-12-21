@@ -39,7 +39,7 @@ proc encode*[T](data: T): string =
 
 proc initUrl*(address: string; endpoint: string): string =
   var url = urlly.parseUrl(address)
-  url.path = ""
+  url.paths = @[]
   let s = $url
   if strutils.endsWith(s, "/"):
     "$1$2".format(s, endpoint)
