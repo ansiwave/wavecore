@@ -40,6 +40,6 @@ Replace `localhost` with your public IP or hostname to connect to it remotely.
 
 Assuming your ansiwave terminal client is using the sysop key you generated (i.e., it is located at `~/.ansiwave/login-key.png`), you should see a `create banner` and `create new subboard` button. If these don't appear, the board in the URL you gave to ansiwave doesn't match your login key. Once you've made the subboards, other users can begin making posts there.
 
-If you built wavecore in release mode, all new users besides the sysop will start off hidden. You can find these users by searching for "modhide" and selecting "tags" underneath. These users can post freely, but they won't appear in the subboards yet. You can unhide them by going to their user page and doing Ctrl + X. A small edit field will appear, where you can delete the "modhide" tag and hit enter to complete.
+All new users besides the sysop will start off hidden. You can find these users by searching for "modhide" and selecting "tags" underneath. These users can post freely, but they won't appear in the subboards yet. You can unhide them by going to their user page and doing Ctrl + X. A small edit field will appear, where you can delete the "modhide" tag and hit enter to complete.
 
 You may also tag users with "modban" to prevent them from posting anymore. Finally, you can tag users with "modleader" or "moderator" (the former has the power to create other moderators, while the latter can only ban/hide people but cannot change anyone's moderator status).

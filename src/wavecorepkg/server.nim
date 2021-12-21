@@ -99,7 +99,7 @@ proc insertPost*(details: ServerDetails, board: string, entity: entities.Post) =
       try:
         discard entities.selectUser(conn, entity.public_key)
       except Exception as ex:
-        let tags = if entity.public_key == board or not defined(release): "" else: "modhide"
+        let tags = if entity.public_key == board: "" else: "modhide"
         entities.insertUser(conn, entities.User(public_key: entity.public_key, tags: entities.Tags(value: tags)))
       let sig = entities.insertPost(conn, entity)
       writeFile(details.staticFileDir / paths.ansiwavez(board, sig), entity.content.value.compressed)
@@ -111,7 +111,7 @@ proc editPost*(details: ServerDetails, board: string, content: entities.Content,
       try:
         discard entities.selectUser(conn, key)
       except Exception as ex:
-        let tags = if key == board or not defined(release): "" else: "modhide"
+        let tags = if key == board: "" else: "modhide"
         entities.insertUser(conn, entities.User(public_key: key, tags: entities.Tags(value: tags)))
       let sig = entities.editPost(conn, content, key)
       writeFile(details.staticFileDir / paths.ansiwavez(board, sig), content.value.compressed)
@@ -388,13 +388,12 @@ proc recvAction(data: ThreadData) {.thread.} =
         echo action.message
       of StateActionKind.InsertPost:
         try:
-          when defined(release):
-            if "testrun" notin data.details.options:
-              const minInterval = 15
-              let ts = times.epochTime()
-              if action.key != action.board and action.key in keyToLastTs and ts - keyToLastTs[action.key] < minInterval:
-                raise newException(Exception, "Posting too fast! Wait a few seconds.")
-              keyToLastTs[action.key] = ts
+          if "testrun" notin data.details.options:
+            const minInterval = 15
+            let ts = times.epochTime()
+            if action.key != action.board and action.key in keyToLastTs and ts - keyToLastTs[action.key] < minInterval:
+              raise newException(Exception, "Posting too fast! Wait a few seconds.")
+            keyToLastTs[action.key] = ts
           {.cast(gcsafe).}:
             insertPost(data.details, action.board, action.post)
         except Exception as ex:
