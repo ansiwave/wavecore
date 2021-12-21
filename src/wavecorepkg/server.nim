@@ -198,7 +198,7 @@ proc ansiwavePost(data: ThreadData, request: Request, headers: var string, body:
     raise newException(BadRequestException, "Invalid /type")
 
   body = ""
-  headers = "HTTP/1.1 200 OK\r\LContent-Length: " & $body.len & "\r\LAccess-Control-Allow-Origin: *"
+  headers = "HTTP/1.1 200 OK\r\LContent-Length: " & $body.len
 
 proc handleStatic(details: ServerDetails, request: Request, headers: var string, body: var string): bool =
   var filePath = ""
@@ -304,6 +304,7 @@ proc handle(data: ThreadData, client: Socket) =
     discard sendAction(data.stateAction, StateAction(kind: Log, message: headers & " - " & body))
   finally:
     try:
+      headers &= "\r\LAccess-Control-Allow-Origin: *"
       client.send(headers & "\r\L\r\L" & body)
     except Exception as ex:
       discard
