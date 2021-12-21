@@ -294,8 +294,7 @@ proc search*(conn: PSqlite3, kind: SearchKind, term: string, offset: int = 0): s
       of Users:
         """
           SELECT user.public_key AS content_sig, user.public_key, user.tags FROM user
-          LEFT JOIN post ON user.public_key = post.content_sig
-          WHERE IFNULL(post.visibility, 1) == 1
+          WHERE user.tags NOT LIKE "%modhide%"
           ORDER BY user.ts DESC
           LIMIT $1
           OFFSET $2
@@ -303,8 +302,7 @@ proc search*(conn: PSqlite3, kind: SearchKind, term: string, offset: int = 0): s
       of UserTags:
         """
           SELECT user.public_key AS content_sig, user.public_key, user.tags FROM user
-          LEFT JOIN post ON user.public_key = post.content_sig
-          WHERE IFNULL(post.visibility, 1) == 1 AND user.tags != ""
+          WHERE user.tags NOT LIKE "%modhide%" AND user.tags != ""
           ORDER BY user.ts DESC
           LIMIT $1
           OFFSET $2
