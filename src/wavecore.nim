@@ -10,6 +10,9 @@ from strutils import nil
 const port = 3000
 
 when isMainModule:
+  when defined(release):
+    if os.fileExists("stop"):
+      quit "Refusing to start because stop file exists"
   var
     p = parseopt.initOptParser()
     options: Table[string, string]
@@ -37,5 +40,11 @@ when isMainModule:
   server.start(s)
   if "testrun" in options:
     testrun.main(port)
-  discard readLine(stdin)
-  server.stop(s)
+  when defined(release):
+    while true:
+      os.sleep(1000)
+      if os.fileExists("stop"):
+        server.stop(s)
+  else:
+    discard readLine(stdin)
+    server.stop(s)
