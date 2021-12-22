@@ -9,7 +9,7 @@ from urlly import nil
 import bitops
 import json
 
-const chunkSize = bitand(131072 + 0xffff, bitnot 0xffff)
+const chunkSize = bitand(262144 + 0xffff, bitnot 0xffff)
 
 when defined(multiplexSqlite):
   {.passC: "-DSQLITE_MULTIPLEX_CHUNK_SIZE=" & $chunkSize.}
