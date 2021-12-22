@@ -58,15 +58,17 @@ only hand-made art please...images belong in random"""
 |__|_|  /__\____ | |__| |__|_|  /____//____  >__|\___  >
       \/        \/            \/           \/        \/ 
 
-code that plays midi music, or "sound" if you have no musical talent"""
+code that plays MIDI music, or "sound" if you have no musical talent"""
   subboard3Text =
     """
-                           .                 
-                          /                  
-   ).--..-.  .  .-.  .-../ .-._..  .-. .-.   
-  /    (  |   )/   )(   / (   )  )/   )   )  
- /      `-'-''/   (  `-'-..`-'  '/   /   (   
-                   `-                     `-'
+ ▄▄▄▄▄▄   ▄▄▄▄▄▄ ▄▄    ▄ ▄▄▄▄▄▄  ▄▄▄▄▄▄▄ ▄▄   ▄▄ 
+█   ▄  █ █      █  █  █ █      ██       █  █▄█  █
+█  █ █ █ █  ▄   █   █▄█ █  ▄    █   ▄   █       █
+█   █▄▄█▄█ █▄█  █       █ █ █   █  █ █  █       █
+█    ▄▄  █      █  ▄    █ █▄█   █  █▄█  █       █
+█   █  █ █  ▄   █ █ █   █       █       █ ██▄██ █
+█▄▄▄█  █▄█▄█ █▄▄█▄█  █▄▄█▄▄▄▄▄▄██▄▄▄▄▄▄▄█▄█   █▄█
+
 nothing is off-topic"""
   jabbaAnsi =
     """
