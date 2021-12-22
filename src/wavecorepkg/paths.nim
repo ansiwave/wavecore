@@ -21,7 +21,7 @@ const
   ansiwavesDir* = "ansiwavez"
   dbDir* = "db"
   dbFilename* = "board.db"
-  defaultBoard* = "Q8BTY324cY7nl5kce6ctEfk8IRIrtsM8NfKL29B-3UE"
+  defaultBoard* = "kEKgeSd3-74Uy0bfOOJ9mj0qW3KpMpXBGrrQdUv190E"
   miscDir* = "misc"
 
 proc db*(board: string): string =
