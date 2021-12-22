@@ -138,7 +138,7 @@ proc recvAction(client: Client) {.thread.} =
           {.cast(gcsafe).}:
             var res = fetch(action.request)
           if res.code == 200:
-            if strutils.endsWith(action.request.url.path, ".ansiwavez"):
+            if strutils.endsWith(urlly.path(action.request.url), ".ansiwavez"):
               res.body = zippy.uncompress(cast[string](res.body), dataFormat = zippy.dfZlib)
             action.response[].send(Result[Response](kind: Valid, valid: res))
           else:
