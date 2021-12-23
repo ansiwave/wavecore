@@ -24,11 +24,17 @@ const
   defaultBoard* = "kEKgeSd3-74Uy0bfOOJ9mj0qW3KpMpXBGrrQdUv190E"
   miscDir* = "misc"
 
-proc db*(board: string): string =
-  boardsDir / board / dbDir / dbFilename
+proc db*(board: string, isUrl: bool = false): string =
+  if isUrl:
+    boardsDir & "/" & board & "/" & dbDir & "/" & dbFilename
+  else:
+    boardsDir / board / dbDir / dbFilename
 
-proc ansiwavez*(board: string, filename: string): string =
-  boardsDir / board / ansiwavesDir / filename & ".ansiwavez"
+proc ansiwavez*(board: string, filename: string, isUrl: bool = false): string =
+  if isUrl:
+    boardsDir & "/" & board & "/" & ansiwavesDir & "/" & filename & ".ansiwavez"
+  else:
+    boardsDir / board / ansiwavesDir / filename & ".ansiwavez"
 
 proc encode*[T](data: T): string =
   result = base64.encode(data, safe = true)
