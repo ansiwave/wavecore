@@ -133,7 +133,13 @@ proc recvAction(client: Client) {.thread.} =
       break
     of Fetch:
       try:
-        case client.kind:
+        let kind =
+          # non-get requests always need to be online
+          if action.request.verb == "get":
+            client.kind
+          else:
+            Online
+        case kind:
         of Online:
           {.cast(gcsafe).}:
             var res = fetch(action.request)
