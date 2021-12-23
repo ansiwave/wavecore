@@ -103,7 +103,7 @@ let customMethods = sqlite3_io_methods(
         verb: "get",
         headers: @[
           Header(key: "Range", value: "bytes=" & $firstByte & "-" & $lastByte),
-          Header(key: "Cache-Control", value: "no-store"),
+          Header(key: "Cache-Control", value: "no-cache, no-store"),
         ]
       ))
       if res.code == 206:
@@ -124,7 +124,7 @@ let customMethods = sqlite3_io_methods(
       url: urlly.parseUrl(paths.readUrl & ".json"),
       verb: "get",
       headers: @[
-        Header(key: "Cache-Control", value: "no-store"),
+        Header(key: "Cache-Control", value: "no-cache, no-store"),
       ]
     ))
     if res.code == 200:
