@@ -6,11 +6,23 @@ from urlly import `$`
 when defined(emscripten):
   const
     address* = ""
-    postAddress* = "http://post.ansiwave.net"
+    postAddress* =
+      when defined(release):
+        "http://post.ansiwave.net"
+      else:
+        address
 else:
   var
-    address* = "http://bbs.ansiwave.net/bbs.html"
-    postAddress* = "http://post.ansiwave.net"
+    address* =
+      when defined(release):
+        "http://bbs.ansiwave.net/bbs.html"
+      else:
+        "http://localhost:3000"
+    postAddress* =
+      when defined(release):
+        "http://post.ansiwave.net"
+      else:
+        address
 
 var readUrl*: string
 
@@ -21,8 +33,12 @@ const
   ansiwavesDir* = "ansiwavez"
   dbDir* = "db"
   dbFilename* = "board.db"
-  defaultBoard* = "kEKgeSd3-74Uy0bfOOJ9mj0qW3KpMpXBGrrQdUv190E"
   miscDir* = "misc"
+  defaultBoard* =
+    when defined(release):
+      "kEKgeSd3-74Uy0bfOOJ9mj0qW3KpMpXBGrrQdUv190E"
+    else:
+      "Q8BTY324cY7nl5kce6ctEfk8IRIrtsM8NfKL29B-3UE"
 
 proc db*(board: string, isUrl: bool = false): string =
   if isUrl:

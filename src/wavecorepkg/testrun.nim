@@ -193,7 +193,7 @@ Aerith's theme
 proc main*(port: int) =
   let
     sysopKeys = block:
-      let path = "privkey"
+      let path = "tests/privkey"
       if os.fileExists(path):
         echo "Using existing sysop key"
         let privKeyStr = readFile(path)
@@ -201,16 +201,18 @@ proc main*(port: int) =
         copyMem(privKey.addr, privKeyStr[0].unsafeAddr, privKeyStr.len)
         ed25519.initKeyPair(privkey)
       else:
-        echo "Creating new sysop key"
-        let keys = ed25519.initKeyPair()
-        writeFile(path, keys.private)
-        keys
+        raise newException(Exception, "Can't find " & path)
+        #echo "Creating new sysop key"
+        #let keys = ed25519.initKeyPair()
+        #writeFile(path, keys.private)
+        #keys
     board = paths.encode(sysopKeys.public)
     readPort =
       when defined(release):
         "80"
       else:
         $port
+  assert board == paths.defaultBoard, "You must set paths.defaultBoard to " & board
   echo "Test run...open this link in the terminal client:"
   echo "http://localhost:" & readPort & "#board:" & board
   let boardDir = paths.staticFileDir / paths.boardsDir / board
