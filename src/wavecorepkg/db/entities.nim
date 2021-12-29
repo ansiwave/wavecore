@@ -309,20 +309,30 @@ proc search*(conn: PSqlite3, kind: SearchKind, term: string, offset: int = 0): s
         """.format(limit, offset)
       of Users:
         """
-          SELECT user.public_key AS content_sig, user.public_key, user.tags FROM user
-          WHERE user.tags NOT LIKE "%modhide%"
-          ORDER BY user.ts DESC
+          SELECT public_key, tags FROM user
+          WHERE tags NOT LIKE "%modhide%"
+          ORDER BY ts DESC
           LIMIT $1
           OFFSET $2
         """.format(limit, offset)
       of UserTags:
         """
-          SELECT user.public_key AS content_sig, user.public_key, user.tags FROM user
-          WHERE user.tags NOT LIKE "%modhide%" AND user.tags != ""
-          ORDER BY user.ts DESC
+          SELECT public_key, tags FROM user
+          WHERE tags NOT LIKE "%modhide%" AND tags != ""
+          ORDER BY ts DESC
           LIMIT $1
           OFFSET $2
         """.format(limit, offset)
+    #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query)):
+    #  echo x
+    sequtils.toSeq(db.select[Post](conn, initPost, query))
+  elif strutils.startsWith(term, "/sql "):
+    let query =
+      term[5 ..< term.len] &
+      """
+        LIMIT $1
+        OFFSET $2
+      """.format(limit, offset)
     #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query)):
     #  echo x
     sequtils.toSeq(db.select[Post](conn, initPost, query))
