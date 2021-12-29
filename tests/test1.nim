@@ -433,25 +433,50 @@ test "edit post and user":
     expect Exception:
       entities.editTags(conn, entities.Tags(value: "\n\nmodban", sig: "alice3"), "alice2", sysopPublicKey, bob.public_key)
     # bob can post
-    let p2 = Post(parent: bob.public_key, public_key: bob.public_key, content: initContent(bobKeys, "I like turtles"))
-    discard entities.insertPost(conn, p2)
+    let iliketurtles = Post(parent: bob.public_key, public_key: bob.public_key, content: initContent(bobKeys, "I like turtles"))
+    discard entities.insertPost(conn, iliketurtles)
     # alice can hide bob
     check 1 == entities.selectPostChildren(conn, bob.public_key).len
     entities.editTags(conn, entities.Tags(value: "\n\nmoderator modhide", sig: "bob4"), "bob3", sysopPublicKey, alice.public_key)
     check 0 == entities.selectPostChildren(conn, bob.public_key).len
-    entities.editTags(conn, entities.Tags(value: "\n\nmoderator", sig: "bob5"), "bob4", sysopPublicKey, alice.public_key)
+    # alice can unhide bob and remove his moderator status
+    entities.editTags(conn, entities.Tags(value: "\n\n", sig: "bob5"), "bob4", sysopPublicKey, alice.public_key)
     check 1 == entities.selectPostChildren(conn, bob.public_key).len
+    # bob cannot hide his post
+    expect Exception:
+      entities.editExtraTags(conn, entities.Tags(value: "\n\nmodhide", sig: iliketurtles.content.sig), iliketurtles.content.sig, sysopPublicKey, bob.public_key)
+    # bob can make a new post
+    discard entities.insertPost(conn, Post(parent: bob.public_key, public_key: bob.public_key, content: initContent(bobKeys, "I really like turtles")))
+    # alice cannot add moderator, modleader, or modban tags to a post
+    expect Exception:
+      entities.editExtraTags(conn, entities.Tags(value: "\n\nmoderator", sig: "iliketurtles1"), iliketurtles.content.sig, sysopPublicKey, alice.public_key)
+    expect Exception:
+      entities.editExtraTags(conn, entities.Tags(value: "\n\nmodleader", sig: "iliketurtles1"), iliketurtles.content.sig, sysopPublicKey, alice.public_key)
+    expect Exception:
+      entities.editExtraTags(conn, entities.Tags(value: "\n\nmodban", sig: "iliketurtles1"), iliketurtles.content.sig, sysopPublicKey, alice.public_key)
+    # alice can hide bob's post
+    entities.editExtraTags(conn, entities.Tags(value: "\n\nmodhide", sig: "iliketurtles1"), iliketurtles.content.sig, sysopPublicKey, alice.public_key)
+    check 1 == entities.selectPostChildren(conn, bob.public_key).len
+    # alice can hide bob entirely again
+    entities.editTags(conn, entities.Tags(value: "\n\nmodhide", sig: "bob6"), "bob5", sysopPublicKey, alice.public_key)
+    check 0 == entities.selectPostChildren(conn, bob.public_key).len
+    # alice can unhide bob entirely but his post is still hidden
+    entities.editTags(conn, entities.Tags(value: "\n\n", sig: "bob7"), "bob6", sysopPublicKey, alice.public_key)
+    check 1 == entities.selectPostChildren(conn, bob.public_key).len
+    # alice can unhide bob's post
+    entities.editExtraTags(conn, entities.Tags(value: "\n\n", sig: "iliketurtles2"), "iliketurtles1", sysopPublicKey, alice.public_key)
+    check 2 == entities.selectPostChildren(conn, bob.public_key).len
     # alice can ban bob
-    entities.editTags(conn, entities.Tags(value: "\n\nmoderator modban", sig: "bob6"), "bob5", sysopPublicKey, alice.public_key)
+    entities.editTags(conn, entities.Tags(value: "\n\nmoderator modban", sig: "bob8"), "bob7", sysopPublicKey, alice.public_key)
     # bob can no longer post
     expect Exception:
       discard entities.insertPost(conn, Post(parent: bob.public_key, public_key: bob.public_key, content: initContent(bobKeys, "I like turtles a lot")))
     expect Exception:
       var newContent = initContent(bobKeys, newText)
-      newContent.sig_last = p2.content.sig
+      newContent.sig_last = iliketurtles.content.sig
       discard entities.editPost(conn, newContent, bob.public_key)
     expect Exception:
-      entities.editTags(conn, entities.Tags(value: "\n\nmoderator hi", sig: "bob7"), "bob6", sysopPublicKey, bob.public_key)
+      entities.editTags(conn, entities.Tags(value: "\n\nmoderator hi", sig: "bob9"), "bob8", sysopPublicKey, bob.public_key)
 
 test "post to blog":
   db.withOpen(conn, ":memory:", false):

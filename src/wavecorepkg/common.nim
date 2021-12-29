@@ -12,7 +12,7 @@ proc parseTags*(tags: string): HashSet[string] =
 
 type
   HeaderKind* = enum
-    New, Edit, Tags
+    New, Edit, Tags, ExtraTags,
 
 proc headers*(pubKey: string, target: string, kind: HeaderKind, board: string): string =
   strutils.join(
@@ -25,6 +25,7 @@ proc headers*(pubKey: string, target: string, kind: HeaderKind, board: string): 
           of New: "new"
           of Edit: "edit"
           of Tags: "tags"
+          of ExtraTags: "extra-tags"
       ),
       "/board " & board,
     ],

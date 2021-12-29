@@ -19,6 +19,7 @@ type
   Tags* = object
     value*: string
     sig*: string
+    editor*: string
   User* = object
     user_id*: int64
     public_key*: string
@@ -74,6 +75,8 @@ proc initPost(stmt: PStmt): Post =
       result.extra_tags.value = $sqlite3.column_text(stmt, col)
     of "extra_tags_sig":
       result.extra_tags.sig = $sqlite3.column_text(stmt, col)
+    of "extra_tags_editor":
+      result.extra_tags.editor = $sqlite3.column_text(stmt, col)
     of "display_name":
       result.display_name = $sqlite3.column_text(stmt, col)
     else:
@@ -160,6 +163,8 @@ proc initUser(stmt: PStmt): User =
       result.tags.value = $sqlite3.column_text(stmt, col)
     of "tags_sig":
       result.tags.sig = $sqlite3.column_text(stmt, col)
+    of "tags_editor":
+      result.tags.editor = $sqlite3.column_text(stmt, col)
     of "display_name":
       result.display_name = $sqlite3.column_text(stmt, col)
 
@@ -464,8 +469,8 @@ proc editTags*(conn: PSqlite3, tags: Tags, tagsSigLast: string, board: string, k
 
   var stmt: PStmt
 
-  db.withStatement(conn, "UPDATE user SET tags = ?, tags_sig = ? WHERE user_id = ?", stmt):
-    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), content[0], tags.sig, targetUser.user_id)
+  db.withStatement(conn, "UPDATE user SET tags = ?, tags_sig = ?, tags_editor = ? WHERE user_id = ?", stmt):
+    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), content[0], tags.sig, key, targetUser.user_id)
     if step(stmt) != SQLITE_DONE:
       db_sqlite.dbError(conn)
 
@@ -480,13 +485,78 @@ proc editTags*(conn: PSqlite3, tags: Tags, tagsSigLast: string, board: string, k
       db_sqlite.dbError(conn)
 
   if "modhide" in newTags and "modhide" notin oldTags:
-    db.withStatement(conn, "UPDATE post SET visibility = ? WHERE public_key = ?", stmt):
+    db.withStatement(conn, "UPDATE post SET visibility = ? WHERE public_key = ? AND visibility = 1", stmt):
       db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), 0, targetUser.public_key)
       if step(stmt) != SQLITE_DONE:
         db_sqlite.dbError(conn)
   elif "modhide" in oldTags and "modhide" notin newTags:
-    db.withStatement(conn, "UPDATE post SET visibility = ? WHERE public_key = ?", stmt):
+    db.withStatement(conn, "UPDATE post SET visibility = ? WHERE public_key = ? AND visibility = 0", stmt):
       db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), 1, targetUser.public_key)
+      if step(stmt) != SQLITE_DONE:
+        db_sqlite.dbError(conn)
+
+const modCommandsExtra = ["modhide"].toHashSet
+
+proc editExtraTags*(conn: PSqlite3, tags: Tags, tagsSigLast: string, board: string, key: string) =
+  proc selectPostByTagsSigLast(conn: PSqlite3, sig: string): Post =
+    const query =
+      """
+        SELECT post_id, tags, extra_tags, extra_tags_sig FROM post
+        WHERE extra_tags_sig = ?
+      """
+    let ret = db.select[Post](conn, initPost, query, sig)
+    if ret.len == 1:
+      ret[0]
+    else:
+      raise newException(Exception, "Can't edit post tags (maybe you're editing an old version?)")
+
+  let
+    targetPost = selectPostByTagsSigLast(conn, tagsSigLast)
+    content = common.splitAfterHeaders(tags.value)
+
+  if content.len != 1:
+    raise newException(Exception, "Tags must be on a single line")
+  elif content[0].len > 80:
+    raise newException(Exception, "Max tag length exceeded")
+
+  for ch in content[0]:
+    if ch notin {'a'..'z', ' '}:
+      raise newException(Exception, "Only the letters a-z are allowed in tags")
+
+  let
+    oldTagsExtra = common.parseTags(targetPost.extra_tags.value)
+    newTagsExtra = common.parseTags(content[0])
+    oldTags = common.parseTags(targetPost.tags) + oldTagsExtra
+    newTags = common.parseTags(targetPost.tags) + newTagsExtra
+
+  for tag in newTagsExtra:
+    if strutils.startsWith(tag, "mod") and tag notin modCommandsExtra:
+      raise newException(Exception, tag & " is an invalid extra tag")
+
+  if key != board:
+    let
+      sourceUser = selectUser(conn, key)
+      sourceTags = common.parseTags(sourceUser.tags.value)
+    if "modban" in sourceTags:
+      raise newException(Exception, "You are banned")
+    if "moderator" notin sourceTags and "modleader" notin sourceTags:
+      raise newException(Exception, "Only the sysop or moderators can edit tags")
+
+  var stmt: PStmt
+
+  db.withStatement(conn, "UPDATE post SET extra_tags = ?, extra_tags_sig = ?, extra_tags_editor = ? WHERE post_id = ?", stmt):
+    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), content[0], tags.sig, key, targetPost.post_id)
+    if step(stmt) != SQLITE_DONE:
+      db_sqlite.dbError(conn)
+
+  if "modhide" in newTags and "modhide" notin oldTags:
+    db.withStatement(conn, "UPDATE post SET visibility = ? WHERE post_id = ?", stmt):
+      db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), 2, targetPost.post_id)
+      if step(stmt) != SQLITE_DONE:
+        db_sqlite.dbError(conn)
+  elif "modhide" in oldTags and "modhide" notin newTags:
+    db.withStatement(conn, "UPDATE post SET visibility = ? WHERE post_id = ? AND visibility = 2", stmt):
+      db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), 1, targetPost.post_id)
       if step(stmt) != SQLITE_DONE:
         db_sqlite.dbError(conn)
 

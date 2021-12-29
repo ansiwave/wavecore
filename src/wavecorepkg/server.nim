@@ -35,6 +35,7 @@ type
     of StateActionKind.EditTags:
       tags: entities.Tags
       tagsSigLast: string
+      extra: bool
     board: string
     key: string
     error: ptr Channel[string]
@@ -116,10 +117,13 @@ proc editPost*(details: ServerDetails, board: string, content: entities.Content,
       let sig = entities.editPost(conn, content, key)
       writeFile(details.staticFileDir / paths.ansiwavez(board, sig), content.value.compressed)
 
-proc editTags*(details: ServerDetails, board: string, tags: entities.Tags, tagsSigLast: string, key: string) =
+proc editTags*(details: ServerDetails, board: string, tags: entities.Tags, tagsSigLast: string, key: string, extra: bool) =
   db.withOpen(conn, details.staticFileDir / paths.db(board), false):
     db.withTransaction(conn):
-      entities.editTags(conn, tags, tagsSigLast, board, key)
+      if extra:
+        entities.editExtraTags(conn, tags, tagsSigLast, board, key)
+      else:
+        entities.editTags(conn, tags, tagsSigLast, board, key)
 
 proc sendAction[T](actionChan: ptr Channel[T], action: T): string =
   let error = cast[ptr Channel[string]](
@@ -192,6 +196,12 @@ proc ansiwavePost(data: ThreadData, request: Request, headers: var string, body:
     let
       tags = entities.Tags(value: request.body, sig: sigBase64)
       error = sendAction(data.stateAction, StateAction(kind: EditTags, board: board, tags: tags, tagsSigLast: cmds["/target"], key: keyBase64))
+    if error != "":
+      raise newException(Exception, error)
+  of "extra-tags":
+    let
+      tags = entities.Tags(value: request.body, sig: sigBase64)
+      error = sendAction(data.stateAction, StateAction(kind: EditTags, board: board, tags: tags, tagsSigLast: cmds["/target"], key: keyBase64, extra: true))
     if error != "":
       raise newException(Exception, error)
   else:
@@ -407,7 +417,7 @@ proc recvAction(data: ThreadData) {.thread.} =
       of StateActionKind.EditTags:
         try:
           {.cast(gcsafe).}:
-            editTags(data.details, action.board, action.tags, action.tagsSigLast, action.key)
+            editTags(data.details, action.board, action.tags, action.tagsSigLast, action.key, action.extra)
         except Exception as ex:
           resp = ex.msg
     if resp == "" and  action.kind in {StateActionKind.InsertPost, StateActionKind.EditPost, StateActionKind.EditTags}:
