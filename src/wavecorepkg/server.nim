@@ -368,7 +368,7 @@ proc recvAction(data: ThreadData) {.thread.} =
         let bbsGitDir = os.absolutePath(data.details.staticFileDir / paths.boardsDir / action.board)
         os.createDir(bbsGitDir / paths.ansiwavesDir)
         os.createDir(bbsGitDir / paths.dbDir)
-        os.createDir(bbsGitDir / paths.miscDir)
+        os.createDir(bbsGitDir / paths.miscDir / paths.purgatoryDir)
         if data.details.shouldClone:
           let outGitDir = os.absolutePath(paths.cloneDir / paths.boardsDir / action.board)
           if not os.dirExists(bbsGitDir / ".git"):
@@ -384,6 +384,8 @@ proc recvAction(data: ThreadData) {.thread.} =
             echo "Created " & outGitDir
         if action.board notin initializedBoards:
           db.withOpen(conn, data.details.staticFileDir / paths.db(action.board), false):
+            db.init(conn)
+          db.withOpen(conn, data.details.staticFileDir / paths.dbPurgatory(action.board), false):
             db.init(conn)
           initializedBoards.incl(action.board)
       except Exception as ex:
