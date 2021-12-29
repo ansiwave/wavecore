@@ -23,6 +23,7 @@ type
     user_id*: int64
     public_key*: string
     tags*: Tags
+    display_name*: string
   Post* = object
     post_id*: int64
     ts*: int64
@@ -33,6 +34,8 @@ type
     score*: int64
     partition*: int64
     tags*: string
+    extra_tags*: Tags
+    display_name*: string
   SearchKind* = enum
     Posts, Users, UserTags,
 
@@ -67,6 +70,12 @@ proc initPost(stmt: PStmt): Post =
       result.partition = sqlite3.column_int(stmt, col)
     of "tags":
       result.tags = $sqlite3.column_text(stmt, col)
+    of "extra_tags":
+      result.extra_tags.value = $sqlite3.column_text(stmt, col)
+    of "extra_tags_sig":
+      result.extra_tags.sig = $sqlite3.column_text(stmt, col)
+    of "display_name":
+      result.display_name = $sqlite3.column_text(stmt, col)
     else:
       discard
 
@@ -151,6 +160,8 @@ proc initUser(stmt: PStmt): User =
       result.tags.value = $sqlite3.column_text(stmt, col)
     of "tags_sig":
       result.tags.sig = $sqlite3.column_text(stmt, col)
+    of "display_name":
+      result.display_name = $sqlite3.column_text(stmt, col)
 
 proc selectUser*(conn: PSqlite3, publicKey: string): User =
   const query =
@@ -216,8 +227,8 @@ proc insertPost*(conn: PSqlite3, e: Post, id: var int64): string =
     visibility = if "modhide" in common.parseTags(sourceUser.tags.value): 0 else: 1
     ts = times.toUnix(times.getTime())
 
-  db.withStatement(conn, "INSERT INTO post (ts, content_sig, content_sig_last, public_key, parent, parent_public_key, reply_count, distinct_reply_count, score, visibility, tags) VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0, ?, ?)", stmt):
-    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), ts, sig, e.content.sig, e.public_key, e.parent, parentPublicKey, visibility, sourceUser.tags.value)
+  db.withStatement(conn, "INSERT INTO post (ts, content_sig, content_sig_last, public_key, parent, parent_public_key, reply_count, distinct_reply_count, score, visibility, tags, extra_tags, extra_tags_sig, display_name) VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0, ?, ?, ?, ?, ?)", stmt):
+    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), ts, sig, e.content.sig, e.public_key, e.parent, parentPublicKey, visibility, sourceUser.tags.value, "", sig, sourceUser.display_name)
     if step(stmt) != SQLITE_DONE:
       db_sqlite.dbError(conn)
     id = sqlite3.last_insert_rowid(conn)

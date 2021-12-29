@@ -57,6 +57,51 @@ proc getVersion(stmt: PStmt): int =
     of "user_version":
       return sqlite3.column_int(stmt, col)
 
+proc createTables(conn: PSqlite3) =
+  db_sqlite.exec conn, sql"""
+    CREATE TABLE user (
+      user_id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ts INTEGER,
+      public_key TEXT UNIQUE,
+      public_key_algo TEXT,
+      tags TEXT,
+      tags_sig TEXT UNIQUE,
+      extra TEXT,
+      display_name TEXT UNIQUE
+    ) STRICT
+  """
+  db_sqlite.exec conn, sql"CREATE INDEX user__ts ON user(ts)"
+  db_sqlite.exec conn, sql"CREATE INDEX user__public_key__ts ON user(public_key, ts)"
+  db_sqlite.exec conn, sql"""
+    CREATE TABLE post (
+      post_id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ts INTEGER,
+      content_sig TEXT UNIQUE,
+      content_sig_last TEXT UNIQUE,
+      public_key TEXT,
+      parent TEXT,
+      parent_public_key TEXT,
+      reply_count INTEGER,
+      distinct_reply_count INTEGER,
+      score INTEGER,
+      partition INTEGER,
+      visibility INTEGER,
+      tags TEXT,
+      extra TEXT,
+      extra_tags TEXT,
+      extra_tags_sig TEXT UNIQUE,
+      display_name TEXT
+    ) STRICT
+  """
+  db_sqlite.exec conn, sql"CREATE INDEX post__ts ON post(ts)"
+  db_sqlite.exec conn, sql"CREATE INDEX post__parent__ts ON post(parent, ts)"
+  db_sqlite.exec conn, sql"CREATE INDEX post__public_key__ts ON post(public_key, ts)"
+  db_sqlite.exec conn, sql"CREATE INDEX post__visibility__ts ON post(visibility, ts)"
+  db_sqlite.exec conn, sql"CREATE INDEX post__visibility__parent__ts ON post(visibility, parent, ts)"
+  db_sqlite.exec conn, sql"CREATE INDEX post__visibility__parent__score ON post(visibility, parent, score)"
+  db_sqlite.exec conn, sql"CREATE INDEX post__visibility__public_key__parent__ts ON post(visibility, public_key, parent, ts)"
+  db_sqlite.exec conn, sql"CREATE INDEX post__visibility__parent__public_key__ts ON post(visibility, parent_public_key, ts)"
+
 proc init*(conn: PSqlite3) =
   var version = select[int](conn, getVersion, "PRAGMA user_version")[0]
   withTransaction(conn):
@@ -67,47 +112,32 @@ proc init*(conn: PSqlite3) =
       db_sqlite.exec conn, sql"""
         pragma page_size = 1024
       """
-      db_sqlite.exec conn, sql"""
-        CREATE TABLE user (
-          user_id INTEGER PRIMARY KEY AUTOINCREMENT,
-          ts INTEGER,
-          public_key TEXT UNIQUE,
-          public_key_algo TEXT,
-          tags TEXT,
-          tags_sig TEXT UNIQUE,
-          extra TEXT
-        ) STRICT
-      """
-      db_sqlite.exec conn, sql"CREATE INDEX user__ts ON user(ts)"
-      db_sqlite.exec conn, sql"CREATE INDEX user__public_key__ts ON user(public_key, ts)"
+      createTables(conn)
       db_sqlite.exec conn, sql"CREATE VIRTUAL TABLE user_search USING fts5 (user_id, attribute, value, value_unindexed UNINDEXED)"
-      db_sqlite.exec conn, sql"""
-        CREATE TABLE post (
-          post_id INTEGER PRIMARY KEY AUTOINCREMENT,
-          ts INTEGER,
-          content_sig TEXT UNIQUE,
-          content_sig_last TEXT UNIQUE,
-          public_key TEXT,
-          parent TEXT,
-          parent_public_key TEXT,
-          reply_count INTEGER,
-          distinct_reply_count INTEGER,
-          score INTEGER,
-          partition INTEGER,
-          visibility INTEGER,
-          tags TEXT,
-          extra TEXT
-        ) STRICT
-      """
-      db_sqlite.exec conn, sql"CREATE INDEX post__ts ON post(ts)"
-      db_sqlite.exec conn, sql"CREATE INDEX post__parent__ts ON post(parent, ts)"
-      db_sqlite.exec conn, sql"CREATE INDEX post__public_key__ts ON post(public_key, ts)"
-      db_sqlite.exec conn, sql"CREATE INDEX post__visibility__ts ON post(visibility, ts)"
-      db_sqlite.exec conn, sql"CREATE INDEX post__visibility__parent__ts ON post(visibility, parent, ts)"
-      db_sqlite.exec conn, sql"CREATE INDEX post__visibility__parent__score ON post(visibility, parent, score)"
-      db_sqlite.exec conn, sql"CREATE INDEX post__visibility__public_key__parent__ts ON post(visibility, public_key, parent, ts)"
-      db_sqlite.exec conn, sql"CREATE INDEX post__visibility__parent__public_key__ts ON post(visibility, parent_public_key, ts)"
       db_sqlite.exec conn, sql"CREATE VIRTUAL TABLE post_search USING fts5 (post_id, user_id, attribute, value, value_unindexed UNINDEXED)"
+      # version 1 does a full replacement of the user and post tables
+      # since createTables already uses the latest schema, we can skip it
+      version += 2
+      db_sqlite.exec conn, sql("PRAGMA user_version = " & $version)
+    if version == 1:
+      echo "MIGRATING..."
+      db_sqlite.exec conn, sql"ALTER TABLE user RENAME TO user_temp"
+      db_sqlite.exec conn, sql"ALTER TABLE post RENAME TO post_temp"
+      db_sqlite.exec conn, sql"DROP INDEX user__ts"
+      db_sqlite.exec conn, sql"DROP INDEX user__public_key__ts"
+      db_sqlite.exec conn, sql"DROP INDEX post__ts"
+      db_sqlite.exec conn, sql"DROP INDEX post__parent__ts"
+      db_sqlite.exec conn, sql"DROP INDEX post__public_key__ts"
+      db_sqlite.exec conn, sql"DROP INDEX post__visibility__ts"
+      db_sqlite.exec conn, sql"DROP INDEX post__visibility__parent__ts"
+      db_sqlite.exec conn, sql"DROP INDEX post__visibility__parent__score"
+      db_sqlite.exec conn, sql"DROP INDEX post__visibility__public_key__parent__ts"
+      db_sqlite.exec conn, sql"DROP INDEX post__visibility__parent__public_key__ts"
+      createTables(conn)
+      db_sqlite.exec conn, sql"INSERT INTO user SELECT *, NULL AS display_name FROM user_temp ORDER BY user_id"
+      db_sqlite.exec conn, sql"INSERT INTO post SELECT *, '' AS extra_tags, content_sig AS extra_tags_sig, '' AS display_name FROM post_temp ORDER BY post_id"
+      db_sqlite.exec conn, sql"DROP TABLE user_temp"
+      db_sqlite.exec conn, sql"DROP TABLE post_temp"
       version += 1
       db_sqlite.exec conn, sql("PRAGMA user_version = " & $version)
 
