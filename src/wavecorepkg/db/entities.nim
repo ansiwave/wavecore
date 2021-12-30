@@ -519,6 +519,9 @@ proc deleteUserPosts*(conn: PSqlite3, publicKey: string) =
     db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), user.user_id)
     if step(stmt) != SQLITE_DONE:
       db_sqlite.dbError(conn)
+  db.withStatement(conn, "UPDATE user SET display_name = NULL WHERE user_id = ?", stmt):
+    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), user.user_id)
+    if step(stmt) != SQLITE_DONE: db_sqlite.dbError(conn)
 
 const modCommandsExtra = ["modhide"].toHashSet
 
