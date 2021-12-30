@@ -34,7 +34,6 @@ const
   dbDir* = "db"
   dbFilename* = "board.db"
   miscDir* = "misc"
-  purgatoryDir* = "purgatory"
   defaultBoard* =
     when defined(release):
       "kEKgeSd3-74Uy0bfOOJ9mj0qW3KpMpXBGrrQdUv190E"
@@ -52,12 +51,6 @@ proc ansiwavez*(board: string, filename: string, isUrl: bool = false): string =
     boardsDir & "/" & board & "/" & ansiwavesDir & "/" & filename & ".ansiwavez"
   else:
     boardsDir / board / ansiwavesDir / filename & ".ansiwavez"
-
-proc dbPurgatory*(board: string, isUrl: bool = false): string =
-  if isUrl:
-    boardsDir & "/" & board & "/" & miscDir & "/" & purgatoryDir & "/" & dbFilename
-  else:
-    boardsDir / board / miscDir / purgatoryDir / dbFilename
 
 proc encode*[T](data: T): string =
   result = base64.encode(data, safe = true)
