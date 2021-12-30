@@ -123,7 +123,20 @@ proc editTags*(details: ServerDetails, board: string, tags: entities.Tags, tagsS
       if extra:
         entities.editExtraTags(conn, tags, tagsSigLast, board, key)
       else:
-        entities.editTags(conn, tags, tagsSigLast, board, key)
+        var userToPurge: string
+        entities.editTags(conn, tags, tagsSigLast, board, key, userToPurge)
+        if userToPurge != "":
+          # purge this user completely
+          os.removeFile(details.staticFileDir / paths.ansiwavez(board, userToPurge))
+          var offset = 0
+          while true:
+            let posts = entities.selectUserPosts(conn, userToPurge, offset)
+            if posts.len == 0:
+              break
+            for post in posts:
+              os.removeFile(details.staticFileDir / paths.ansiwavez(board, post.content.sig))
+            offset += entities.limit
+          entities.deleteUserPosts(conn, userToPurge)
 
 proc sendAction[T](actionChan: ptr Channel[T], action: T): string =
   let error = cast[ptr Channel[string]](

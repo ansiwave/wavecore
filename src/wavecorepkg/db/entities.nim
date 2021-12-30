@@ -423,10 +423,10 @@ proc insertUser*(conn: PSqlite3, entity: User) =
   insertUser(conn, entity, id)
 
 const
-  modRoles = ["modleader", "moderator"].toHashSet
-  modCommands = modRoles + ["modban", "modhide"].toHashSet
+  modCommandsRestricted = ["modleader", "moderator", "modpurge"].toHashSet
+  modCommands = modCommandsRestricted + ["modban", "modhide"].toHashSet
 
-proc editTags*(conn: PSqlite3, tags: Tags, tagsSigLast: string, board: string, key: string) =
+proc editTags*(conn: PSqlite3, tags: Tags, tagsSigLast: string, board: string, key: string, userToPurge: var string) =
   if tagsSigLast == board:
     raise newException(Exception, "Cannot tag the sysop")
 
@@ -472,8 +472,8 @@ proc editTags*(conn: PSqlite3, tags: Tags, tagsSigLast: string, board: string, k
     if "moderator" notin sourceTags and "modleader" notin sourceTags:
       raise newException(Exception, "Only the sysop or moderators can edit tags")
     let changedTags = oldTags.symmetricDifference(newTags)
-    if changedTags - modRoles != changedTags and "modleader" notin sourceTags:
-      raise newException(Exception, "Only modleaders can change someone's moderator status")
+    if changedTags - modCommandsRestricted != changedTags and "modleader" notin sourceTags:
+      raise newException(Exception, "Only modleaders can change that tag")
     if changedTags - modCommands != changedTags and "modleader" in oldTags and "modleader" notin sourceTags:
       raise newException(Exception, "Only modleaders can change mod tags of another modleader")
 
@@ -494,7 +494,11 @@ proc editTags*(conn: PSqlite3, tags: Tags, tagsSigLast: string, board: string, k
     if step(stmt) != SQLITE_DONE:
       db_sqlite.dbError(conn)
 
-  if "modhide" in newTags and "modhide" notin oldTags:
+  if "modpurge" in newTags:
+    if "modban" notin newTags:
+      raise newException(Exception, "To add the modpurge tag, you must add modban as well")
+    userToPurge = targetUser.public_key
+  elif "modhide" in newTags and "modhide" notin oldTags:
     db.withStatement(conn, "UPDATE post SET visibility = ? WHERE public_key = ? AND visibility = 1", stmt):
       db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), 0, targetUser.public_key)
       if step(stmt) != SQLITE_DONE:
@@ -504,6 +508,22 @@ proc editTags*(conn: PSqlite3, tags: Tags, tagsSigLast: string, board: string, k
       db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), 1, targetUser.public_key)
       if step(stmt) != SQLITE_DONE:
         db_sqlite.dbError(conn)
+
+proc editTags*(conn: PSqlite3, tags: Tags, tagsSigLast: string, board: string, key: string) =
+  var userToPurge: string
+  editTags(conn, tags, tagsSigLast, board, key, userToPurge)
+
+proc deleteUserPosts*(conn: PSqlite3, publicKey: string) =
+  let user = selectUser(conn, publicKey)
+  var stmt: PStmt
+  db.withStatement(conn, "DELETE FROM post WHERE public_key = ?", stmt):
+    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), publicKey)
+    if step(stmt) != SQLITE_DONE:
+      db_sqlite.dbError(conn)
+  db.withStatement(conn, "DELETE FROM post_search WHERE user_id = ?", stmt):
+    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), user.user_id)
+    if step(stmt) != SQLITE_DONE:
+      db_sqlite.dbError(conn)
 
 const modCommandsExtra = ["modhide"].toHashSet
 

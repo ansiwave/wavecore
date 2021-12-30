@@ -553,6 +553,14 @@ test "submit ansiwaves over http":
       var res = client.submit(c, "ansiwave", body)
       client.get(res, true)
       check res.value.kind == client.Valid
+      check os.fileExists(bbsDir / paths.ansiwavez(sysopPublicKey, sig))
+    # purge alice from the db
+    block:
+      let (body, sig) = common.signWithHeaders(sysopKeys, "modban modpurge", alice.public_key, common.Tags, sysopPublicKey)
+      var res = client.submit(c, "ansiwave", body)
+      client.get(res, true)
+      check res.value.kind == client.Valid
+      check not os.fileExists(bbsDir / paths.ansiwavez(sysopPublicKey, sig))
   finally:
     os.removeFile(dbPath)
     server.stop(s)
