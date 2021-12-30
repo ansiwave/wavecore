@@ -519,32 +519,40 @@ test "retrieve sqlite db via http":
     os.removeFile(dbPath)
     server.stop(s)
 
-test "submit an ansiwave":
+test "submit ansiwaves over http":
   var s = server.initServer("localhost", port, bbsDir)
   server.start(s)
   var c = client.initClient(address)
   client.start(c)
   try:
-    # create test db
-    var subboard: Post
-    db.withOpen(conn, dbPath, false):
-      db.init(conn)
-      let sysop = initUser(sysopPublicKey)
-      server.editPost(s.details, sysopPublicKey, initContent(common.signWithHeaders(sysopKeys, "Welcome to my BBS", sysop.public_key, common.Edit, sysopPublicKey), sysop.public_key), sysop.public_key)
-      subboard = entities.Post(parent: sysop.public_key, public_key: sysop.public_key, content: initContent(common.signWithHeaders(sysopKeys, "General Discussion", sysop.public_key, common.New, sysopPublicKey)))
-      server.insertPost(s.details, sysopPublicKey, subboard)
-    let aliceKeys = ed25519.initKeyPair()
+    # create banner for BBS
     block:
-      let (body, sig) = common.signWithHeaders(aliceKeys, "Hi i'm alice", subboard.content.sig, common.New, sysopPublicKey)
+      let (body, sig) = common.signWithHeaders(sysopKeys, "Welcome to my BBS", sysopPublicKey, common.Edit, sysopPublicKey)
       var res = client.submit(c, "ansiwave", body)
       client.get(res, true)
       check res.value.kind == client.Valid
+    # create subboard
+    let (subboardBody, subboardSig) = common.signWithHeaders(sysopKeys, "General Discussion", sysopPublicKey, common.New, sysopPublicKey)
+    block:
+      var res = client.submit(c, "ansiwave", subboardBody)
+      client.get(res, true)
+      check res.value.kind == client.Valid
+    let
+      aliceKeys = ed25519.initKeyPair()
+      alice = initUser(paths.encode(aliceKeys.public))
+    # post rejected because it's too big
     block:
       const hulk = staticRead("hulk.ansiwave")
-      let (body, sig) = common.signWithHeaders(aliceKeys, strutils.repeat(hulk, 15), subboard.content.sig, common.New, sysopPublicKey)
+      let (body, sig) = common.signWithHeaders(aliceKeys, strutils.repeat(hulk, 15), subboardSig, common.New, sysopPublicKey)
       var res = client.submit(c, "ansiwave", body)
       client.get(res, true)
       check res.value.kind == client.Error
+    # new post
+    block:
+      let (body, sig) = common.signWithHeaders(aliceKeys, "Hi i'm alice", subboardSig, common.New, sysopPublicKey)
+      var res = client.submit(c, "ansiwave", body)
+      client.get(res, true)
+      check res.value.kind == client.Valid
   finally:
     os.removeFile(dbPath)
     server.stop(s)
