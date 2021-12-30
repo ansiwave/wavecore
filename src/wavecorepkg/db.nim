@@ -67,7 +67,6 @@ proc createTables(conn: PSqlite3) =
       tags TEXT,
       tags_sig TEXT UNIQUE,
       extra TEXT,
-      tags_editor TEXT,
       display_name TEXT UNIQUE
     ) STRICT
   """
@@ -91,7 +90,6 @@ proc createTables(conn: PSqlite3) =
       extra TEXT,
       extra_tags TEXT,
       extra_tags_sig TEXT UNIQUE,
-      extra_tags_editor TEXT,
       display_name TEXT
     ) STRICT
   """
@@ -136,8 +134,8 @@ proc init*(conn: PSqlite3) =
       db_sqlite.exec conn, sql"DROP INDEX post__visibility__public_key__parent__ts"
       db_sqlite.exec conn, sql"DROP INDEX post__visibility__parent__public_key__ts"
       createTables(conn)
-      db_sqlite.exec conn, sql"INSERT INTO user SELECT *, NULL AS tags_editor, NULL AS display_name FROM user_temp ORDER BY user_id"
-      db_sqlite.exec conn, sql"INSERT INTO post SELECT *, '' AS extra_tags, content_sig AS extra_tags_sig, NULL AS extra_tags_editor, '' AS display_name FROM post_temp ORDER BY post_id"
+      db_sqlite.exec conn, sql"INSERT INTO user SELECT *, NULL AS display_name FROM user_temp ORDER BY user_id"
+      db_sqlite.exec conn, sql"INSERT INTO post SELECT *, '' AS extra_tags, content_sig AS extra_tags_sig, '' AS display_name FROM post_temp ORDER BY post_id"
       db_sqlite.exec conn, sql"DROP TABLE user_temp"
       db_sqlite.exec conn, sql"DROP TABLE post_temp"
       echo "FINISHED MIGRATING"
