@@ -42,15 +42,12 @@ EM_JS(void, wavecore_set_innerhtml, (const char* selector, const char* html), {
   elem.innerHTML = UTF8ToString(html);
 });
 
-EM_JS(void, wavecore_set_display, (const char* selector, const char* display), {
-  var elem = document.querySelector(UTF8ToString(selector));
-  elem.style.display = UTF8ToString(display);
+EM_JS(int, wavecore_get_client_width, (), {
+  return document.documentElement.clientWidth;
 });
 
-EM_JS(void, wavecore_set_size_max, (const char* selector, float ratio, int xadd, int yadd), {
-  var elem = document.querySelector(UTF8ToString(selector));
-  elem.width = document.documentElement.clientWidth * ratio + xadd;
-  elem.height = document.documentElement.clientHeight * ratio + yadd;
+EM_JS(int, wavecore_get_client_height, (), {
+  return document.documentElement.clientHeight;
 });
 
 EM_JS(void, wavecore_browse_file, (const char* callback), {

@@ -94,8 +94,8 @@ proc emscripten_worker_respond(data: cstring, size: cint) {.importc.}
 proc emscripten_async_wget_data(url: cstring, arg: pointer, onload: pointer, onerror: pointer) {.importc.}
 proc wavecore_fetch(url: cstring, verb: cstring, headers: cstring, body: cstring): cstring {.importc.}
 proc wavecore_set_innerhtml(selector: cstring, html: cstring) {.importc.}
-proc wavecore_set_display(selector: cstring, display: cstring) {.importc.}
-proc wavecore_set_size_max(selector: cstring, ratio: cfloat, xadd: cint, yadd: cint) {.importc.}
+proc wavecore_get_client_width(): cint {.importc.}
+proc wavecore_get_client_height(): cint {.importc.}
 proc wavecore_browse_file(callback: cstring) {.importc.}
 proc wavecore_get_pixel_density(): cfloat {.importc.}
 proc wavecore_start_download(data_uri: cstring, filename: cstring) {.importc.}
@@ -139,11 +139,11 @@ proc fetch*(request: Request): Response =
 proc setInnerHtml*(selector: string, html: string) =
   wavecore_set_innerhtml(selector, html)
 
-proc setDisplay*(selector: string, display: string) =
-  wavecore_set_display(selector, display)
+proc getClientWidth*(): int32 =
+  wavecore_get_client_width()
 
-proc setSizeMax*(selector: string, ratio: float32, xadd: int32, yadd: int32) =
-  wavecore_set_size_max(selector, ratio, xadd, yadd)
+proc getClientHeight*(): int32 =
+  wavecore_get_client_height()
 
 proc browseFile*(callback: string) =
   wavecore_browse_file(callback)
