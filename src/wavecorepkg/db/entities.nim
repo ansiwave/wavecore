@@ -346,7 +346,8 @@ proc search*(conn: PSqlite3, kind: SearchKind, term: string, offset: int = 0): s
       of UserTags:
         """
           SELECT public_key, tags FROM user
-          WHERE user_id IN (SELECT user_id FROM user_search WHERE attribute MATCH 'tags' AND value MATCH ? ORDER BY rank)
+          WHERE user_id IN (SELECT user_id FROM user_search WHERE attribute MATCH 'tags' AND value MATCH ?)
+          ORDER BY ts DESC
           LIMIT $1
           OFFSET $2
         """.format(limit, offset)
