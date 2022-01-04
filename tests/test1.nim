@@ -71,7 +71,7 @@ os.createDir(bbsDir / paths.boardsDir / sysopPublicKey / paths.ansiwavesDir)
 os.createDir(bbsDir / paths.boardsDir / sysopPublicKey / paths.dbDir)
 os.createDir(bbsDir / paths.boardsDir / sysopPublicKey / paths.miscDir / paths.limboDir / paths.ansiwavesDir)
 os.createDir(bbsDir / paths.boardsDir / sysopPublicKey / paths.miscDir / paths.limboDir / paths.dbDir)
-paths.readUrl = "http://localhost:" & $port & "/" & dbDirs
+paths.address = "http://localhost:" & $port
 vfs.register()
 
 test "Full lifecycle":

@@ -21,12 +21,6 @@ const
 proc initClient*(address: string, postAddress: string = address): Client =
   Client(kind: Online, address: address, postAddress: postAddress)
 
-proc setReadUrl*(client: Client, readUrl: string) =
-  when defined(emscripten):
-    emscripten.sendSetReadUrl(client, readUrl)
-  else:
-    paths.readUrl = readUrl
-
 proc request*(url: string, data: string, verb: string): string =
   let response: Response = fetch(Request(url: urlly.parseUrl(url), verb: verb, body: data))
   if response.code != 200:

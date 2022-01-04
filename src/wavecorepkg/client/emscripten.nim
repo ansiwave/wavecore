@@ -39,11 +39,9 @@ type
     of Error:
       error*: string
   ActionKind* = enum
-    SetReadUrl, Stop, Fetch, QueryUser, QueryPost, QueryPostChildren, QueryUserPosts, QueryUserReplies, SearchPosts,
+    Stop, Fetch, QueryUser, QueryPost, QueryPostChildren, QueryUserPosts, QueryUserReplies, SearchPosts,
   Action* = object
     case kind*: ActionKind
-    of SetReadUrl:
-      readUrl*: string
     of Stop:
       discard
     of Fetch:
@@ -226,10 +224,6 @@ proc sendAction*(client: Client, action: Action, chan: ptr Channel) =
   let data = flatty.toFlatty(WorkerRequest(action: action, channel: cast[int64](chan)))
   emscripten_call_worker(client.worker, "recvAction", data, data.len.cint, callback, nil)
 
-proc sendSetReadUrl*(client: Client, readUrl: string) =
-  let data = flatty.toFlatty(WorkerRequest(action: Action(kind: SetReadUrl, readUrl: readUrl)))
-  emscripten_call_worker(client.worker, "recvAction", data, data.len.cint, nil, nil)
-
 proc sendFetch*(client: Client, request: Request, chan: ChannelRef) =
   if request.verb != "get" or request.headers.len > 0:
     sendAction(client, Action(kind: Fetch, request: request), chan)
@@ -276,11 +270,9 @@ proc recvAction(data: pointer, size: cint) {.exportc.} =
   let
     workerRequest = flatty.fromFlatty(input, WorkerRequest)
     action = workerRequest.action
+  paths.readUrl = paths.initUrl(paths.address, action.dbFilename)
   let res =
     case action.kind:
-    of SetReadUrl:
-      paths.readUrl = action.readUrl
-      ""
     of Stop:
       return
     of Fetch:
