@@ -162,7 +162,11 @@ proc editTags*(details: ServerDetails, board: string, tags: entities.Tags, tagsS
             if posts.len == 0:
               break
             for post in posts:
-              discard entities.insertPost(conn, post, dbPrefix = alias & ".")
+              if post.parent == "" or entities.existsPost(conn, post.parent, dbPrefix = alias & "."):
+                discard entities.insertPost(conn, post, dbPrefix = alias & ".")
+              else:
+                echo "WARNING: Not moving invalid post from limbo: " & post.content.sig
+                os.removeFile(details.staticFileDir / paths.ansiwavez(board, post.content.sig, limbo = true))
             offset += entities.limit
           # move ansiwavez files
           offset = 0

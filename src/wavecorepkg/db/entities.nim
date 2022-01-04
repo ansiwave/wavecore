@@ -93,6 +93,17 @@ proc selectPost*(conn: PSqlite3, sig: string, dbPrefix: string = ""): Post =
   else:
     raise newException(Exception, "Can't select post")
 
+proc existsPost*(conn: PSqlite3, sig: string, dbPrefix: string = ""): bool =
+  let query =
+    """
+      SELECT post_id, ts, content_sig, content_sig_last, public_key, parent, reply_count, score, partition, tags, extra_tags, extra_tags_sig FROM $1post
+      WHERE content_sig = ?
+    """.format(dbPrefix)
+  #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), sig):
+  #  echo x
+  let ret = db.select[Post](conn, initPost, query, sig)
+  ret.len == 1
+
 proc selectPostParentIds(conn: PSqlite3, id: int64, dbPrefix: string = ""): string =
   let query =
     """
