@@ -169,7 +169,7 @@ proc editTags*(details: ServerDetails, board: string, tags: entities.Tags, tagsS
                 os.moveFile(src, dest)
               discard entities.insertPost(conn, post, dbPrefix = alias & ".")
             offset += entities.limit
-          entities.deleteUserPosts(conn, tagsSigLast)
+          entities.deleteUser(conn, tagsSigLast)
   db.withOpen(conn, details.staticFileDir / paths.db(board), false):
     db.withTransaction(conn):
       if extra:
@@ -187,7 +187,7 @@ proc editTags*(details: ServerDetails, board: string, tags: entities.Tags, tagsS
             for post in posts:
               os.removeFile(details.staticFileDir / paths.ansiwavez(board, post.content.sig))
             offset += entities.limit
-          entities.deleteUserPosts(conn, userToPurge)
+          entities.deleteUser(conn, userToPurge)
 
 proc sendAction[T](actionChan: ptr Channel[T], action: T): string =
   let error = cast[ptr Channel[string]](

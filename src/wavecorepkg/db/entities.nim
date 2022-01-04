@@ -522,8 +522,6 @@ proc editTags*(conn: PSqlite3, tags: Tags, tagsSigLast: string, board: string, k
       db_sqlite.dbError(conn)
 
   if "modpurge" in newTags:
-    if "modban" notin newTags:
-      raise newException(Exception, "To add the modpurge tag, you must add modban as well")
     userToPurge = targetUser.public_key
   elif "modhide" in newTags and "modhide" notin oldTags:
     db.withStatement(conn, "UPDATE post SET visibility = ? WHERE public_key = ? AND visibility = 1", stmt):
@@ -540,7 +538,7 @@ proc editTags*(conn: PSqlite3, tags: Tags, tagsSigLast: string, board: string, k
   var userToPurge: string
   editTags(conn, tags, tagsSigLast, board, key, userToPurge)
 
-proc deleteUserPosts*(conn: PSqlite3, publicKey: string) =
+proc deleteUser*(conn: PSqlite3, publicKey: string) =
   let user = selectUser(conn, publicKey)
   var stmt: PStmt
   db.withStatement(conn, "DELETE FROM post WHERE public_key = ?", stmt):
@@ -551,7 +549,10 @@ proc deleteUserPosts*(conn: PSqlite3, publicKey: string) =
     db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), user.user_id)
     if step(stmt) != SQLITE_DONE:
       db_sqlite.dbError(conn)
-  db.withStatement(conn, "UPDATE user SET display_name = NULL WHERE user_id = ?", stmt):
+  db.withStatement(conn, "DELETE FROM user WHERE public_key = ?", stmt):
+    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), publicKey)
+    if step(stmt) != SQLITE_DONE: db_sqlite.dbError(conn)
+  db.withStatement(conn, "DELETE FROM user_search WHERE user_id = ?", stmt):
     db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), user.user_id)
     if step(stmt) != SQLITE_DONE: db_sqlite.dbError(conn)
 
