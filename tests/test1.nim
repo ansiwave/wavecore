@@ -158,7 +158,7 @@ test "query users asynchronously":
     block:
       var response = client.queryUser(c, dbDirs, "STUFF")
       client.get(response, true)
-      check response.value.kind == client.Error
+      check response.value.valid == entities.User()
   finally:
     os.removeFile(dbPath)
     server.stop(s)
