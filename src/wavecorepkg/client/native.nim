@@ -173,7 +173,10 @@ proc recvAction(client: Client) {.thread.} =
           of Offline:
             (client.path / trimPath(action.dbFilename), false)
         db.withOpen(conn, path, useHttp):
-          action.userResponse[].send(Result[entities.User](kind: Valid, valid: entities.selectUser(conn, action.publicKey)))
+          if entities.existsUser(conn, action.publicKey):
+            action.userResponse[].send(Result[entities.User](kind: Valid, valid: entities.selectUser(conn, action.publicKey)))
+          else:
+            action.userResponse[].send(Result[entities.User](kind: Valid, valid: entities.User()))
       except Exception as ex:
         action.userResponse[].send(Result[entities.User](kind: Error, error: ex.msg))
     of QueryPost:

@@ -290,7 +290,11 @@ proc recvAction(data: pointer, size: cint) {.exportc.} =
       try:
         var s: string
         db.withOpen(conn, action.dbFilename, true):
-          let user = entities.selectUser(conn, action.publicKey)
+          let user =
+            if entities.existsUser(conn, action.publicKey):
+              entities.selectUser(conn, action.publicKey)
+            else:
+              entities.User()
           s = flatty.toFlatty(Result[entities.User](kind: Valid, valid: user))
         s
       except Exception as ex:
