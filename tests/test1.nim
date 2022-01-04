@@ -600,7 +600,7 @@ test "limbo":
       var res = client.submit(c, "ansiwave", body)
       client.get(res, true)
       check res.value.kind == client.Valid
-      check os.fileExists(bbsDir / paths.ansiwavezLimbo(sysopPublicKey, sig))
+      check os.fileExists(bbsDir / paths.ansiwavez(sysopPublicKey, sig, limbo = true))
     # edit post
     block:
       let (body, sig) = common.signWithHeaders(aliceKeys, "Hi i'm alice!!", postSig1, common.Edit, sysopPublicKey)
@@ -615,15 +615,15 @@ test "limbo":
       var res = client.submit(c, "ansiwave", body)
       client.get(res, true)
       check res.value.kind == client.Valid
-      check os.fileExists(bbsDir / paths.ansiwavezLimbo(sysopPublicKey, sig))
+      check os.fileExists(bbsDir / paths.ansiwavez(sysopPublicKey, sig, limbo = true))
     # bring alice out of limbo
     block:
       let (body, sig) = common.signWithHeaders(sysopKeys, "", alice.public_key, common.Tags, sysopPublicKey)
       var res = client.submit(c, "ansiwave", body)
       client.get(res, true)
       check res.value.kind == client.Valid
-      check not os.fileExists(bbsDir / paths.ansiwavezLimbo(sysopPublicKey, postSig1))
-      check not os.fileExists(bbsDir / paths.ansiwavezLimbo(sysopPublicKey, postSig2))
+      check not os.fileExists(bbsDir / paths.ansiwavez(sysopPublicKey, postSig1, limbo = true))
+      check not os.fileExists(bbsDir / paths.ansiwavez(sysopPublicKey, postSig2, limbo = true))
       check os.fileExists(bbsDir / paths.ansiwavez(sysopPublicKey, postSig1))
       check os.fileExists(bbsDir / paths.ansiwavez(sysopPublicKey, postSig2))
   finally:

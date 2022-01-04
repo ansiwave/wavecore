@@ -41,29 +41,29 @@ const
     else:
       "Q8BTY324cY7nl5kce6ctEfk8IRIrtsM8NfKL29B-3UE"
 
-proc db*(board: string, isUrl: bool = false): string =
+proc db*(board: string, isUrl: bool = false, limbo: bool = false): string =
   if isUrl:
-    boardsDir & "/" & board & "/" & dbDir & "/" & dbFilename
+    if limbo:
+      boardsDir & "/" & board & "/" & miscDir & "/" & limboDir & "/" & dbDir & "/" & dbFilename
+    else:
+      boardsDir & "/" & board & "/" & dbDir & "/" & dbFilename
   else:
-    boardsDir / board / dbDir / dbFilename
+    if limbo:
+      boardsDir / board / miscDir / limboDir / dbDir / dbFilename
+    else:
+      boardsDir / board / dbDir / dbFilename
 
-proc ansiwavez*(board: string, filename: string, isUrl: bool = false): string =
+proc ansiwavez*(board: string, filename: string, isUrl: bool = false, limbo: bool = false): string =
   if isUrl:
-    boardsDir & "/" & board & "/" & ansiwavesDir & "/" & filename & ".ansiwavez"
+    if limbo:
+      boardsDir & "/" & board & "/" & miscDir & "/" & limboDir & "/" & ansiwavesDir & "/" & filename & ".ansiwavez"
+    else:
+      boardsDir & "/" & board & "/" & ansiwavesDir & "/" & filename & ".ansiwavez"
   else:
-    boardsDir / board / ansiwavesDir / filename & ".ansiwavez"
-
-proc dbLimbo*(board: string, isUrl: bool = false): string =
-  if isUrl:
-    boardsDir & "/" & board & "/" & miscDir & "/" & limboDir & "/" & dbDir & "/" & dbFilename
-  else:
-    boardsDir / board / miscDir / limboDir / dbDir / dbFilename
-
-proc ansiwavezLimbo*(board: string, filename: string, isUrl: bool = false): string =
-  if isUrl:
-    boardsDir & "/" & board & "/" & miscDir & "/" & limboDir & "/" & ansiwavesDir & "/" & filename & ".ansiwavez"
-  else:
-    boardsDir / board / miscDir / limboDir / ansiwavesDir / filename & ".ansiwavez"
+    if limbo:
+      boardsDir / board / miscDir / limboDir / ansiwavesDir / filename & ".ansiwavez"
+    else:
+      boardsDir / board / ansiwavesDir / filename & ".ansiwavez"
 
 proc encode*[T](data: T): string =
   result = base64.encode(data, safe = true)

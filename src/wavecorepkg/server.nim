@@ -110,12 +110,12 @@ proc insertPost*(details: ServerDetails, board: string, entity: entities.Post) =
         writeFile(details.staticFileDir / paths.ansiwavez(board, sig), entity.content.value.compressed)
   # insert into limbo
   if limbo:
-    db.withOpen(conn, details.staticFileDir / paths.dbLimbo(board), false):
+    db.withOpen(conn, details.staticFileDir / paths.db(board, limbo = true), false):
       db.withTransaction(conn):
         if not entities.existsUser(conn, entity.public_key):
           entities.insertUser(conn, entities.User(public_key: entity.public_key, tags: entities.Tags(value: "modlimbo")))
         let sig = entities.insertPost(conn, entity, limbo = true)
-        writeFile(details.staticFileDir / paths.ansiwavezLimbo(board, sig), entity.content.value.compressed)
+        writeFile(details.staticFileDir / paths.ansiwavez(board, sig, limbo = true), entity.content.value.compressed)
 
 proc editPost*(details: ServerDetails, board: string, content: entities.Content, key: string) =
   var limbo = false
@@ -134,16 +134,16 @@ proc editPost*(details: ServerDetails, board: string, content: entities.Content,
         writeFile(details.staticFileDir / paths.ansiwavez(board, sig), content.value.compressed)
   # insert into limbo
   if limbo:
-    db.withOpen(conn, details.staticFileDir / paths.dbLimbo(board), false):
+    db.withOpen(conn, details.staticFileDir / paths.db(board, limbo = true), false):
       db.withTransaction(conn):
         if not entities.existsUser(conn, key):
           entities.insertUser(conn, entities.User(public_key: key, tags: entities.Tags(value: "modlimbo")))
         let sig = entities.editPost(conn, content, key)
-        writeFile(details.staticFileDir / paths.ansiwavezLimbo(board, sig), content.value.compressed)
+        writeFile(details.staticFileDir / paths.ansiwavez(board, sig, limbo = true), content.value.compressed)
 
 proc editTags*(details: ServerDetails, board: string, tags: entities.Tags, tagsSigLast: string, key: string, extra: bool) =
   # if we're editing a user in limbo
-  db.withOpen(conn, details.staticFileDir / paths.dbLimbo(board), false):
+  db.withOpen(conn, details.staticFileDir / paths.db(board, limbo = true), false):
     db.withTransaction(conn):
       if entities.existsUser(conn, tagsSigLast):
         let
@@ -163,7 +163,7 @@ proc editTags*(details: ServerDetails, board: string, tags: entities.Tags, tagsS
               break
             for post in posts:
               let
-                src = details.staticFileDir / paths.ansiwavezLimbo(board, post.content.sig)
+                src = details.staticFileDir / paths.ansiwavez(board, post.content.sig, limbo = true)
                 dest = details.staticFileDir / paths.ansiwavez(board, post.content.sig)
               if os.fileExists(src):
                 os.moveFile(src, dest)
@@ -458,7 +458,7 @@ proc recvAction(data: ThreadData) {.thread.} =
         if action.board notin initializedBoards:
           db.withOpen(conn, data.details.staticFileDir / paths.db(action.board), false):
             db.init(conn)
-          db.withOpen(conn, data.details.staticFileDir / paths.dbLimbo(action.board), false):
+          db.withOpen(conn, data.details.staticFileDir / paths.db(action.board, limbo = true), false):
             db.init(conn)
           initializedBoards.incl(action.board)
       except Exception as ex:
