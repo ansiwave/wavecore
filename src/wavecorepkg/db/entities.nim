@@ -79,12 +79,12 @@ proc initPost(stmt: PStmt): Post =
     else:
       discard
 
-proc selectPost*(conn: PSqlite3, sig: string): Post =
+proc selectPost*(conn: PSqlite3, sig: string, dbPrefix: string = ""): Post =
   let query =
     """
-      SELECT post_id, ts, content_sig, content_sig_last, public_key, parent, reply_count, score, partition, tags, extra_tags, extra_tags_sig FROM post
+      SELECT post_id, ts, content_sig, content_sig_last, public_key, parent, reply_count, score, partition, tags, extra_tags, extra_tags_sig FROM $1post
       WHERE content_sig = ?
-    """
+    """.format(dbPrefix)
   #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), sig):
   #  echo x
   let ret = db.select[Post](conn, initPost, query, sig)
@@ -93,12 +93,12 @@ proc selectPost*(conn: PSqlite3, sig: string): Post =
   else:
     raise newException(Exception, "Can't select post")
 
-proc selectPostParentIds(conn: PSqlite3, id: int64): string =
-  const query =
+proc selectPostParentIds(conn: PSqlite3, id: int64, dbPrefix: string = ""): string =
+  let query =
     """
-      SELECT value AS parentids FROM post_search
+      SELECT value AS parentids FROM $1post_search
       WHERE post_id MATCH ? AND attribute MATCH 'parentids'
-    """
+    """.format(dbPrefix)
   proc init(stmt: PStmt): tuple[parent_ids: string] =
     var cols = sqlite3.column_count(stmt)
     for col in 0 .. cols-1:
@@ -127,6 +127,19 @@ proc selectUserPosts*(conn: PSqlite3, publicKey: string, offset: int = 0): seq[P
       SELECT post_id, ts, content_sig, content_sig_last, public_key, parent, reply_count, score, partition, tags, extra_tags, extra_tags_sig FROM post
       WHERE public_key = ? AND parent != ''
       ORDER BY ts DESC
+      LIMIT $1
+      OFFSET $2
+    """.format(limit, offset)
+  #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), publicKey):
+  #  echo x
+  sequtils.toSeq(db.select[Post](conn, initPost, query, publicKey))
+
+proc selectAllUserPosts*(conn: PSqlite3, publicKey: string, offset: int = 0): seq[Post] =
+  let query =
+    """
+      SELECT post_id, ts, content_sig, content_sig_last, public_key, parent, reply_count, score, partition, tags, extra_tags, extra_tags_sig FROM post
+      WHERE public_key = ?
+      ORDER BY ts ASC
       LIMIT $1
       OFFSET $2
     """.format(limit, offset)
@@ -177,7 +190,18 @@ proc selectUser*(conn: PSqlite3, publicKey: string): User =
   else:
     raise newException(Exception, "Can't select user")
 
-proc insertPost*(conn: PSqlite3, e: Post, id: var int64): string =
+proc existsUser*(conn: PSqlite3, publicKey: string): bool =
+  const query =
+    """
+      SELECT user_id, public_key, tags, tags_sig FROM user
+      WHERE public_key = ?
+    """
+  #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), publicKey):
+  #  echo x
+  let ret = db.select[User](conn, initUser, query, publicKey)
+  ret.len == 1
+
+proc insertPost*(conn: PSqlite3, e: Post, id: var int64, dbPrefix: string = "", limbo: bool = false): string =
   let sourceUser = selectUser(conn, e.public_key)
   if "modban" in common.parseTags(sourceUser.tags.value):
     raise newException(Exception, "You are banned")
@@ -185,37 +209,44 @@ proc insertPost*(conn: PSqlite3, e: Post, id: var int64): string =
   var stmt: PStmt
 
   let
-    parentIds =
-      # top level
-      if e.parent == "":
-        ""
-      # reply to top level
-      elif e.parent == e.public_key:
-        ""
+    (parentIds, parentPublicKey) =
+      if limbo:
+        (parentIds: "", parentPublicKey: "")
       else:
-        let
-          parentId = selectPost(conn, e.parent).post_id
-          parentParentIds = selectPostParentIds(conn, parentId)
-        if parentParentIds.len == 0:
-          $parentId
-        else:
-          parentParentIds & ", " & $parentId
-    parentPublicKey =
-      # top level
-      if e.parent == "":
-        ""
-      # reply to top level
-      elif e.parent == e.public_key:
-        e.public_key
-      else:
-        let parentPost = selectPost(conn, e.parent)
-        # posts that reply to a top level post (i.e. a user's banner)
-        # may only come from the user themself.
-        # they would've hit the second branch in this conditional
-        # so at this point we can just throw an exception if necessary.
-        if parentPost.parent == "":
-          raise newException(Exception, "Posting here is not allowed")
-        parentPost.public_key
+        (
+          parentIds:
+            # top level
+            if e.parent == "":
+              ""
+            # reply to top level
+            elif e.parent == e.public_key:
+              ""
+            else:
+              let
+                parentId = selectPost(conn, e.parent, dbPrefix).post_id
+                parentParentIds = selectPostParentIds(conn, parentId, dbPrefix)
+              if parentParentIds.len == 0:
+                $parentId
+              else:
+                parentParentIds & ", " & $parentId
+          ,
+          parentPublicKey:
+            # top level
+            if e.parent == "":
+              ""
+            # reply to top level
+            elif e.parent == e.public_key:
+              e.public_key
+            else:
+              let parentPost = selectPost(conn, e.parent, dbPrefix)
+              # posts that reply to a top level post (i.e. a user's banner)
+              # may only come from the user themself.
+              # they would've hit the second branch in this conditional
+              # so at this point we can just throw an exception if necessary.
+              if parentPost.parent == "":
+                raise newException(Exception, "Posting here is not allowed")
+              parentPost.public_key
+        )
     # posts without a parent are considered "top level" (their sig is the user's public key)
     sig =
       if e.parent == "":
@@ -227,7 +258,7 @@ proc insertPost*(conn: PSqlite3, e: Post, id: var int64): string =
     visibility = if "modhide" in common.parseTags(sourceUser.tags.value): 0 else: 1
     ts = times.toUnix(times.getTime())
 
-  db.withStatement(conn, "INSERT INTO post (ts, content_sig, content_sig_last, public_key, parent, parent_public_key, reply_count, distinct_reply_count, score, visibility, tags, extra_tags, extra_tags_sig, display_name) VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0, ?, ?, ?, ?, ?)", stmt):
+  db.withStatement(conn, "INSERT INTO $1post (ts, content_sig, content_sig_last, public_key, parent, parent_public_key, reply_count, distinct_reply_count, score, visibility, tags, extra_tags, extra_tags_sig, display_name) VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0, ?, ?, ?, ?, ?)".format(dbPrefix), stmt):
     db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), ts, sig, e.content.sig, e.public_key, e.parent, parentPublicKey, visibility, sourceUser.tags.value, "", sig, sourceUser.display_name)
     if step(stmt) != SQLITE_DONE:
       db_sqlite.dbError(conn)
@@ -235,60 +266,60 @@ proc insertPost*(conn: PSqlite3, e: Post, id: var int64): string =
 
   let userId = sourceUser.user_id
 
-  db.withStatement(conn, "INSERT INTO post_search (post_id, user_id, attribute, value) VALUES (?, ?, ?, ?)", stmt):
+  db.withStatement(conn, "INSERT INTO $1post_search (post_id, user_id, attribute, value) VALUES (?, ?, ?, ?)".format(dbPrefix), stmt):
     db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), id, userId, "content", common.stripUnsearchableText(e.content.value.uncompressed))
     if step(stmt) != SQLITE_DONE:
       db_sqlite.dbError(conn)
-  db.withStatement(conn, "INSERT INTO post_search (post_id, user_id, attribute, value) VALUES (?, ?, ?, ?)", stmt):
+  db.withStatement(conn, "INSERT INTO $1post_search (post_id, user_id, attribute, value) VALUES (?, ?, ?, ?)".format(dbPrefix), stmt):
     db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), id, userId, "parentids", parentIds)
     if step(stmt) != SQLITE_DONE:
       db_sqlite.dbError(conn)
 
-  if e.parent != "":
+  if not limbo and e.parent != "":
     # update the partition and score for all sibling posts
     const partitionSize = 60 * 60 * 24 # how many seconds for each partition
     let partitionQuery =
       """
-      UPDATE post
+      UPDATE $1post
       SET partition = 1000000000 - (((? - ts) / ?) * 1000)
       WHERE parent = ?
-      """
+      """.format(dbPrefix)
     db_sqlite.exec(conn, sql partitionQuery, ts, partitionSize, e.parent)
     let scoreQuery =
       """
-      UPDATE post
+      UPDATE $1post
       SET score = partition + distinct_reply_count
       WHERE parent = ?
-      """
+      """.format(dbPrefix)
     db_sqlite.exec(conn, sql scoreQuery, e.parent)
 
     # update the reply count and score for all parent posts
     let parentReplyCountQuery =
       """
-      UPDATE post
+      UPDATE $1post
       SET
       reply_count = reply_count + 1,
       distinct_reply_count = (
-        SELECT COUNT(DISTINCT user_id) FROM post_search
-        INNER JOIN post AS child_post ON post_search.post_id = child_post.post_id
-        WHERE post_search.attribute MATCH 'parentids' AND post_search.value MATCH post.post_id AND child_post.visibility = 1
+        SELECT COUNT(DISTINCT user_id) FROM $1post_search
+        INNER JOIN $1post AS child_post ON $1post_search.post_id = child_post.post_id
+        WHERE $1post_search.attribute MATCH 'parentids' AND $1post_search.value MATCH post.post_id AND child_post.visibility = 1
       )
-      WHERE post_id IN ($1)
-      """.format(parentIds)
+      WHERE post_id IN ($2)
+      """.format(dbPrefix, parentIds)
     db_sqlite.exec(conn, sql parentReplyCountQuery)
     let parentScoreQuery =
       """
-      UPDATE post
+      UPDATE $1post
       SET score = partition + distinct_reply_count
-      WHERE post_id IN ($1)
-      """.format(parentIds)
+      WHERE post_id IN ($2)
+      """.format(dbPrefix, parentIds)
     db_sqlite.exec(conn, sql parentScoreQuery)
 
   return sig
 
-proc insertPost*(conn: PSqlite3, entity: Post): string =
+proc insertPost*(conn: PSqlite3, entity: Post, dbPrefix: string = "", limbo: bool = false): string =
   var id: int64
-  insertPost(conn, entity, id)
+  insertPost(conn, entity, id, dbPrefix, limbo)
 
 proc search*(conn: PSqlite3, kind: SearchKind, term: string, offset: int = 0): seq[Post] =
   if term == "":
@@ -400,23 +431,23 @@ proc editPost*(conn: PSqlite3, content: Content, key: string): string =
 
   return post.content.sig
 
-proc insertUser*(conn: PSqlite3, entity: User, id: var int64) =
+proc insertUser*(conn: PSqlite3, entity: User, id: var int64, dbPrefix: string = "") =
   var stmt: PStmt
 
-  db.withStatement(conn, "INSERT INTO user (ts, public_key, public_key_algo, tags, tags_sig) VALUES (?, ?, ?, ?, ?)", stmt):
+  db.withStatement(conn, "INSERT INTO $1user (ts, public_key, public_key_algo, tags, tags_sig) VALUES (?, ?, ?, ?, ?)".format(dbPrefix), stmt):
     db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), times.toUnix(times.getTime()), entity.publicKey, "ed25519", entity.tags.value, entity.publicKey)
     if step(stmt) != SQLITE_DONE:
       db_sqlite.dbError(conn)
     id = sqlite3.last_insert_rowid(conn)
 
-  db.withStatement(conn, "INSERT INTO user_search (user_id, attribute, value) VALUES (?, ?, ?)", stmt):
+  db.withStatement(conn, "INSERT INTO $1user_search (user_id, attribute, value) VALUES (?, ?, ?)".format(dbPrefix), stmt):
     db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), id, "tags", entity.tags.value)
     if step(stmt) != SQLITE_DONE:
       db_sqlite.dbError(conn)
 
-proc insertUser*(conn: PSqlite3, entity: User) =
+proc insertUser*(conn: PSqlite3, entity: User, dbPrefix: string = "") =
   var id: int64
-  insertUser(conn, entity, id)
+  insertUser(conn, entity, id, dbPrefix)
 
 const
   modCommandsRestricted = ["modleader", "moderator", "modpurge"].toHashSet

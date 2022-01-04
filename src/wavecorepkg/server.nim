@@ -94,30 +94,82 @@ proc initServer*(hostname: string, port: int, staticFileDir: string = "", option
   Server(details: (hostname: hostname, port: port, staticFileDir: staticFileDir, options: options, shouldClone: "rclone" in options))
 
 proc insertPost*(details: ServerDetails, board: string, entity: entities.Post) =
+  var limbo = false
+  # try inserting it into the main db
   db.withOpen(conn, details.staticFileDir / paths.db(board), false):
     db.withTransaction(conn):
-      # if user doesn't exist in db, insert it
-      try:
-        discard entities.selectUser(conn, entity.public_key)
-      except Exception as ex:
-        let tags = if entity.public_key == board or not defined(release): "" else: "modhide"
-        entities.insertUser(conn, entities.User(public_key: entity.public_key, tags: entities.Tags(value: tags)))
-      let sig = entities.insertPost(conn, entity)
-      writeFile(details.staticFileDir / paths.ansiwavez(board, sig), entity.content.value.compressed)
+      if not entities.existsUser(conn, entity.public_key):
+        # if the user is the sysop, insert it
+        if entity.public_key == board or "disable-limbo" in details.options:
+          entities.insertUser(conn, entities.User(public_key: entity.public_key, tags: entities.Tags(value: "")))
+        else:
+          limbo = true
+      # if we're not inserting into limbo, insert the post
+      if not limbo:
+        let sig = entities.insertPost(conn, entity)
+        writeFile(details.staticFileDir / paths.ansiwavez(board, sig), entity.content.value.compressed)
+  # insert into limbo
+  if limbo:
+    db.withOpen(conn, details.staticFileDir / paths.dbLimbo(board), false):
+      db.withTransaction(conn):
+        if not entities.existsUser(conn, entity.public_key):
+          entities.insertUser(conn, entities.User(public_key: entity.public_key, tags: entities.Tags(value: "modlimbo")))
+        let sig = entities.insertPost(conn, entity, limbo = true)
+        writeFile(details.staticFileDir / paths.ansiwavezLimbo(board, sig), entity.content.value.compressed)
 
 proc editPost*(details: ServerDetails, board: string, content: entities.Content, key: string) =
+  var limbo = false
+  # try inserting it into the main db
   db.withOpen(conn, details.staticFileDir / paths.db(board), false):
     db.withTransaction(conn):
-      # if user doesn't exist in db, insert it
-      try:
-        discard entities.selectUser(conn, key)
-      except Exception as ex:
-        let tags = if key == board or not defined(release): "" else: "modhide"
-        entities.insertUser(conn, entities.User(public_key: key, tags: entities.Tags(value: tags)))
-      let sig = entities.editPost(conn, content, key)
-      writeFile(details.staticFileDir / paths.ansiwavez(board, sig), content.value.compressed)
+      if not entities.existsUser(conn, key):
+        # if the user is the sysop, insert it
+        if key == board or "disable-limbo" in details.options:
+          entities.insertUser(conn, entities.User(public_key: key, tags: entities.Tags(value: "")))
+        else:
+          limbo = true
+      # if we're not inserting into limbo, insert the post
+      if not limbo:
+        let sig = entities.editPost(conn, content, key)
+        writeFile(details.staticFileDir / paths.ansiwavez(board, sig), content.value.compressed)
+  # insert into limbo
+  if limbo:
+    db.withOpen(conn, details.staticFileDir / paths.dbLimbo(board), false):
+      db.withTransaction(conn):
+        if not entities.existsUser(conn, key):
+          entities.insertUser(conn, entities.User(public_key: key, tags: entities.Tags(value: "modlimbo")))
+        let sig = entities.editPost(conn, content, key)
+        writeFile(details.staticFileDir / paths.ansiwavezLimbo(board, sig), content.value.compressed)
 
 proc editTags*(details: ServerDetails, board: string, tags: entities.Tags, tagsSigLast: string, key: string, extra: bool) =
+  # if we're editing a user in limbo
+  db.withOpen(conn, details.staticFileDir / paths.dbLimbo(board), false):
+    db.withTransaction(conn):
+      if entities.existsUser(conn, tagsSigLast):
+        let
+          content = common.splitAfterHeaders(tags.value)
+          newTags = common.parseTags(content[0])
+        if "modlimbo" in newTags:
+          raise newException(Exception, "You must remove modlimbo tag first")
+        else:
+          # copy all the user's posts into the main db
+          const alias = "board"
+          db.attach(conn, details.staticFileDir / paths.db(board), alias)
+          entities.insertUser(conn, entities.User(public_key: tagsSigLast, tags: entities.Tags(value: "")), dbPrefix = alias & ".")
+          var offset = 0
+          while true:
+            let posts = entities.selectAllUserPosts(conn, tagsSigLast, offset)
+            if posts.len == 0:
+              break
+            for post in posts:
+              let
+                src = details.staticFileDir / paths.ansiwavezLimbo(board, post.content.sig)
+                dest = details.staticFileDir / paths.ansiwavez(board, post.content.sig)
+              if os.fileExists(src):
+                os.moveFile(src, dest)
+              discard entities.insertPost(conn, post, dbPrefix = alias & ".")
+            offset += entities.limit
+          entities.deleteUserPosts(conn, tagsSigLast)
   db.withOpen(conn, details.staticFileDir / paths.db(board), false):
     db.withTransaction(conn):
       if extra:
@@ -127,10 +179,9 @@ proc editTags*(details: ServerDetails, board: string, tags: entities.Tags, tagsS
         entities.editTags(conn, tags, tagsSigLast, board, key, userToPurge)
         if userToPurge != "":
           # purge this user completely
-          os.removeFile(details.staticFileDir / paths.ansiwavez(board, userToPurge))
           var offset = 0
           while true:
-            let posts = entities.selectUserPosts(conn, userToPurge, offset)
+            let posts = entities.selectAllUserPosts(conn, userToPurge, offset)
             if posts.len == 0:
               break
             for post in posts:
@@ -381,7 +432,8 @@ proc recvAction(data: ThreadData) {.thread.} =
         let bbsGitDir = os.absolutePath(data.details.staticFileDir / paths.boardsDir / action.board)
         os.createDir(bbsGitDir / paths.ansiwavesDir)
         os.createDir(bbsGitDir / paths.dbDir)
-        os.createDir(bbsGitDir / paths.miscDir)
+        os.createDir(bbsGitDir / paths.miscDir / paths.limboDir / paths.ansiwavesDir)
+        os.createDir(bbsGitDir / paths.miscDir / paths.limboDir / paths.dbDir)
         if data.details.shouldClone:
           let outGitDir = os.absolutePath(paths.cloneDir / paths.boardsDir / action.board)
           if not os.dirExists(bbsGitDir / ".git"):
@@ -397,6 +449,8 @@ proc recvAction(data: ThreadData) {.thread.} =
             echo "Created " & outGitDir
         if action.board notin initializedBoards:
           db.withOpen(conn, data.details.staticFileDir / paths.db(action.board), false):
+            db.init(conn)
+          db.withOpen(conn, data.details.staticFileDir / paths.dbLimbo(action.board), false):
             db.init(conn)
           initializedBoards.incl(action.board)
       except Exception as ex:

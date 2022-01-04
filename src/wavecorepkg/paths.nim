@@ -34,6 +34,7 @@ const
   dbDir* = "db"
   dbFilename* = "board.db"
   miscDir* = "misc"
+  limboDir* = "limbo"
   defaultBoard* =
     when defined(release):
       "kEKgeSd3-74Uy0bfOOJ9mj0qW3KpMpXBGrrQdUv190E"
@@ -51,6 +52,18 @@ proc ansiwavez*(board: string, filename: string, isUrl: bool = false): string =
     boardsDir & "/" & board & "/" & ansiwavesDir & "/" & filename & ".ansiwavez"
   else:
     boardsDir / board / ansiwavesDir / filename & ".ansiwavez"
+
+proc dbLimbo*(board: string, isUrl: bool = false): string =
+  if isUrl:
+    boardsDir & "/" & board & "/" & miscDir & "/" & limboDir & "/" & dbDir & "/" & dbFilename
+  else:
+    boardsDir / board / miscDir / limboDir / dbDir / dbFilename
+
+proc ansiwavezLimbo*(board: string, filename: string, isUrl: bool = false): string =
+  if isUrl:
+    boardsDir & "/" & board & "/" & miscDir & "/" & limboDir & "/" & ansiwavesDir & "/" & filename & ".ansiwavez"
+  else:
+    boardsDir / board / miscDir / limboDir / ansiwavesDir / filename & ".ansiwavez"
 
 proc encode*[T](data: T): string =
   result = base64.encode(data, safe = true)

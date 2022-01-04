@@ -4,6 +4,7 @@ import ./db/sqlite3
 from ./db/db_sqlite import sql
 from bitops import nil
 import tables
+from strutils import format
 
 const
   SQLITE_OPEN_READONLY = 1
@@ -34,7 +35,7 @@ template withTransaction*(conn: PSqlite3, body: untyped) =
 
 template withStatement*(conn: PSqlite3, query: string, stmt: PStmt, body: untyped) =
   try:
-    if prepare_v2(conn, query, query.len.cint, stmt, nil) != SQLITE_OK:
+    if prepare_v2(conn, query.cstring, query.len.cint, stmt, nil) != SQLITE_OK:
       db_sqlite.dbError(conn)
     body
   finally:
@@ -142,3 +143,5 @@ proc init*(conn: PSqlite3) =
       version += 1
       db_sqlite.exec conn, sql("PRAGMA user_version = " & $version)
 
+proc attach*(conn: PSqlite3, path: string, alias: string) =
+  db_sqlite.exec conn, sql("ATTACH DATABASE '$1' AS $2".format(path, alias))

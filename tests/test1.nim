@@ -2,6 +2,7 @@ import unittest
 from strutils import nil
 from sequtils import nil
 import json
+import tables
 
 from ./wavecorepkg/wavescript import nil
 
@@ -68,6 +69,8 @@ let
   dbPath = bbsDir / dbDirs
 os.createDir(bbsDir / paths.boardsDir / sysopPublicKey / paths.ansiwavesDir)
 os.createDir(bbsDir / paths.boardsDir / sysopPublicKey / paths.dbDir)
+os.createDir(bbsDir / paths.boardsDir / sysopPublicKey / paths.miscDir / paths.limboDir / paths.ansiwavesDir)
+os.createDir(bbsDir / paths.boardsDir / sysopPublicKey / paths.miscDir / paths.limboDir / paths.dbDir)
 paths.readUrl = "http://localhost:" & $port & "/" & dbDirs
 vfs.register()
 
@@ -520,7 +523,7 @@ test "retrieve sqlite db via http":
     server.stop(s)
 
 test "submit ansiwaves over http":
-  var s = server.initServer("localhost", port, bbsDir)
+  var s = server.initServer("localhost", port, bbsDir, options = {"testrun": "", "disable-limbo": ""}.toTable)
   server.start(s)
   var c = client.initClient(address)
   client.start(c)
@@ -548,8 +551,10 @@ test "submit ansiwaves over http":
       client.get(res, true)
       check res.value.kind == client.Error
     # new post
+    var postSig = ""
     block:
       let (body, sig) = common.signWithHeaders(aliceKeys, "Hi i'm alice", subboardSig, common.New, sysopPublicKey)
+      postSig = sig
       var res = client.submit(c, "ansiwave", body)
       client.get(res, true)
       check res.value.kind == client.Valid
@@ -560,7 +565,67 @@ test "submit ansiwaves over http":
       var res = client.submit(c, "ansiwave", body)
       client.get(res, true)
       check res.value.kind == client.Valid
-      check not os.fileExists(bbsDir / paths.ansiwavez(sysopPublicKey, sig))
+      check not os.fileExists(bbsDir / paths.ansiwavez(sysopPublicKey, postSig))
+  finally:
+    os.removeFile(dbPath)
+    server.stop(s)
+    client.stop(c)
+
+test "limbo":
+  var s = server.initServer("localhost", port, bbsDir, options = {"testrun": ""}.toTable)
+  server.start(s)
+  var c = client.initClient(address)
+  client.start(c)
+  try:
+    # create banner for BBS
+    block:
+      let (body, sig) = common.signWithHeaders(sysopKeys, "Welcome to my BBS", sysopPublicKey, common.Edit, sysopPublicKey)
+      var res = client.submit(c, "ansiwave", body)
+      client.get(res, true)
+      check res.value.kind == client.Valid
+    # create subboard
+    let (subboardBody, subboardSig) = common.signWithHeaders(sysopKeys, "General Discussion", sysopPublicKey, common.New, sysopPublicKey)
+    block:
+      var res = client.submit(c, "ansiwave", subboardBody)
+      client.get(res, true)
+      check res.value.kind == client.Valid
+    let
+      aliceKeys = ed25519.initKeyPair()
+      alice = initUser(paths.encode(aliceKeys.public))
+    # new post
+    var postSig1 = ""
+    block:
+      let (body, sig) = common.signWithHeaders(aliceKeys, "Hi i'm alice", subboardSig, common.New, sysopPublicKey)
+      postSig1 = sig
+      var res = client.submit(c, "ansiwave", body)
+      client.get(res, true)
+      check res.value.kind == client.Valid
+      check os.fileExists(bbsDir / paths.ansiwavezLimbo(sysopPublicKey, sig))
+    # edit post
+    block:
+      let (body, sig) = common.signWithHeaders(aliceKeys, "Hi i'm alice!!", postSig1, common.Edit, sysopPublicKey)
+      var res = client.submit(c, "ansiwave", body)
+      client.get(res, true)
+      check res.value.kind == client.Valid
+    # new post replying to other post
+    var postSig2 = ""
+    block:
+      let (body, sig) = common.signWithHeaders(aliceKeys, "What's up", postSig1, common.New, sysopPublicKey)
+      postSig2 = sig
+      var res = client.submit(c, "ansiwave", body)
+      client.get(res, true)
+      check res.value.kind == client.Valid
+      check os.fileExists(bbsDir / paths.ansiwavezLimbo(sysopPublicKey, sig))
+    # bring alice out of limbo
+    block:
+      let (body, sig) = common.signWithHeaders(sysopKeys, "", alice.public_key, common.Tags, sysopPublicKey)
+      var res = client.submit(c, "ansiwave", body)
+      client.get(res, true)
+      check res.value.kind == client.Valid
+      check not os.fileExists(bbsDir / paths.ansiwavezLimbo(sysopPublicKey, postSig1))
+      check not os.fileExists(bbsDir / paths.ansiwavezLimbo(sysopPublicKey, postSig2))
+      check os.fileExists(bbsDir / paths.ansiwavez(sysopPublicKey, postSig1))
+      check os.fileExists(bbsDir / paths.ansiwavez(sysopPublicKey, postSig2))
   finally:
     os.removeFile(dbPath)
     server.stop(s)
