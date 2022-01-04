@@ -129,7 +129,7 @@ proc trimPath(path: string): string =
 proc recvAction(client: Client) {.thread.} =
   while true:
     let action = client.action[].recv()
-    if client.kind == Online:
+    if client.kind == Online and action.dbFilename != "":
       {.cast(gcsafe).}:
         paths.readUrl = paths.initUrl(paths.address, action.dbFilename)
     case action.kind:

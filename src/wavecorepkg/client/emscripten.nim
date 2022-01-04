@@ -270,7 +270,8 @@ proc recvAction(data: pointer, size: cint) {.exportc.} =
   let
     workerRequest = flatty.fromFlatty(input, WorkerRequest)
     action = workerRequest.action
-  paths.readUrl = paths.initUrl(paths.address, action.dbFilename)
+  if action.dbFilename != "":
+    paths.readUrl = paths.initUrl(paths.address, action.dbFilename)
   let res =
     case action.kind:
     of Stop:
