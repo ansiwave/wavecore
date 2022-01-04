@@ -411,12 +411,10 @@ proc listen(data: ThreadData) {.thread.} =
     echo("Server closing on port " & $data.details.port)
     socket.close()
 
-proc execCmd(command: string): string =
-  let res = osproc.execCmdEx(command)
-  if res.exitCode != 0:
-    raise newException(Exception, "Command failed: " & command & "\n" & res.output)
-  else:
-    res.output
+proc execCmd(command: string, silent: bool = false): tuple[output: string, exitCode: int] =
+  result = osproc.execCmdEx(command)
+  if result.exitCode != 0 and not silent:
+    raise newException(Exception, "Command failed: " & command & "\n" & result.output)
 
 proc recvAction(data: ThreadData) {.thread.} =
   data.readyChan[].send(true)
@@ -441,12 +439,22 @@ proc recvAction(data: ThreadData) {.thread.} =
             discard execCmd("git init $1".format(bbsGitDir))
             discard execCmd("git -C $1 add .gitignore".format(bbsGitDir))
             discard execCmd("git -C $1 commit -m \"Add .gitignore\"".format(bbsGitDir))
-            echo "Created " & bbsGitDir
+          if not os.dirExists(bbsGitDir / paths.miscDir / ".git"):
+            writeFile(bbsGitDir / paths.miscDir / ".gitignore", "")
+            discard execCmd("git init $1".format(bbsGitDir / paths.miscDir))
+            discard execCmd("git -C $1 add .gitignore".format(bbsGitDir / paths.miscDir))
+            discard execCmd("git -C $1 commit -m \"Add .gitignore\"".format(bbsGitDir / paths.miscDir))
+            echo "Created " & bbsGitDir / paths.miscDir
           if not os.dirExists(outGitDir):
             os.createDir(os.parentDir(outGitDir))
             discard execCmd("git init $1".format(outGitDir))
             discard execCmd("git -C $1 config --local receive.denyCurrentBranch updateInstead".format(outGitDir))
             echo "Created " & outGitDir
+          if not os.dirExists(outGitDir / paths.miscDir):
+            os.createDir(outGitDir / paths.miscDir)
+            discard execCmd("git init $1".format(outGitDir / paths.miscDir))
+            discard execCmd("git -C $1 config --local receive.denyCurrentBranch updateInstead".format(outGitDir / paths.miscDir))
+            echo "Created " & outGitDir / paths.miscDir
         if action.board notin initializedBoards:
           db.withOpen(conn, data.details.staticFileDir / paths.db(action.board), false):
             db.init(conn)
@@ -492,7 +500,11 @@ proc recvAction(data: ThreadData) {.thread.} =
         let bbsGitDir = os.absolutePath(data.details.staticFileDir / paths.boardsDir / action.board)
         if data.details.shouldClone:
           discard execCmd("git -C $1 add .".format(bbsGitDir))
-          discard execCmd("git -C $1 commit -m \"$2\"".format(bbsGitDir, $action.kind & " " & action.key))
+          let mainResult = execCmd("git -C $1 commit -m \"$2\"".format(bbsGitDir, $action.kind & " " & action.key), silent = true)
+          discard execCmd("git -C $1 add .".format(bbsGitDir / paths.miscDir))
+          let miscResult = execCmd("git -C $1 commit -m \"$2\"".format(bbsGitDir / paths.miscDir, $action.kind & " " & action.key), silent = true)
+          if mainResult.exitCode != 0 and miscResult.exitCode != 0:
+            raise newException(Exception, mainResult.output & "\n" & miscResult.output)
           data.backgroundAction[].send(BackgroundAction(kind: BackgroundActionKind.CopyOut, board: action.board))
       except Exception as ex:
         stderr.writeLine(ex.msg)
@@ -518,6 +530,7 @@ proc recvBackgroundAction(data: ThreadData) {.thread.} =
             bbsGitDir = os.absolutePath(data.details.staticFileDir / paths.boardsDir / action.board)
             outGitDir = os.absolutePath(paths.cloneDir / paths.boardsDir / action.board)
           discard execCmd("git -C $1 push $2 master".format(bbsGitDir, outGitDir))
+          discard execCmd("git -C $1 push $2 master".format(bbsGitDir / paths.miscDir, outGitDir / paths.miscDir))
           boardsToCopy.incl(action.board)
           boardsToSync.incl(action.board)
         except Exception as ex:
@@ -529,7 +542,7 @@ proc recvBackgroundAction(data: ThreadData) {.thread.} =
       if boardsToCopy.len > 0 and times.epochTime() - lastClone >= 15:
         for board in boardsToCopy:
           let outGitDir = os.absolutePath(paths.cloneDir / paths.boardsDir / board)
-          let output = execCmd("rclone copy $1 $2/$3/$4/ --exclude .git/ --verbose --checksum --no-update-modtime".format(outGitDir, data.details.options["rclone"], paths.boardsDir, board))
+          let output = execCmd("rclone copy $1 $2/$3/$4/ --exclude .git/ --exclude misc/.git/ --verbose --checksum --no-update-modtime".format(outGitDir, data.details.options["rclone"], paths.boardsDir, board)).output
           discard sendAction(data.stateAction, StateAction(kind: Log, message: "rclone copy output for $1\n$2".format(board, output)))
         boardsToCopy.clear
         lastClone = times.epochTime()
