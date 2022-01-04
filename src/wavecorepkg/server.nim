@@ -152,11 +152,20 @@ proc editTags*(details: ServerDetails, board: string, tags: entities.Tags, tagsS
         if "modlimbo" in newTags:
           raise newException(Exception, "You must remove modlimbo tag first")
         else:
-          # copy all the user's posts into the main db
           const alias = "board"
           db.attach(conn, details.staticFileDir / paths.db(board), alias)
           entities.insertUser(conn, entities.User(public_key: tagsSigLast, tags: entities.Tags(value: "")), dbPrefix = alias & ".")
+          # insert posts into main db
           var offset = 0
+          while true:
+            let posts = entities.selectAllUserPosts(conn, tagsSigLast, offset)
+            if posts.len == 0:
+              break
+            for post in posts:
+              discard entities.insertPost(conn, post, dbPrefix = alias & ".")
+            offset += entities.limit
+          # move ansiwavez files
+          offset = 0
           while true:
             let posts = entities.selectAllUserPosts(conn, tagsSigLast, offset)
             if posts.len == 0:
@@ -167,8 +176,8 @@ proc editTags*(details: ServerDetails, board: string, tags: entities.Tags, tagsS
                 dest = details.staticFileDir / paths.ansiwavez(board, post.content.sig)
               if os.fileExists(src):
                 os.moveFile(src, dest)
-              discard entities.insertPost(conn, post, dbPrefix = alias & ".")
             offset += entities.limit
+          # delete user in limbo db
           entities.deleteUser(conn, tagsSigLast)
   db.withOpen(conn, details.staticFileDir / paths.db(board), false):
     db.withTransaction(conn):
