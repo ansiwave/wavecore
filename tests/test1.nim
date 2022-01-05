@@ -592,6 +592,8 @@ test "limbo":
     let
       aliceKeys = ed25519.initKeyPair()
       alice = initUser(paths.encode(aliceKeys.public))
+      bobKeys = ed25519.initKeyPair()
+      bob = initUser(paths.encode(bobKeys.public))
     # new post
     var postSig1 = ""
     block:
@@ -616,6 +618,18 @@ test "limbo":
       client.get(res, true)
       check res.value.kind == client.Valid
       check os.fileExists(bbsDir / paths.ansiwavez(sysopPublicKey, sig, limbo = true))
+    # new post from bob
+    block:
+      let (body, sig) = common.signWithHeaders(bobKeys, "Hi i'm bob", postSig2, common.New, sysopPublicKey)
+      var res = client.submit(c, "ansiwave", body)
+      client.get(res, true)
+      check res.value.kind == client.Valid
+    # bring bob out of limbo (but his post is deleted because alice is still in limbo)
+    block:
+      let (body, sig) = common.signWithHeaders(sysopKeys, "", bob.public_key, common.Tags, sysopPublicKey)
+      var res = client.submit(c, "ansiwave", body)
+      client.get(res, true)
+      check res.value.kind == client.Valid
     # bring alice out of limbo
     block:
       let (body, sig) = common.signWithHeaders(sysopKeys, "", alice.public_key, common.Tags, sysopPublicKey)
