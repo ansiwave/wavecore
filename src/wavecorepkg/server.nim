@@ -564,7 +564,7 @@ proc recvBackgroundAction(data: ThreadData) {.thread.} =
           let outGitDir = os.absolutePath(paths.cloneDir / paths.boardsDir / board)
           discard execCmd("git -C $1 gc".format(outGitDir))
           discard execCmd("git -C $1 update-server-info".format(outGitDir))
-          let output = execCmd("rclone sync $1/.git $2/$3/$4/.git --verbose --checksum --no-update-modtime".format(outGitDir, data.details.options["rclone"], paths.boardsDir, board))
+          let output = execCmd("rclone sync $1/.git $2/$3/$4/.git --verbose --checksum --no-update-modtime".format(outGitDir, data.details.options["rclone"], paths.boardsDir, board)).output
           discard sendAction(data.stateAction, StateAction(kind: Log, message: "rclone sync output for $1\n$2".format(board, output)))
         boardsToSync.clear
         lastSync = times.epochTime()
