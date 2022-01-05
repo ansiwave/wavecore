@@ -138,7 +138,7 @@ proc editPost*(details: ServerDetails, board: string, content: entities.Content,
       db.withTransaction(conn):
         if not entities.existsUser(conn, key):
           entities.insertUser(conn, entities.User(public_key: key, tags: entities.Tags(value: "modlimbo")))
-        let sig = entities.editPost(conn, content, key)
+        let sig = entities.editPost(conn, content, key, limbo = true)
         writeFile(details.staticFileDir / paths.ansiwavez(board, sig, limbo = true), content.value.compressed)
 
 proc editTags*(details: ServerDetails, board: string, tags: entities.Tags, tagsSigLast: string, key: string, extra: bool) =

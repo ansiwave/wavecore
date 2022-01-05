@@ -410,7 +410,7 @@ proc search*(conn: PSqlite3, kind: SearchKind, term: string, offset: int = 0): s
     #  echo x
     sequtils.toSeq(db.select[Post](conn, initPost, query, term))
 
-proc editPost*(conn: PSqlite3, content: Content, key: string): string =
+proc editPost*(conn: PSqlite3, content: Content, key: string, limbo: bool = false): string =
   let sourceUser = selectUser(conn, key)
   if "modban" in common.parseTags(sourceUser.tags.value):
     raise newException(Exception, "You are banned")
@@ -452,7 +452,9 @@ proc editPost*(conn: PSqlite3, content: Content, key: string): string =
       let strippedLine = ansi.stripCodesIfCommand(line)
       if strutils.startsWith(strippedLine, "/name "):
         let res = wavescript.parse(ctx, strippedLine)
-        if res.kind == wavescript.Error:
+        if limbo:
+          raise newException(Exception, "You can't set a /name until a mod adds you")
+        elif res.kind == wavescript.Error:
           raise newException(Exception, res.message)
         elif name != "":
           raise newException(Exception, "You can only set /name once")

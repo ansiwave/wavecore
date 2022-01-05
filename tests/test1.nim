@@ -670,6 +670,14 @@ test "limbo":
       client.get(res, true)
       check res.value.kind == client.Valid
       check os.fileExists(bbsDir / paths.ansiwavez(sysopPublicKey, sig, limbo = true))
+    # bob tries to set a name, but can't because he's still in limbo
+    var postSigBob = ""
+    block:
+      let (body, sig) = common.signWithHeaders(bobKeys, "/name bobby ", bob.public_key, common.Edit, sysopPublicKey)
+      postSigBob = sig
+      var res = client.submit(c, "ansiwave", body)
+      client.get(res, true)
+      check res.value.kind == client.Error
     # new post from bob
     block:
       let (body, sig) = common.signWithHeaders(bobKeys, "Hi i'm bob", postSig2, common.New, sysopPublicKey)
