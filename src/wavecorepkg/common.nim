@@ -5,6 +5,7 @@ from strutils import nil
 import tables, sets
 from times import nil
 import unicode
+from ./ansi import nil
 
 proc parseTags*(tags: string): HashSet[string] =
   result = strutils.split(tags, ' ').toHashSet
@@ -77,35 +78,6 @@ proc parseAnsiwave*(ansiwave: string): tuple[cmds: Table[string, string], header
   result.headersAndContent = ansiwave[newline + 1 ..< ansiwave.len]
   result.content = content
 
-const
-  codeTerminators* = {'c', 'f', 'h', 'l', 'm', 's', 't', 'u',
-                      'A', 'B', 'C', 'D', 'E', 'F', 'G',
-                      'H', 'J', 'K', 'N', 'O', 'P', 'S',
-                      'T', 'X', '\\', ']', '^', '_'}
-
-proc parseCode(codes: var seq[string], ch: Rune): bool =
-  proc terminated(s: string): bool =
-    if s.len > 0:
-      let lastChar = s[s.len - 1]
-      return codeTerminators.contains(lastChar)
-    else:
-      return false
-  let s = $ch
-  if s == "\e":
-    codes.add(s)
-    return true
-  elif codes.len > 0 and not codes[codes.len - 1].terminated:
-    codes[codes.len - 1] &= s
-    return true
-  return false
-
-proc stripCodes*(line: seq[Rune]): seq[Rune] =
-  var codes: seq[string]
-  for ch in line:
-    if parseCode(codes, ch):
-      continue
-    result.add(ch)
-
 proc stripUnsearchableText*(content: string): string =
   let idx = strutils.find(content, "\n\n")
   if idx == -1: # this should never happen
@@ -115,7 +87,7 @@ proc stripUnsearchableText*(content: string): string =
     var newLines: seq[string]
     for line in strutils.splitLines(body):
       var
-        chars = stripCodes(line.toRunes) # remove escape codes
+        chars = ansi.stripCodes(line.toRunes) # remove escape codes
         newLine: seq[string]
       # replace ansi block chars with spaces
       for ch in chars:

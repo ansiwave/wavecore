@@ -8,6 +8,7 @@ from times import nil
 from ../common import nil
 import sets
 from ../wavescript import nil
+from ../ansi import nil
 
 type
   CompressedValue* = object
@@ -448,8 +449,9 @@ proc editPost*(conn: PSqlite3, content: Content, key: string): string =
     let lines = common.splitAfterHeaders(content.value.uncompressed)
     var ctx = wavescript.initContext()
     for line in lines:
-      if strutils.startsWith(line, "/name "):
-        let res = wavescript.parse(ctx, line)
+      let strippedLine = ansi.stripCodesIfCommand(line)
+      if strutils.startsWith(strippedLine, "/name "):
+        let res = wavescript.parse(ctx, strippedLine)
         if res.kind == wavescript.Error:
           raise newException(Exception, res.message)
         elif name != "":

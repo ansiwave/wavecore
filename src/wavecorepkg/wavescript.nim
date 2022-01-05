@@ -2,6 +2,7 @@ import unicode, tables, paramidi/constants
 from strutils import format
 import json, sets
 from urlly import nil
+from ./ansi import nil
 
 type
   CommandText* = object
@@ -301,7 +302,8 @@ proc parse*(context: var Context, command: CommandText): CommandTree =
   if forms.len >= 1 and forms[0].kind == Symbol and forms[0].name in context.stringCommands:
     var text, error = ""
     if command.text.len > forms[0].name.len:
-      for ch in command.text[forms[0].name.len+1 ..< command.text.len].toRunes:
+      let unsanitizedText = command.text[forms[0].name.len+1 ..< command.text.len]
+      for ch in ansi.stripCodes(unsanitizedText.toRunes):
         let s = $ch
         if s in whitespaceChars:
           text &= " "

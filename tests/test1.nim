@@ -30,7 +30,7 @@ test "Parse broken symbol":
   check trees.len == 1
 
 test "Parse string command with ANSI block characters":
-  let lines = strutils.splitLines("/section ██████ Hello! ██████")
+  let lines = strutils.splitLines("/section \e[31m██████ Hello! ██████")
   let trees = parseAnsiwave(lines)
   check trees.len == 1
   check trees[0].kind == wavescript.Valid
@@ -600,14 +600,14 @@ test "submit ansiwaves over http":
     # bob tries to set a valid user name
     var postSigBob = ""
     block:
-      let (body, sig) = common.signWithHeaders(bobKeys, "Hello\n/name bobby ", bob.public_key, common.Edit, sysopPublicKey)
+      let (body, sig) = common.signWithHeaders(bobKeys, "\e[0m/name bobby ", bob.public_key, common.Edit, sysopPublicKey)
       postSigBob = sig
       var res = client.submit(c, "ansiwave", body)
       client.get(res, true)
       check res.value.kind == client.Valid
     # bob edits his banner but doesn't change the name
     block:
-      let (body, sig) = common.signWithHeaders(bobKeys, "Hello\n/name bobby\nYO", postSigBob, common.Edit, sysopPublicKey)
+      let (body, sig) = common.signWithHeaders(bobKeys, "\e[0m/name bobby\nYO", postSigBob, common.Edit, sysopPublicKey)
       postSigBob = sig
       var res = client.submit(c, "ansiwave", body)
       client.get(res, true)
