@@ -444,8 +444,8 @@ proc editPost*(conn: PSqlite3, content: Content, key: string, limbo: bool = fals
     raise newException(Exception, "Cannot edit this post")
 
   # this is a banner, so try parsing their username out of it
-  var name = ""
   if post.parent == "":
+    var name = ""
     let lines = common.splitAfterHeaders(content.value.uncompressed)
     var ctx = wavescript.initContext()
     for line in lines:
@@ -460,27 +460,27 @@ proc editPost*(conn: PSqlite3, content: Content, key: string, limbo: bool = fals
           raise newException(Exception, "You can only set /name once")
         else:
           name = res.args[0].name
-  if name != sourceUser.display_name:
-    if name == "":
-      db.withStatement(conn, "UPDATE user SET display_name = NULL WHERE public_key = ?", stmt):
-        db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), sourceUser.public_key)
-        if step(stmt) != SQLITE_DONE:
-          db_sqlite.dbError(conn)
-      db.withStatement(conn, "UPDATE post SET display_name = NULL WHERE public_key = ?", stmt):
-        db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), sourceUser.public_Key)
-        if step(stmt) != SQLITE_DONE:
-          db_sqlite.dbError(conn)
-    elif existsUsername(conn, name):
-      raise newException(Exception, name & " is already taken")
-    else:
-      db.withStatement(conn, "UPDATE user SET display_name = ? WHERE public_key = ?", stmt):
-        db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), name, sourceUser.public_key)
-        if step(stmt) != SQLITE_DONE:
-          db_sqlite.dbError(conn)
-      db.withStatement(conn, "UPDATE post SET display_name = ? WHERE public_key = ?", stmt):
-        db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), name, sourceUser.public_Key)
-        if step(stmt) != SQLITE_DONE:
-          db_sqlite.dbError(conn)
+    if name != sourceUser.display_name:
+      if name == "":
+        db.withStatement(conn, "UPDATE user SET display_name = NULL WHERE public_key = ?", stmt):
+          db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), sourceUser.public_key)
+          if step(stmt) != SQLITE_DONE:
+            db_sqlite.dbError(conn)
+        db.withStatement(conn, "UPDATE post SET display_name = NULL WHERE public_key = ?", stmt):
+          db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), sourceUser.public_Key)
+          if step(stmt) != SQLITE_DONE:
+            db_sqlite.dbError(conn)
+      elif existsUsername(conn, name):
+        raise newException(Exception, name & " is already taken")
+      else:
+        db.withStatement(conn, "UPDATE user SET display_name = ? WHERE public_key = ?", stmt):
+          db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), name, sourceUser.public_key)
+          if step(stmt) != SQLITE_DONE:
+            db_sqlite.dbError(conn)
+        db.withStatement(conn, "UPDATE post SET display_name = ? WHERE public_key = ?", stmt):
+          db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), name, sourceUser.public_Key)
+          if step(stmt) != SQLITE_DONE:
+            db_sqlite.dbError(conn)
 
   db.withStatement(conn, "UPDATE post SET content_sig_last = ? WHERE post_id = ?", stmt):
     db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), content.sig, post.post_id)
