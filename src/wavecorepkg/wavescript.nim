@@ -109,7 +109,9 @@ const
     "/name":
       proc (s: string): string =
         if s.len < 2 or s.len > 20:
-          return "Names must be between 2 and 20 characters"
+          return "Your /name must be between 2 and 20 characters"
+        elif strutils.startsWith(s, "mod") or s in ["admin", "sysop"].toHashSet:
+          return "Your /name is invalid"
         for ch in s:
           if ch == ' ':
             return "You cannot have a space in your /name"
@@ -314,10 +316,10 @@ proc parse*(context: var Context, command: CommandText): CommandTree =
         else:
           text &= s
       text = strutils.strip(text)
-      if forms[0].name in stringCommandValidators:
-        error = stringCommandValidators[forms[0].name](text)
-      if error != "":
-        return CommandTree(kind: Error, line: command.line, message: error)
+    if forms[0].name in stringCommandValidators:
+      error = stringCommandValidators[forms[0].name](text)
+    if error != "":
+      return CommandTree(kind: Error, line: command.line, message: error)
     return CommandTree(
       kind: Valid,
       name: forms[0].name,
