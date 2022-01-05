@@ -29,6 +29,13 @@ test "Parse broken symbol":
   let trees = parseAnsiwave(lines)
   check trees.len == 1
 
+test "Parse string command with ANSI block characters":
+  let lines = strutils.splitLines("/section ██████ Hello! ██████")
+  let trees = parseAnsiwave(lines)
+  check trees.len == 1
+  check trees[0].kind == wavescript.Valid
+  check trees[0].args[0].name == "Hello!"
+
 test "/,":
   let text = strutils.splitLines("""
 /banjo /octave 3 /16 b c+ /8 d+ b c+ a b g a
