@@ -450,7 +450,7 @@ proc editPost*(conn: PSqlite3, content: Content, key: string, limbo: bool = fals
     var ctx = wavescript.initContext()
     for line in lines:
       let strippedLine = ansi.stripCodesIfCommand(line)
-      if strutils.startsWith(strippedLine, "/name "):
+      if strutils.startsWith(strippedLine, "/name ") or strippedLine == "/name":
         let res = wavescript.parse(ctx, strippedLine)
         if limbo:
           raise newException(Exception, "You can't set a /name until a mod adds you")
@@ -470,8 +470,6 @@ proc editPost*(conn: PSqlite3, content: Content, key: string, limbo: bool = fals
         db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), sourceUser.public_Key)
         if step(stmt) != SQLITE_DONE:
           db_sqlite.dbError(conn)
-    elif name.len < 2 or name.len > 20:
-      raise newException(Exception, "/name must between 2 and 20 characters")
     elif existsUsername(conn, name):
       raise newException(Exception, name & " is already taken")
     else:

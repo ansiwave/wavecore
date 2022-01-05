@@ -108,15 +108,15 @@ const
     ,
     "/name":
       proc (s: string): string =
-        var i = 0
+        if s.len < 2 or s.len > 20:
+          return "Names must be between 2 and 20 characters"
         for ch in s:
           if ch == ' ':
             return "You cannot have a space in your /name"
           elif ch notin {'a'..'z', '0'..'9'}:
             return "/name can only have numbers and lower-case letters"
-          elif i == 0 and ch in {'0'..'9'}:
-            return "Your /name cannot begin with a number"
-          i += 1
+        if s[0] notin {'a'..'z'}:
+          return "Names cannot begin with a number"
   }.toTable
 
 proc initContext*(): Context =
