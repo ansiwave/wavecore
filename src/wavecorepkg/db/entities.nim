@@ -84,7 +84,7 @@ proc initPost(stmt: PStmt): Post =
 proc selectPost*(conn: PSqlite3, sig: string, dbPrefix: string = ""): Post =
   let query =
     """
-      SELECT post_id, ts, content_sig, content_sig_last, public_key, parent, reply_count, score, partition, tags, extra_tags, extra_tags_sig FROM $1post
+      SELECT post_id, ts, content_sig, content_sig_last, public_key, parent, reply_count, score, partition, tags, extra_tags, extra_tags_sig, display_name FROM $1post
       WHERE content_sig = ?
     """.format(dbPrefix)
   #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), sig):
@@ -98,7 +98,7 @@ proc selectPost*(conn: PSqlite3, sig: string, dbPrefix: string = ""): Post =
 proc existsPost*(conn: PSqlite3, sig: string, dbPrefix: string = ""): bool =
   let query =
     """
-      SELECT post_id, ts, content_sig, content_sig_last, public_key, parent, reply_count, score, partition, tags, extra_tags, extra_tags_sig FROM $1post
+      SELECT post_id, ts, content_sig, content_sig_last, public_key, parent, reply_count, score, partition, tags, extra_tags, extra_tags_sig, display_name FROM $1post
       WHERE content_sig = ?
     """.format(dbPrefix)
   #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), sig):
@@ -124,7 +124,7 @@ proc selectPostParentIds(conn: PSqlite3, id: int64, dbPrefix: string = ""): stri
 proc selectPostChildren*(conn: PSqlite3, sig: string, sortByTs: bool = false, offset: int = 0): seq[Post] =
   let query =
     """
-      SELECT post_id, ts, content_sig, content_sig_last, public_key, parent, reply_count, score, partition, tags, extra_tags, extra_tags_sig FROM post
+      SELECT post_id, ts, content_sig, content_sig_last, public_key, parent, reply_count, score, partition, tags, extra_tags, extra_tags_sig, display_name FROM post
       WHERE parent = ? $1
       ORDER BY $2 DESC
       LIMIT $3
@@ -137,7 +137,7 @@ proc selectPostChildren*(conn: PSqlite3, sig: string, sortByTs: bool = false, of
 proc selectUserPosts*(conn: PSqlite3, publicKey: string, offset: int = 0): seq[Post] =
   let query =
     """
-      SELECT post_id, ts, content_sig, content_sig_last, public_key, parent, reply_count, score, partition, tags, extra_tags, extra_tags_sig FROM post
+      SELECT post_id, ts, content_sig, content_sig_last, public_key, parent, reply_count, score, partition, tags, extra_tags, extra_tags_sig, display_name FROM post
       WHERE public_key = ? AND parent != ''
       ORDER BY ts DESC
       LIMIT $1
@@ -150,7 +150,7 @@ proc selectUserPosts*(conn: PSqlite3, publicKey: string, offset: int = 0): seq[P
 proc selectAllUserPosts*(conn: PSqlite3, publicKey: string, offset: int = 0): seq[Post] =
   let query =
     """
-      SELECT post_id, ts, content_sig, content_sig_last, public_key, parent, reply_count, score, partition, tags, extra_tags, extra_tags_sig FROM post
+      SELECT post_id, ts, content_sig, content_sig_last, public_key, parent, reply_count, score, partition, tags, extra_tags, extra_tags_sig, display_name FROM post
       WHERE public_key = ?
       ORDER BY ts ASC
       LIMIT $1
@@ -163,7 +163,7 @@ proc selectAllUserPosts*(conn: PSqlite3, publicKey: string, offset: int = 0): se
 proc selectUserReplies*(conn: PSqlite3, publicKey: string, offset: int = 0): seq[Post] =
   let query =
     """
-      SELECT post_id, ts, content_sig, content_sig_last, public_key, parent, reply_count, score, partition, tags, extra_tags, extra_tags_sig FROM post
+      SELECT post_id, ts, content_sig, content_sig_last, public_key, parent, reply_count, score, partition, tags, extra_tags, extra_tags_sig, display_name FROM post
       WHERE visibility = 1 AND parent_public_key = ? AND parent_public_key != public_key
       ORDER BY ts DESC
       LIMIT $1
@@ -351,7 +351,7 @@ proc search*(conn: PSqlite3, kind: SearchKind, term: string, offset: int = 0): s
       case kind:
       of Posts:
         """
-          SELECT post_id, ts, content_sig, content_sig_last, public_key, parent, reply_count, score, partition, tags, extra_tags, extra_tags_sig FROM post
+          SELECT post_id, ts, content_sig, content_sig_last, public_key, parent, reply_count, score, partition, tags, extra_tags, extra_tags_sig, display_name FROM post
           WHERE parent != '' AND visibility = 1
           ORDER BY ts DESC
           LIMIT $1
@@ -391,7 +391,7 @@ proc search*(conn: PSqlite3, kind: SearchKind, term: string, offset: int = 0): s
       case kind:
       of Posts, Users:
         """
-          SELECT post_id, ts, content_sig, content_sig_last, public_key, parent, reply_count, score, partition, tags, extra_tags, extra_tags_sig FROM post
+          SELECT post_id, ts, content_sig, content_sig_last, public_key, parent, reply_count, score, partition, tags, extra_tags, extra_tags_sig, display_name FROM post
           WHERE post_id IN (SELECT post_id FROM post_search WHERE attribute MATCH 'content' AND value MATCH ? ORDER BY rank)
           AND visibility = 1
           AND $1
