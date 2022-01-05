@@ -36,6 +36,22 @@ test "Parse string command with ANSI block characters":
   check trees[0].kind == wavescript.Valid
   check trees[0].args[0].name == "Hello!"
 
+test "Parse /link command with validator":
+  let error = parseAnsiwave(strutils.splitLines("/link hello"))
+  check error.len == 1
+  check error[0].kind == wavescript.Error
+  let success = parseAnsiwave(strutils.splitLines("/link hello https://ansiwave.net"))
+  check success.len == 1
+  check success[0].kind == wavescript.Valid
+
+test "Parse /name commands with validator":
+  let error = parseAnsiwave(strutils.splitLines("/name hello-world"))
+  check error.len == 1
+  check error[0].kind == wavescript.Error
+  let success = parseAnsiwave(strutils.splitLines("/name helloworld"))
+  check success.len == 1
+  check success[0].kind == wavescript.Valid
+
 test "/,":
   let text = strutils.splitLines("""
 /banjo /octave 3 /16 b c+ /8 d+ b c+ a b g a
@@ -550,6 +566,8 @@ test "submit ansiwaves over http":
     let
       aliceKeys = ed25519.initKeyPair()
       alice = initUser(paths.encode(aliceKeys.public))
+      bobKeys = ed25519.initKeyPair()
+      bob = initUser(paths.encode(bobKeys.public))
     # post rejected because it's too big
     block:
       const hulk = staticRead("hulk.ansiwave")
@@ -573,6 +591,33 @@ test "submit ansiwaves over http":
       client.get(res, true)
       check res.value.kind == client.Valid
       check not os.fileExists(bbsDir / paths.ansiwavez(sysopPublicKey, postSig))
+    # bob tries to set an invalid user name
+    block:
+      let (body, sig) = common.signWithHeaders(bobKeys, "Hello\n/name hello world", bob.public_key, common.Edit, sysopPublicKey)
+      var res = client.submit(c, "ansiwave", body)
+      client.get(res, true)
+      check res.value.kind == client.Error
+    # bob tries to set a valid user name
+    var postSigBob = ""
+    block:
+      let (body, sig) = common.signWithHeaders(bobKeys, "Hello\n/name bobby ", bob.public_key, common.Edit, sysopPublicKey)
+      postSigBob = sig
+      var res = client.submit(c, "ansiwave", body)
+      client.get(res, true)
+      check res.value.kind == client.Valid
+    # bob edits his banner but doesn't change the name
+    block:
+      let (body, sig) = common.signWithHeaders(bobKeys, "Hello\n/name bobby\nYO", postSigBob, common.Edit, sysopPublicKey)
+      postSigBob = sig
+      var res = client.submit(c, "ansiwave", body)
+      client.get(res, true)
+      check res.value.kind == client.Valid
+    # bob edits his banner and removes his name
+    block:
+      let (body, sig) = common.signWithHeaders(bobKeys, "Hello\nYO", postSigBob, common.Edit, sysopPublicKey)
+      var res = client.submit(c, "ansiwave", body)
+      client.get(res, true)
+      check res.value.kind == client.Valid
   finally:
     os.removeFile(dbPath)
     server.stop(s)

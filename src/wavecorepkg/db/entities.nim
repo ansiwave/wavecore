@@ -7,6 +7,7 @@ from strutils import format
 from times import nil
 from ../common import nil
 import sets
+from ../wavescript import nil
 
 type
   CompressedValue* = object
@@ -190,7 +191,7 @@ proc initUser(stmt: PStmt): User =
 proc selectUser*(conn: PSqlite3, publicKey: string): User =
   const query =
     """
-      SELECT user_id, public_key, tags, tags_sig FROM user
+      SELECT user_id, public_key, tags, tags_sig, display_name FROM user
       WHERE public_key = ?
     """
   #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), publicKey):
@@ -204,12 +205,23 @@ proc selectUser*(conn: PSqlite3, publicKey: string): User =
 proc existsUser*(conn: PSqlite3, publicKey: string): bool =
   const query =
     """
-      SELECT user_id, public_key, tags, tags_sig FROM user
+      SELECT user_id, public_key, tags, tags_sig, display_name FROM user
       WHERE public_key = ?
     """
   #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), publicKey):
   #  echo x
   let ret = db.select[User](conn, initUser, query, publicKey)
+  ret.len == 1
+
+proc existsUsername*(conn: PSqlite3, name: string): bool =
+  const query =
+    """
+      SELECT user_id, public_key, tags, tags_sig, display_name FROM user
+      WHERE display_name = ?
+    """
+  #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), publicKey):
+  #  echo x
+  let ret = db.select[User](conn, initUser, query, name)
   ret.len == 1
 
 proc insertPost*(conn: PSqlite3, e: Post, id: var int64, dbPrefix: string = "", limbo: bool = false): string =
@@ -429,6 +441,44 @@ proc editPost*(conn: PSqlite3, content: Content, key: string): string =
 
   if post.public_key != key:
     raise newException(Exception, "Cannot edit this post")
+
+  # this is a banner, so try parsing their username out of it
+  var name = ""
+  if post.parent == "":
+    let lines = common.splitAfterHeaders(content.value.uncompressed)
+    var ctx = wavescript.initContext()
+    for line in lines:
+      if strutils.startsWith(line, "/name "):
+        let res = wavescript.parse(ctx, line)
+        if res.kind == wavescript.Error:
+          raise newException(Exception, res.message)
+        elif name != "":
+          raise newException(Exception, "You can only set /name once")
+        else:
+          name = res.args[0].name
+  if name != sourceUser.display_name:
+    if name == "":
+      db.withStatement(conn, "UPDATE user SET display_name = NULL WHERE public_key = ?", stmt):
+        db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), sourceUser.public_key)
+        if step(stmt) != SQLITE_DONE:
+          db_sqlite.dbError(conn)
+      db.withStatement(conn, "UPDATE post SET display_name = NULL WHERE public_key = ?", stmt):
+        db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), sourceUser.public_Key)
+        if step(stmt) != SQLITE_DONE:
+          db_sqlite.dbError(conn)
+    elif name.len < 2 or name.len > 20:
+      raise newException(Exception, "/name must between 2 and 20 characters")
+    elif existsUsername(conn, name):
+      raise newException(Exception, name & " is already taken")
+    else:
+      db.withStatement(conn, "UPDATE user SET display_name = ? WHERE public_key = ?", stmt):
+        db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), name, sourceUser.public_key)
+        if step(stmt) != SQLITE_DONE:
+          db_sqlite.dbError(conn)
+      db.withStatement(conn, "UPDATE post SET display_name = ? WHERE public_key = ?", stmt):
+        db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), name, sourceUser.public_Key)
+        if step(stmt) != SQLITE_DONE:
+          db_sqlite.dbError(conn)
 
   db.withStatement(conn, "UPDATE post SET content_sig_last = ? WHERE post_id = ?", stmt):
     db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), content.sig, post.post_id)

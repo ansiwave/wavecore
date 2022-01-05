@@ -1,6 +1,7 @@
 import unicode, tables, paramidi/constants
 from strutils import format
 import json, sets
+from urlly import nil
 
 type
   CommandText* = object
@@ -93,7 +94,25 @@ const
   ].toHashSet
   operatorCommands = ["/,"].toHashSet
   commands = initCommands()
-  stringCommands* = ["/section", "/link"].toHashSet
+  stringCommands* = ["/section", "/link", "/name"].toHashSet
+  stringCommandValidators = {
+    "/link":
+      proc (s: string): string =
+        var foundUrl = false
+        for word in strutils.split(s, " "):
+          if urlly.parseUrl(word).scheme != "":
+            foundUrl = true
+        if not foundUrl:
+          result = "No URL found. Write it like this:   /link hello world https://ansiwave.net"
+    ,
+    "/name":
+      proc (s: string): string =
+        for ch in s:
+          if ch == ' ':
+            return "You cannot have a space in your /name"
+          elif ch notin {'a'..'z', '0'..'9'}:
+            return "/name can only have numbers and lower-case letters"
+  }.toTable
 
 proc initContext*(): Context =
   result.commands = commands
@@ -280,22 +299,23 @@ proc parse*(context: var Context, command: CommandText): CommandTree =
   forms = newForms
   # if a string command, exit early
   if forms.len >= 1 and forms[0].kind == Symbol and forms[0].name in context.stringCommands:
+    var text, error = ""
+    if command.text.len > forms[0].name.len:
+      for ch in command.text[forms[0].name.len+1 ..< command.text.len].toRunes:
+        let s = $ch
+        if s in whitespaceChars:
+          text &= " "
+        else:
+          text &= s
+      text = strutils.strip(text)
+      if forms[0].name in stringCommandValidators:
+        error = stringCommandValidators[forms[0].name](text)
+      if error != "":
+        return CommandTree(kind: Error, line: command.line, message: error)
     return CommandTree(
       kind: Valid,
       name: forms[0].name,
-      args:
-        if command.text.len > forms[0].name.len:
-          var text = ""
-          for ch in command.text[forms[0].name.len+1 ..< command.text.len].toRunes:
-            let s = $ch
-            if s in whitespaceChars:
-              text &= " "
-            else:
-              text &= s
-          @[Form(kind: Symbol, name: strutils.strip(text))]
-        else:
-          @[]
-      ,
+      args: @[Form(kind: Symbol, name: text)],
       line: command.line,
       skip: true
     )
