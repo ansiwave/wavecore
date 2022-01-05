@@ -359,7 +359,7 @@ proc search*(conn: PSqlite3, kind: SearchKind, term: string, offset: int = 0): s
         """.format(limit, offset)
       of Users:
         """
-          SELECT public_key, tags, display_name FROM user
+          SELECT user_id, ts, public_key, tags, display_name FROM user
           WHERE tags NOT LIKE "%modhide%"
           ORDER BY ts DESC
           LIMIT $1
@@ -367,7 +367,7 @@ proc search*(conn: PSqlite3, kind: SearchKind, term: string, offset: int = 0): s
         """.format(limit, offset)
       of UserTags:
         """
-          SELECT public_key, tags, display_name FROM user
+          SELECT user_id, ts, public_key, tags, display_name FROM user
           WHERE tags NOT LIKE "%modhide%" AND tags != ""
           ORDER BY ts DESC
           LIMIT $1
@@ -400,7 +400,7 @@ proc search*(conn: PSqlite3, kind: SearchKind, term: string, offset: int = 0): s
         """.format((if kind == Posts: "parent != ''" else: "parent = ''"), limit, offset)
       of UserTags:
         """
-          SELECT public_key, tags, display_name FROM user
+          SELECT user_id, ts, public_key, tags, display_name FROM user
           WHERE user_id IN (SELECT user_id FROM user_search WHERE attribute MATCH 'tags' AND value MATCH ?)
           ORDER BY ts DESC
           LIMIT $1
