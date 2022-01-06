@@ -204,12 +204,12 @@ proc initUser(stmt: PStmt): User =
     of "display_name":
       result.display_name = $sqlite3.column_text(stmt, col)
 
-proc selectUser*(conn: PSqlite3, publicKey: string): User =
-  const query =
+proc selectUser*(conn: PSqlite3, publicKey: string, dbPrefix: string = ""): User =
+  let query =
     """
-      SELECT user_id, public_key, tags, tags_sig, display_name FROM user
+      SELECT user_id, public_key, tags, tags_sig, display_name FROM $1user
       WHERE public_key = ?
-    """
+    """.format(dbPrefix)
   #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), publicKey):
   #  echo x
   let ret = db.select[User](conn, initUser, query, publicKey)
@@ -241,7 +241,7 @@ proc existsUsername*(conn: PSqlite3, name: string): bool =
   ret.len == 1
 
 proc insertPost*(conn: PSqlite3, e: Post, id: var int64, dbPrefix: string = "", limbo: bool = false): string =
-  let sourceUser = selectUser(conn, e.public_key)
+  let sourceUser = selectUser(conn, e.public_key, dbPrefix)
   if "modban" in common.parseTags(sourceUser.tags.value):
     raise newException(Exception, "You are banned")
 
@@ -425,8 +425,8 @@ proc search*(conn: PSqlite3, kind: SearchKind, term: string, offset: int = 0): s
     #  echo x
     sequtils.toSeq(db.select[Post](conn, initPost, query, term))
 
-proc editPost*(conn: PSqlite3, content: Content, key: string, limbo: bool = false): string =
-  let sourceUser = selectUser(conn, key)
+proc editPost*(conn: PSqlite3, content: Content, key: string, dbPrefix: string = "", limbo: bool = false): string =
+  let sourceUser = selectUser(conn, key, dbPrefix)
   if "modban" in common.parseTags(sourceUser.tags.value):
     raise newException(Exception, "You are banned")
 
@@ -436,17 +436,17 @@ proc editPost*(conn: PSqlite3, content: Content, key: string, limbo: bool = fals
     # if the content sig_last is same as the public key, this is the first time they've edited their banner
     # so insert it into the db
     if content.sig_last == key:
-      discard insertPost(conn, Post(content: content, public_key: key))
+      discard insertPost(conn, Post(content: content, public_key: key), dbPrefix, limbo)
       content.sig
     else:
       content.sig_last
 
   proc selectPostByLastSig(conn: PSqlite3, sig: string): Post =
-    const query =
+    let query =
       """
-        SELECT post_id, content_sig, content_sig_last, public_key, parent, reply_count, score, partition, tags FROM post
+        SELECT post_id, content_sig, content_sig_last, public_key, parent, reply_count, score, partition, tags FROM $1post
         WHERE content_sig_last = ?
-      """
+      """.format(dbPrefix)
     let ret = db.select[Post](conn, initPost, query, sig)
     if ret.len == 1:
       ret[0]
@@ -497,12 +497,12 @@ proc editPost*(conn: PSqlite3, content: Content, key: string, limbo: bool = fals
           if step(stmt) != SQLITE_DONE:
             db_sqlite.dbError(conn)
 
-  db.withStatement(conn, "UPDATE post SET content_sig_last = ? WHERE post_id = ?", stmt):
+  db.withStatement(conn, "UPDATE $1post SET content_sig_last = ? WHERE post_id = ?".format(dbPrefix), stmt):
     db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), content.sig, post.post_id)
     if step(stmt) != SQLITE_DONE:
       db_sqlite.dbError(conn)
 
-  db.withStatement(conn, "UPDATE post_search SET value = ? WHERE post_id MATCH ? AND attribute MATCH 'content'", stmt):
+  db.withStatement(conn, "UPDATE $1post_search SET value = ? WHERE post_id MATCH ? AND attribute MATCH 'content'".format(dbPrefix), stmt):
     db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), common.stripUnsearchableText(content.value.uncompressed), post.post_id)
     if step(stmt) != SQLITE_DONE:
       db_sqlite.dbError(conn)

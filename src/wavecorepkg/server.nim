@@ -162,7 +162,9 @@ proc editTags*(details: ServerDetails, board: string, tags: entities.Tags, tagsS
             if posts.len == 0:
               break
             for post in posts:
-              if post.parent == "" or post.parent == post.public_key or entities.existsPost(conn, post.parent, dbPrefix = alias & "."):
+              if post.parent == "":
+                discard entities.editPost(conn, entities.Content(sig: post.content.sig_last, sig_last: post.public_key), post.public_key, dbPrefix = alias & ".")
+              elif post.parent == post.public_key or entities.existsPost(conn, post.parent, dbPrefix = alias & "."):
                 discard entities.insertPost(conn, post, dbPrefix = alias & ".")
               else:
                 echo "WARNING: Not moving invalid post from limbo: " & post.content.sig
