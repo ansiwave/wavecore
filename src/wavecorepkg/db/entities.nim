@@ -40,6 +40,8 @@ type
     display_name*: string
   SearchKind* = enum
     Posts, Users, UserTags,
+  SortBy* = enum
+    Ts, Score, ReplyCount,
 
 const limit* = 10
 
@@ -121,7 +123,7 @@ proc selectPostParentIds(conn: PSqlite3, id: int64, dbPrefix: string = ""): stri
         result.parent_ids = $sqlite3.column_text(stmt, col)
   db.select[tuple[parent_ids: string]](conn, init, query, id)[0].parent_ids
 
-proc selectPostChildren*(conn: PSqlite3, sig: string, sortByTs: bool = false, offset: int = 0): seq[Post] =
+proc selectPostChildren*(conn: PSqlite3, sig: string, sortBy: SortBy = Score, offset: int = 0): seq[Post] =
   let query =
     """
       SELECT post_id, ts, content_sig, content_sig_last, public_key, parent, reply_count, score, partition, tags, extra_tags, extra_tags_sig, display_name FROM post
@@ -129,7 +131,20 @@ proc selectPostChildren*(conn: PSqlite3, sig: string, sortByTs: bool = false, of
       ORDER BY $2 DESC
       LIMIT $3
       OFFSET $4
-    """.format((if sortByTs: "" else: "AND visibility = 1"), (if sortByTs: "ts" else: "score"), limit, offset)
+    """.format(
+      if sortBy == Score:
+       "AND visibility = 1"
+      else:
+       ""
+      ,
+      case sortBy
+      of Ts: "ts"
+      of Score: "score"
+      of ReplyCount: "reply_count"
+      ,
+      limit,
+      offset,
+    )
   #for x in db_sqlite.fastRows(conn, sql("EXPLAIN QUERY PLAN" & query), sig):
   #  echo x
   sequtils.toSeq(db.select[Post](conn, initPost, query, sig))

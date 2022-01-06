@@ -36,7 +36,7 @@ type
       postResponse*: ChannelRef[Result[entities.Post]]
     of QueryPostChildren:
       postParentSig*: string
-      sortByTs*: bool
+      sortBy*: entities.SortBy
       postChildrenResponse*: ChannelRef[Result[seq[entities.Post]]]
     of QueryUserPosts:
       userPostsPublicKey*: string
@@ -108,8 +108,8 @@ proc sendUserQuery*(client: Client, filename: string, publicKey: string, chan: C
 proc sendPostQuery*(client: Client, filename: string, sig: string, chan: ChannelRef) =
   sendAction(client, Action(kind: QueryPost, dbFilename: filename, postSig: sig, postResponse: chan))
 
-proc sendPostChildrenQuery*(client: Client, filename: string, sig: string, sortByTs: bool, offset: int, chan: ChannelRef) =
-  sendAction(client, Action(kind: QueryPostChildren, dbFilename: filename, postParentSig: sig, sortByTs: sortByTs, offset: offset, postChildrenResponse: chan))
+proc sendPostChildrenQuery*(client: Client, filename: string, sig: string, sortBy: entities.SortBy, offset: int, chan: ChannelRef) =
+  sendAction(client, Action(kind: QueryPostChildren, dbFilename: filename, postParentSig: sig, sortBy: sortBy, offset: offset, postChildrenResponse: chan))
 
 proc sendUserPostsQuery*(client: Client, filename: string, publicKey: string, offset: int, chan: ChannelRef) =
   sendAction(client, Action(kind: QueryUserPosts, dbFilename: filename, userPostsPublicKey: publicKey, offset: offset, userPostsResponse: chan))
@@ -200,7 +200,7 @@ proc recvAction(client: Client) {.thread.} =
           of Offline:
             (client.path / trimPath(action.dbFilename), false)
         db.withOpen(conn, path, useHttp):
-          action.postChildrenResponse[].send(Result[seq[entities.Post]](kind: Valid, valid: entities.selectPostChildren(conn, action.postParentSig, action.sortByTs, action.offset)))
+          action.postChildrenResponse[].send(Result[seq[entities.Post]](kind: Valid, valid: entities.selectPostChildren(conn, action.postParentSig, action.sortBy, action.offset)))
       except Exception as ex:
         action.postChildrenResponse[].send(Result[seq[entities.Post]](kind: Error, error: ex.msg))
     of QueryUserPosts:
