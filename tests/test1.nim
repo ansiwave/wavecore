@@ -664,7 +664,7 @@ test "limbo":
     # create banner
     var bannerSig = ""
     block:
-      let (body, sig) = common.signWithHeaders(aliceKeys, "This is my banner", alice.public_key, common.Edit, sysopPublicKey)
+      let (body, sig) = common.signWithHeaders(aliceKeys, "hello", alice.public_key, common.Edit, sysopPublicKey)
       bannerSig = sig
       var res = client.submit(c, "ansiwave", body)
       client.get(res, true)
@@ -708,15 +708,16 @@ test "limbo":
       check not os.fileExists(bbsDir / paths.ansiwavez(sysopPublicKey, postSig2, limbo = true))
       check os.fileExists(bbsDir / paths.ansiwavez(sysopPublicKey, postSig1))
       check os.fileExists(bbsDir / paths.ansiwavez(sysopPublicKey, postSig2))
-    # alice modifies her banner
-    block:
-      let (body, sig) = common.signWithHeaders(aliceKeys, "hello", bannerSig, common.Edit, sysopPublicKey)
-      var res = client.submit(c, "ansiwave", body)
-      client.get(res, true)
-      check res.value.kind == client.Valid
+    # make sure the posts brought from limbo are searchable
     db.withOpen(conn, dbPath, false):
       check entities.search(conn, entities.Users, "hello").len == 1
       check entities.search(conn, entities.Posts, "goodbye").len == 1
+    # alice modifies her banner
+    block:
+      let (body, sig) = common.signWithHeaders(aliceKeys, "This is my new banner", bannerSig, common.Edit, sysopPublicKey)
+      var res = client.submit(c, "ansiwave", body)
+      client.get(res, true)
+      check res.value.kind == client.Valid
   finally:
     os.removeFile(dbPath)
     server.stop(s)
