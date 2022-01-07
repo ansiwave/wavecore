@@ -408,15 +408,24 @@ proc search*(conn: PSqlite3, kind: SearchKind, term: string, offset: int = 0): s
   else:
     let query =
       case kind:
-      of Posts, Users:
+      of Posts:
         """
           SELECT post_id, ts, content_sig, content_sig_last, public_key, parent, reply_count, score, partition, tags, extra_tags, extra_tags_sig, display_name FROM post
           WHERE post_id IN (SELECT post_id FROM post_search WHERE attribute MATCH 'content' AND value MATCH ? ORDER BY rank)
           AND visibility = 1
-          AND $1
-          LIMIT $2
-          OFFSET $3
-        """.format((if kind == Posts: "parent != ''" else: "parent = ''"), limit, offset)
+          AND parent != ''
+          LIMIT $1
+          OFFSET $2
+        """.format(limit, offset)
+      of Users:
+        """
+          SELECT ts, public_key, tags, display_name FROM post
+          WHERE post_id IN (SELECT post_id FROM post_search WHERE attribute MATCH 'content' AND value MATCH ? ORDER BY rank)
+          AND visibility = 1
+          AND parent = ''
+          LIMIT $1
+          OFFSET $2
+        """.format(limit, offset)
       of UserTags:
         """
           SELECT user_id, ts, public_key, tags, display_name FROM user
