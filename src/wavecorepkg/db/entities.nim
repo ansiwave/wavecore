@@ -49,6 +49,10 @@ proc initCompressedValue*(uncompressed: string): CompressedValue =
   result.compressed = cast[seq[uint8]](zippy.compress(uncompressed, dataFormat = zippy.dfZlib))
   result.uncompressed = uncompressed
 
+proc initCompressedValue*(compressed: seq[uint8]): CompressedValue =
+  result.compressed = compressed
+  result.uncompressed = zippy.uncompress(cast[string](compressed), dataFormat = zippy.dfZlib)
+
 proc initPost(stmt: PStmt): Post =
   var cols = sqlite3.column_count(stmt)
   for col in 0 .. cols-1:

@@ -672,7 +672,7 @@ test "limbo":
     # new post replying to other post
     var postSig2 = ""
     block:
-      let (body, sig) = common.signWithHeaders(aliceKeys, "What's up", postSig1, common.New, sysopPublicKey)
+      let (body, sig) = common.signWithHeaders(aliceKeys, "goodbye", postSig1, common.New, sysopPublicKey)
       postSig2 = sig
       var res = client.submit(c, "ansiwave", body)
       client.get(res, true)
@@ -708,11 +708,15 @@ test "limbo":
       check not os.fileExists(bbsDir / paths.ansiwavez(sysopPublicKey, postSig2, limbo = true))
       check os.fileExists(bbsDir / paths.ansiwavez(sysopPublicKey, postSig1))
       check os.fileExists(bbsDir / paths.ansiwavez(sysopPublicKey, postSig2))
+    # alice modifies her banner
     block:
-      let (body, sig) = common.signWithHeaders(aliceKeys, "This is my new banner", bannerSig, common.Edit, sysopPublicKey)
+      let (body, sig) = common.signWithHeaders(aliceKeys, "hello", bannerSig, common.Edit, sysopPublicKey)
       var res = client.submit(c, "ansiwave", body)
       client.get(res, true)
       check res.value.kind == client.Valid
+    db.withOpen(conn, dbPath, false):
+      check entities.search(conn, entities.Users, "hello").len == 1
+      check entities.search(conn, entities.Posts, "goodbye").len == 1
   finally:
     os.removeFile(dbPath)
     server.stop(s)
