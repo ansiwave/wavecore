@@ -144,61 +144,62 @@ proc editPost*(details: ServerDetails, board: string, content: entities.Content,
 proc editTags*(details: ServerDetails, board: string, tags: entities.Tags, tagsSigLast: string, key: string, extra: bool) =
   var exitEarly = false
   # if we're editing a user in limbo
-  db.withOpen(conn, details.staticFileDir / paths.db(board, limbo = true), false):
-    db.withTransaction(conn):
-      if entities.existsUser(conn, tagsSigLast):
-        let
-          content = common.splitAfterHeaders(tags.value)
-          newTags = common.parseTags(content[0])
-        if "modlimbo" in newTags:
-          raise newException(Exception, "You must remove modlimbo tag first")
-        else:
-          if "modpurge" in newTags:
-            # we're deleting the user from limbo without bringing them into the main db
-            exitEarly = true
+  if not extra:
+    db.withOpen(conn, details.staticFileDir / paths.db(board, limbo = true), false):
+      db.withTransaction(conn):
+        if entities.existsUser(conn, tagsSigLast):
+          let
+            content = common.splitAfterHeaders(tags.value)
+            newTags = common.parseTags(content[0])
+          if "modlimbo" in newTags:
+            raise newException(Exception, "You must remove modlimbo tag first")
           else:
-            const alias = "board"
-            db.attach(conn, details.staticFileDir / paths.db(board), alias)
-            entities.insertUser(conn, entities.User(public_key: tagsSigLast, tags: entities.Tags(value: "")), dbPrefix = alias & ".")
-            # insert posts into main db
-            var offset = 0
-            while true:
-              let posts = entities.selectAllUserPosts(conn, tagsSigLast, offset)
-              if posts.len == 0:
-                break
-              for post in posts:
-                let
-                  src = details.staticFileDir / paths.ansiwavez(board, post.content.sig, limbo = true)
-                  value =
-                    if os.fileExists(src):
-                      entities.initCompressedValue(cast[seq[uint8]](readFile(src)))
-                    else:
-                      entities.CompressedValue()
-                if post.parent == "":
-                  discard entities.editPost(conn, entities.Content(sig: post.content.sig_last, sig_last: post.public_key, value: value), post.public_key, dbPrefix = alias & ".")
-                elif post.parent == post.public_key or entities.existsPost(conn, post.parent, dbPrefix = alias & "."):
-                  var p = post
-                  p.content.value = value
-                  discard entities.insertPost(conn, p, dbPrefix = alias & ".")
-                else:
-                  echo "WARNING: Not moving invalid post from limbo: " & post.content.sig
-                  os.removeFile(details.staticFileDir / paths.ansiwavez(board, post.content.sig, limbo = true))
-              offset += entities.limit
-            # move ansiwavez files
-            offset = 0
-            while true:
-              let posts = entities.selectAllUserPosts(conn, tagsSigLast, offset)
-              if posts.len == 0:
-                break
-              for post in posts:
-                let
-                  src = details.staticFileDir / paths.ansiwavez(board, post.content.sig, limbo = true)
-                  dest = details.staticFileDir / paths.ansiwavez(board, post.content.sig)
-                if os.fileExists(src):
-                  os.moveFile(src, dest)
-              offset += entities.limit
-          # delete user in limbo db
-          entities.deleteUser(conn, tagsSigLast)
+            if "modpurge" in newTags:
+              # we're deleting the user from limbo without bringing them into the main db
+              exitEarly = true
+            else:
+              const alias = "board"
+              db.attach(conn, details.staticFileDir / paths.db(board), alias)
+              entities.insertUser(conn, entities.User(public_key: tagsSigLast, tags: entities.Tags(value: "")), dbPrefix = alias & ".")
+              # insert posts into main db
+              var offset = 0
+              while true:
+                let posts = entities.selectAllUserPosts(conn, tagsSigLast, offset)
+                if posts.len == 0:
+                  break
+                for post in posts:
+                  let
+                    src = details.staticFileDir / paths.ansiwavez(board, post.content.sig, limbo = true)
+                    value =
+                      if os.fileExists(src):
+                        entities.initCompressedValue(cast[seq[uint8]](readFile(src)))
+                      else:
+                        entities.CompressedValue()
+                  if post.parent == "":
+                    discard entities.editPost(conn, entities.Content(sig: post.content.sig_last, sig_last: post.public_key, value: value), post.public_key, dbPrefix = alias & ".")
+                  elif post.parent == post.public_key or entities.existsPost(conn, post.parent, dbPrefix = alias & "."):
+                    var p = post
+                    p.content.value = value
+                    discard entities.insertPost(conn, p, dbPrefix = alias & ".")
+                  else:
+                    echo "WARNING: Not moving invalid post from limbo: " & post.content.sig
+                    os.removeFile(details.staticFileDir / paths.ansiwavez(board, post.content.sig, limbo = true))
+                offset += entities.limit
+              # move ansiwavez files
+              offset = 0
+              while true:
+                let posts = entities.selectAllUserPosts(conn, tagsSigLast, offset)
+                if posts.len == 0:
+                  break
+                for post in posts:
+                  let
+                    src = details.staticFileDir / paths.ansiwavez(board, post.content.sig, limbo = true)
+                    dest = details.staticFileDir / paths.ansiwavez(board, post.content.sig)
+                  if os.fileExists(src):
+                    os.moveFile(src, dest)
+                offset += entities.limit
+            # delete user in limbo db
+            entities.deleteUser(conn, tagsSigLast)
   if exitEarly:
     return
   # insert into main db
