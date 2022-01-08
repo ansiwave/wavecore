@@ -1,6 +1,6 @@
 # Package
 
-version       = "0.3.4"
+version       = "0.3.5"
 author        = "oakes"
 description   = "Server and client utils for ANSIWAVE BBS"
 license       = "Public Domain"
