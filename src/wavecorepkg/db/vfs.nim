@@ -106,8 +106,7 @@ let customMethods = sqlite3_io_methods(
           Header(key: "Cache-Control", value: "no-cache, no-store"),
         ]
       ))
-      if res.code == 206:
-        assert res.body.len == amt
+      if res.code == 206 and res.body.len == amt:
         copyMem(buf, res.body[0].addr, res.body.len)
       else:
         return SQLITE_ERROR
