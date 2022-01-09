@@ -134,6 +134,8 @@ let customMethods = sqlite3_io_methods(
         return SQLITE_OK
       except Exception as ex:
         return SQLITE_ERROR
+    else:
+      return SQLITE_ERROR
   ,
   xLock: proc (a1: ptr sqlite3_file; a2: cint): cint {.cdecl.} = SQLITE_OK,
   xUnlock: proc (a1: ptr sqlite3_file; a2: cint): cint {.cdecl.} = SQLITE_OK,
