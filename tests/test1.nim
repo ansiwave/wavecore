@@ -656,8 +656,10 @@ test "limbo":
       check res.value.kind == client.Valid
       check os.fileExists(bbsDir / paths.ansiwavez(sysopPublicKey, sig, limbo = true))
     # edit post
+    var postSig1Edit = ""
     block:
       let (body, sig) = common.signWithHeaders(aliceKeys, "Hi i'm alice!!", postSig1, common.Edit, sysopPublicKey)
+      postSig1Edit = sig
       var res = client.submit(c, "ansiwave", body)
       client.get(res, true)
       check res.value.kind == client.Valid
@@ -715,6 +717,12 @@ test "limbo":
     # alice modifies her banner
     block:
       let (body, sig) = common.signWithHeaders(aliceKeys, "This is my new banner", bannerSig, common.Edit, sysopPublicKey)
+      var res = client.submit(c, "ansiwave", body)
+      client.get(res, true)
+      check res.value.kind == client.Valid
+    # edit post
+    block:
+      let (body, sig) = common.signWithHeaders(aliceKeys, "Hi i'm alice!!!!!", postSig1Edit, common.Edit, sysopPublicKey)
       var res = client.submit(c, "ansiwave", body)
       client.get(res, true)
       check res.value.kind == client.Valid

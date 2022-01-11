@@ -296,13 +296,20 @@ proc insertPost*(conn: PSqlite3, e: Post, id: var int64, dbPrefix: string = "", 
         e.public_key
       else:
         e.content.sig
+    sigLast =
+      # when coming from limbo, we'll using the sig_last.
+      # otherise, it's a brand new post so sig_last will be sig
+      if e.content.sig_last != "" and e.content.sig_last != e.public_key:
+        e.content.sig_last
+      else:
+        e.content.sig
 
   let
     visibility = if "modhide" in common.parseTags(sourceUser.tags.value): 0 else: 1
     ts = times.toUnix(times.getTime())
 
   db.withStatement(conn, "INSERT INTO $1post (ts, content_sig, content_sig_last, public_key, parent, parent_public_key, reply_count, distinct_reply_count, score, visibility, tags, extra_tags, extra_tags_sig, display_name) VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0, ?, ?, ?, ?, ?)".format(dbPrefix), stmt):
-    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), ts, sig, e.content.sig, e.public_key, e.parent, parentPublicKey, visibility, sourceUser.tags.value, "", sig, sourceUser.display_name)
+    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), ts, sig, sigLast, e.public_key, e.parent, parentPublicKey, visibility, sourceUser.tags.value, "", sig, sourceUser.display_name)
     if step(stmt) != SQLITE_DONE:
       db_sqlite.dbError(conn)
     id = sqlite3.last_insert_rowid(conn)
