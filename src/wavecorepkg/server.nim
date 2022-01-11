@@ -276,7 +276,7 @@ proc ansiwavePost(data: ThreadData, request: Request, headers: var string, body:
   of "new":
     let
       post = entities.Post(
-        content: entities.Content(value: entities.initCompressedValue(request.body), sig: sigBase64),
+        content: entities.Content(value: entities.initCompressedValue(request.body), sig: sigBase64, sig_last: sigBase64),
         public_key: keyBase64,
         parent: cmds["/target"],
       )
