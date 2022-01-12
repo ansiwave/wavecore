@@ -145,3 +145,17 @@ proc init*(conn: PSqlite3) =
 
 proc attach*(conn: PSqlite3, path: string, alias: string) =
   db_sqlite.exec conn, sql("ATTACH DATABASE '$1' AS $2".format(path, alias))
+
+proc shell*(dbPath: string) =
+  echo "Write a query and hit enter:"
+  let query = readLine(stdin)
+  db.withOpen(conn, dbPath, false):
+    db.withTransaction(conn):
+      var stmt: PStmt
+      withStatement(conn, query, stmt):
+        while step(stmt) == SQLITE_ROW:
+          echo ""
+          var cols = sqlite3.column_count(stmt)
+          for col in 0 .. cols-1:
+            echo $sqlite3.column_name(stmt, col), ": ", $sqlite3.column_text(stmt, col)
+
