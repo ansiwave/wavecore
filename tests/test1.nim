@@ -362,7 +362,6 @@ test "search posts":
     check entities.search(conn, entities.UserTags, "moderator").len == 1
 
 from ./wavecorepkg/db/db_sqlite import sql
-from times import nil
 
 test "score":
   db.withOpen(conn, ":memory:", false):
