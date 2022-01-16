@@ -154,12 +154,14 @@ proc editTags*(details: ServerDetails, board: string, tags: entities.Tags, tagsS
           if "modlimbo" in newTags:
             raise newException(Exception, "You must remove modlimbo tag first")
           else:
+            const alias = "board"
+            db.attach(conn, details.staticFileDir / paths.db(board), alias)
+            # try editing the tags to ensure the user is allowed to
+            entities.editTags(conn, tags, tagsSigLast, board, key, dbPrefix = alias & ".")
             if "modpurge" in newTags:
               # we're deleting the user from limbo without bringing them into the main db
               exitEarly = true
             else:
-              const alias = "board"
-              db.attach(conn, details.staticFileDir / paths.db(board), alias)
               entities.insertUser(conn, entities.User(public_key: tagsSigLast, tags: entities.Tags(value: "")), dbPrefix = alias & ".")
               # insert posts into main db
               var offset = 0

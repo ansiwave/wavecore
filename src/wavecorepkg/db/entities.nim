@@ -546,7 +546,7 @@ const
   modCommandsRestricted = ["modleader", "moderator", "modpurge"].toHashSet
   modCommands = modCommandsRestricted + ["modban", "modhide"].toHashSet
 
-proc editTags*(conn: PSqlite3, tags: Tags, tagsSigLast: string, board: string, key: string, userToPurge: var string) =
+proc editTags*(conn: PSqlite3, tags: Tags, tagsSigLast: string, board: string, key: string, userToPurge: var string, dbPrefix: string = "") =
   if tagsSigLast == board:
     raise newException(Exception, "Cannot tag the sysop")
 
@@ -585,7 +585,7 @@ proc editTags*(conn: PSqlite3, tags: Tags, tagsSigLast: string, board: string, k
 
   if key != board:
     let
-      sourceUser = selectUser(conn, key)
+      sourceUser = selectUser(conn, key, dbPrefix)
       sourceTags = common.parseTags(sourceUser.tags.value)
     if "modban" in sourceTags:
       raise newException(Exception, "You are banned")
@@ -627,9 +627,9 @@ proc editTags*(conn: PSqlite3, tags: Tags, tagsSigLast: string, board: string, k
       if step(stmt) != SQLITE_DONE:
         db_sqlite.dbError(conn)
 
-proc editTags*(conn: PSqlite3, tags: Tags, tagsSigLast: string, board: string, key: string) =
+proc editTags*(conn: PSqlite3, tags: Tags, tagsSigLast: string, board: string, key: string, dbPrefix: string = "") =
   var userToPurge: string
-  editTags(conn, tags, tagsSigLast, board, key, userToPurge)
+  editTags(conn, tags, tagsSigLast, board, key, userToPurge, dbPrefix)
 
 proc deleteUser*(conn: PSqlite3, publicKey: string) =
   let user = selectUser(conn, publicKey)

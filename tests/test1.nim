@@ -699,6 +699,12 @@ test "limbo":
       var res = client.submit(c, "ansiwave", body)
       client.get(res, true)
       check res.value.kind == client.Valid
+    # bob tries to bring purge alice but it fails
+    block:
+      let (body, sig) = common.signWithHeaders(bobKeys, "modpurge", alice.public_key, common.Tags, sysopPublicKey)
+      var res = client.submit(c, "ansiwave", body)
+      client.get(res, true)
+      check res.value.kind == client.Error
     # bring alice out of limbo
     block:
       let (body, sig) = common.signWithHeaders(sysopKeys, "", alice.public_key, common.Tags, sysopPublicKey)
