@@ -15,7 +15,7 @@ task dev, "Run dev version":
 
 requires "nim >= 1.2.6"
 requires "urlly >= 1.0.0"
-requires "puppy >= 1.4.0"
+requires "puppy >= 1.5.1"
 requires "flatty >= 0.2.3"
 requires "zippy >= 0.7.3"
 requires "paramidi >= 0.6.0"
