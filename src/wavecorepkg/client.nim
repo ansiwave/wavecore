@@ -1,8 +1,6 @@
-from strutils import nil
 from ./db/entities import nil
 from urlly import nil
 from paths import nil
-from os import `/`
 
 when defined(emscripten):
   import client/emscripten

@@ -1,5 +1,4 @@
 import ./sqlite3
-from os import `/`
 from strformat import fmt
 from strutils import nil
 from ../paths import nil
