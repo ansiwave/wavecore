@@ -106,9 +106,6 @@ proc wavecore_stop_audio() {.importc.}
 proc wavecore_get_hash(): cstring {.importc.}
 proc wavecore_set_hash(hash: cstring) {.importc.}
 proc wavecore_open_new_tab(url: cstring) {.importc.}
-proc wavecore_scroll_up(top: cint) {.importc.}
-proc wavecore_scroll_down(bottom: cint) {.importc.}
-proc wavecore_copy_text(text: cstring) {.importc.}
 proc free(p: pointer) {.importc.}
 
 {.compile: "emscripten.c".}
@@ -175,9 +172,6 @@ proc playAudio*(src: string) =
 proc stopAudio*() =
   wavecore_stop_audio()
 
-proc copyText*(text: string) =
-  wavecore_copy_text(text)
-
 proc initChannelValue*[T](): ChannelValue[T] =
   result = ChannelValue[T](
     started: true,
@@ -196,12 +190,6 @@ proc setHash*(hash: string) =
 
 proc openNewTab*(url: string) =
   wavecore_open_new_tab(url)
-
-proc scrollUp*(top: int32) =
-  wavecore_scroll_up(top)
-
-proc scrollDown*(bottom: int32) =
-  wavecore_scroll_down(bottom)
 
 proc get*[T](cv: var ChannelValue[T]) =
   if cv.started and not cv.ready:
