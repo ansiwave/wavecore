@@ -37,9 +37,30 @@ EM_JS(char*, wavecore_fetch, (const char* url, const char* verb, const char* hea
   return stringOnWasmHeap;
 });
 
+EM_JS(char*, wavecore_get_innerhtml, (const char* selector), {
+  var elem = document.querySelector(UTF8ToString(selector));
+  var content = elem.innerHTML;
+  var lengthBytes = lengthBytesUTF8(content)+1;
+  var stringOnWasmHeap = _malloc(lengthBytes);
+  stringToUTF8(content, stringOnWasmHeap, lengthBytes);
+  return stringOnWasmHeap;
+});
+
 EM_JS(void, wavecore_set_innerhtml, (const char* selector, const char* html), {
   var elem = document.querySelector(UTF8ToString(selector));
   elem.innerHTML = UTF8ToString(html);
+});
+
+EM_JS(int, wavecore_set_location, (const char* selector, int left, int top), {
+  var elem = document.querySelector(UTF8ToString(selector));
+  elem.style.left = left + "px";
+  elem.style.top = top + "px";
+});
+
+EM_JS(int, wavecore_set_size, (const char* selector, int width, int height), {
+  var elem = document.querySelector(UTF8ToString(selector));
+  elem.style.width = width + "px";
+  elem.style.height = height + "px";
 });
 
 EM_JS(int, wavecore_get_client_width, (), {
@@ -74,10 +95,6 @@ EM_JS(void, wavecore_browse_file, (const char* callback), {
   };
   elem.addEventListener('change', importImage);
   elem.click();
-});
-
-EM_JS(float, wavecore_get_pixel_density, (), {
-  return window.devicePixelRatio;
 });
 
 EM_JS(void, wavecore_start_download, (const char* data_uri, const char* filename), {
@@ -157,4 +174,14 @@ EM_JS(void, wavecore_set_hash, (const char* hash), {
 
 EM_JS(void, wavecore_open_new_tab, (const char* url), {
   window.open(UTF8ToString(url), "_blank");
+});
+
+EM_JS(void, wavecore_set_display, (const char* selector, const char* display), {
+  var elem = document.querySelector(UTF8ToString(selector));
+  elem.style.display = UTF8ToString(display);
+});
+
+EM_JS(void, wavecore_focus, (const char* selector), {
+  var elem = document.querySelector(UTF8ToString(selector));
+  elem.focus();
 });

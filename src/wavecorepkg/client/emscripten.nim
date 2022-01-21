@@ -91,11 +91,13 @@ proc emscripten_call_worker(worker: cint, funcname: cstring, data: cstring, size
 proc emscripten_worker_respond(data: cstring, size: cint) {.importc.}
 proc emscripten_async_wget_data(url: cstring, arg: pointer, onload: pointer, onerror: pointer) {.importc.}
 proc wavecore_fetch(url: cstring, verb: cstring, headers: cstring, body: cstring): cstring {.importc.}
+proc wavecore_get_innerhtml(selector: cstring): cstring {.importc.}
 proc wavecore_set_innerhtml(selector: cstring, html: cstring) {.importc.}
+proc wavecore_set_location(selector: cstring, left: cint, top: cint) {.importc.}
+proc wavecore_set_size(selector: cstring, width: cint, height: cint) {.importc.}
 proc wavecore_get_client_width(): cint {.importc.}
 proc wavecore_get_client_height(): cint {.importc.}
 proc wavecore_browse_file(callback: cstring) {.importc.}
-proc wavecore_get_pixel_density(): cfloat {.importc.}
 proc wavecore_start_download(data_uri: cstring, filename: cstring) {.importc.}
 proc wavecore_localstorage_set(key: cstring, val: cstring): bool {.importc.}
 proc wavecore_localstorage_get(key: cstring): cstring {.importc.}
@@ -106,6 +108,8 @@ proc wavecore_stop_audio() {.importc.}
 proc wavecore_get_hash(): cstring {.importc.}
 proc wavecore_set_hash(hash: cstring) {.importc.}
 proc wavecore_open_new_tab(url: cstring) {.importc.}
+proc wavecore_set_display(selector: cstring, display: cstring) {.importc.}
+proc wavecore_focus(selector: cstring) {.importc.}
 proc free(p: pointer) {.importc.}
 
 {.compile: "emscripten.c".}
@@ -131,8 +135,19 @@ proc fetch*(request: Request): Response =
   result = Response(body: body, code: code, headers: resHeaders)
   free(res)
 
+proc getInnerHtml*(selector: string): string =
+  let html = wavecore_get_innerhtml(selector)
+  result = $html
+  free(html)
+
 proc setInnerHtml*(selector: string, html: string) =
   wavecore_set_innerhtml(selector, html)
+
+proc setLocation*(selector: string, left: int32, top: int32) =
+  wavecore_set_location(selector, left, top)
+
+proc setSize*(selector: string, width: int32, height: int32) =
+  wavecore_set_size(selector, width, height)
 
 proc getClientWidth*(): int32 =
   wavecore_get_client_width()
@@ -142,9 +157,6 @@ proc getClientHeight*(): int32 =
 
 proc browseFile*(callback: string) =
   wavecore_browse_file(callback)
-
-proc getPixelDensity*(): float32 =
-  wavecore_get_pixel_density()
 
 proc startDownload*(dataUri: string, filename: string) =
   wavecore_start_download(dataUri, filename)
@@ -190,6 +202,12 @@ proc setHash*(hash: string) =
 
 proc openNewTab*(url: string) =
   wavecore_open_new_tab(url)
+
+proc setDisplay*(selector: string, display: string) =
+  wavecore_set_display(selector, display)
+
+proc focus*(selector: string) =
+  wavecore_focus(selector)
 
 proc get*[T](cv: var ChannelValue[T]) =
   if cv.started and not cv.ready:
