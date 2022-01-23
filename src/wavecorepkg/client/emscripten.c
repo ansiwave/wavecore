@@ -39,7 +39,10 @@ EM_JS(char*, wavecore_fetch, (const char* url, const char* verb, const char* hea
 
 EM_JS(char*, wavecore_get_innerhtml, (const char* selector), {
   var elem = document.querySelector(UTF8ToString(selector));
-  var content = elem.innerHTML;
+  var content = "";
+  if (elem) {
+    content = elem.innerHTML;
+  }
   var lengthBytes = lengthBytesUTF8(content)+1;
   var stringOnWasmHeap = _malloc(lengthBytes);
   stringToUTF8(content, stringOnWasmHeap, lengthBytes);
