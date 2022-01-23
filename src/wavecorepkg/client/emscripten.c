@@ -48,17 +48,20 @@ EM_JS(char*, wavecore_get_innerhtml, (const char* selector), {
 
 EM_JS(void, wavecore_set_innerhtml, (const char* selector, const char* html), {
   var elem = document.querySelector(UTF8ToString(selector));
+  if (!elem) return;
   elem.innerHTML = UTF8ToString(html);
 });
 
-EM_JS(int, wavecore_set_location, (const char* selector, int left, int top), {
+EM_JS(void, wavecore_set_location, (const char* selector, int left, int top), {
   var elem = document.querySelector(UTF8ToString(selector));
+  if (!elem) return;
   elem.style.left = left + "px";
   elem.style.top = top + "px";
 });
 
-EM_JS(int, wavecore_set_size, (const char* selector, int width, int height), {
+EM_JS(void, wavecore_set_size, (const char* selector, int width, int height), {
   var elem = document.querySelector(UTF8ToString(selector));
+  if (!elem) return;
   elem.style.width = width + "px";
   elem.style.height = height + "px";
 });
@@ -178,20 +181,27 @@ EM_JS(void, wavecore_open_new_tab, (const char* url), {
 
 EM_JS(void, wavecore_set_display, (const char* selector, const char* display), {
   var elem = document.querySelector(UTF8ToString(selector));
+  if (!elem) return;
   elem.style.display = UTF8ToString(display);
 });
 
 EM_JS(void, wavecore_focus, (const char* selector), {
   var elem = document.querySelector(UTF8ToString(selector));
+  if (!elem) return;
   elem.focus();
 });
 
 EM_JS(void, wavecore_scroll_down, (const char* selector), {
   var elem = document.querySelector(UTF8ToString(selector));
-  elem.scrollTop = elem.scrollHeight;
+  if (elem) {
+    elem.scrollTop = elem.scrollHeight;
+  }
 });
 
 EM_JS(int, wavecore_get_cursor_line, (const char* selector), {
+  var elem = document.querySelector(UTF8ToString(selector));
+  if (!elem) return;
+
   function uuidv4() {
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
       var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
@@ -210,7 +220,6 @@ EM_JS(int, wavecore_get_cursor_line, (const char* selector), {
   span.appendChild(document.createTextNode(id));
   range.insertNode(span);
 
-  var elem = document.querySelector(UTF8ToString(selector));
   var text = elem.innerText;
   var newLines = 0;
   var lastNewline = null;
