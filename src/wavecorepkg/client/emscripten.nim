@@ -111,6 +111,7 @@ proc wavecore_open_new_tab(url: cstring) {.importc.}
 proc wavecore_set_display(selector: cstring, display: cstring) {.importc.}
 proc wavecore_focus(selector: cstring) {.importc.}
 proc wavecore_scroll_down(selector: cstring) {.importc.}
+proc wavecore_get_cursor_line(selector: cstring): cint {.importc.}
 proc free(p: pointer) {.importc.}
 
 {.compile: "emscripten.c".}
@@ -212,6 +213,9 @@ proc focus*(selector: string) =
 
 proc scrollDown*(selector: string) =
   wavecore_scroll_down(selector)
+
+proc getCursorLine*(selector: string): int =
+  wavecore_get_cursor_line(selector)
 
 proc get*[T](cv: var ChannelValue[T]) =
   if cv.started and not cv.ready:
