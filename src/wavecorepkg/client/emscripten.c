@@ -185,3 +185,8 @@ EM_JS(void, wavecore_focus, (const char* selector), {
   var elem = document.querySelector(UTF8ToString(selector));
   elem.focus();
 });
+
+EM_JS(void, wavecore_scroll_down, (const char* selector), {
+  var elem = document.querySelector(UTF8ToString(selector));
+  elem.scrollTop = elem.scrollHeight;
+});
