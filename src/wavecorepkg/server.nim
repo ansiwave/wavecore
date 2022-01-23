@@ -382,9 +382,10 @@ proc handle(data: ThreadData, client: Socket) =
       if parseutils.parseSaturatedNatural(request.headers["Content-Length"], contentLength) == 0:
         raise newException(BadRequestException, "Invalid Content-Length")
       elif contentLength > maxContentLength:
+        client.skip(contentLength, recvTimeout)
         raise newException(BadRequestException, "The Content-Length is too large")
       else:
-        request.body = client.recv(contentLength)
+        request.body = client.recv(contentLength, recvTimeout)
     # handle requests
     let dispatch = (reqMethod: request.reqMethod, path: request.uri.path)
     if dispatch == (httpcore.HttpPost, "/ansiwave"):
