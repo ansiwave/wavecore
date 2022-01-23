@@ -87,7 +87,7 @@ const
     else:
       100
   recvTimeout = 2000
-  maxContentLength = 200000
+  maxContentLength = 300000
   maxHeaderCount = 100
 
 proc initServer*(hostname: string, port: int, staticFileDir: string = "", options: Table[string, string] = initTable[string, string]()): Server =
