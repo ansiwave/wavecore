@@ -200,6 +200,9 @@ EM_JS(int, wavecore_get_cursor_line, (const char* selector), {
   }
 
   var selection = document.getSelection();
+  if (selection.rangeCount < 1) {
+    return -1;
+  }
   var range = selection.getRangeAt(0);
   range.collapse(true);
   var span = document.createElement('span');
