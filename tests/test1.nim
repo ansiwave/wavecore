@@ -570,7 +570,7 @@ test "submit ansiwaves over http":
     # post rejected because it's too big
     block:
       const hulk = staticRead("hulk.ansiwave")
-      let (body, sig) = common.signWithHeaders(aliceKeys, strutils.repeat(hulk, 15), subboardSig, common.New, sysopPublicKey)
+      let (body, sig) = common.signWithHeaders(aliceKeys, strutils.repeat(hulk, 20), subboardSig, common.New, sysopPublicKey)
       var res = client.submit(c, "ansiwave", body)
       client.get(res, true)
       check res.value.kind == client.Error
