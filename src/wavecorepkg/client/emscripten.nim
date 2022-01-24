@@ -91,12 +91,6 @@ proc emscripten_call_worker(worker: cint, funcname: cstring, data: cstring, size
 proc emscripten_worker_respond(data: cstring, size: cint) {.importc.}
 proc emscripten_async_wget_data(url: cstring, arg: pointer, onload: pointer, onerror: pointer) {.importc.}
 proc wavecore_fetch(url: cstring, verb: cstring, headers: cstring, body: cstring): cstring {.importc.}
-proc wavecore_get_innerhtml(selector: cstring): cstring {.importc.}
-proc wavecore_set_innerhtml(selector: cstring, html: cstring) {.importc.}
-proc wavecore_set_location(selector: cstring, left: cint, top: cint) {.importc.}
-proc wavecore_set_size(selector: cstring, width: cint, height: cint) {.importc.}
-proc wavecore_get_client_width(): cint {.importc.}
-proc wavecore_get_client_height(): cint {.importc.}
 proc wavecore_browse_file(callback: cstring) {.importc.}
 proc wavecore_start_download(data_uri: cstring, filename: cstring) {.importc.}
 proc wavecore_localstorage_set(key: cstring, val: cstring): bool {.importc.}
@@ -105,13 +99,9 @@ proc wavecore_localstorage_remove(key: cstring) {.importc.}
 proc wavecore_localstorage_list(): cstring {.importc.}
 proc wavecore_play_audio(src: cstring) {.importc.}
 proc wavecore_stop_audio() {.importc.}
+proc wavecore_open_new_tab(url: cstring) {.importc.}
 proc wavecore_get_hash(): cstring {.importc.}
 proc wavecore_set_hash(hash: cstring) {.importc.}
-proc wavecore_open_new_tab(url: cstring) {.importc.}
-proc wavecore_set_display(selector: cstring, display: cstring) {.importc.}
-proc wavecore_focus(selector: cstring) {.importc.}
-proc wavecore_scroll_down(selector: cstring) {.importc.}
-proc wavecore_get_cursor_line(selector: cstring): cint {.importc.}
 proc free(p: pointer) {.importc.}
 
 {.compile: "emscripten.c".}
@@ -136,26 +126,6 @@ proc fetch*(request: Request): Response =
       hs
   result = Response(body: body, code: code, headers: resHeaders)
   free(res)
-
-proc getInnerHtml*(selector: string): string =
-  let html = wavecore_get_innerhtml(selector)
-  result = $html
-  free(html)
-
-proc setInnerHtml*(selector: string, html: string) =
-  wavecore_set_innerhtml(selector, html)
-
-proc setLocation*(selector: string, left: int32, top: int32) =
-  wavecore_set_location(selector, left, top)
-
-proc setSize*(selector: string, width: int32, height: int32) =
-  wavecore_set_size(selector, width, height)
-
-proc getClientWidth*(): int32 =
-  wavecore_get_client_width()
-
-proc getClientHeight*(): int32 =
-  wavecore_get_client_height()
 
 proc browseFile*(callback: string) =
   wavecore_browse_file(callback)
@@ -186,13 +156,8 @@ proc playAudio*(src: string) =
 proc stopAudio*() =
   wavecore_stop_audio()
 
-proc initChannelValue*[T](): ChannelValue[T] =
-  result = ChannelValue[T](
-    started: true,
-    chan: cast[ChannelRef](
-      allocShared0(sizeof(Channel))
-    )
-  )
+proc openNewTab*(url: string) =
+  wavecore_open_new_tab(url)
 
 proc getHash*(): string =
   let hash = wavecore_get_hash()
@@ -202,20 +167,13 @@ proc getHash*(): string =
 proc setHash*(hash: string) =
   wavecore_set_hash(hash)
 
-proc openNewTab*(url: string) =
-  wavecore_open_new_tab(url)
-
-proc setDisplay*(selector: string, display: string) =
-  wavecore_set_display(selector, display)
-
-proc focus*(selector: string) =
-  wavecore_focus(selector)
-
-proc scrollDown*(selector: string) =
-  wavecore_scroll_down(selector)
-
-proc getCursorLine*(selector: string): int =
-  wavecore_get_cursor_line(selector)
+proc initChannelValue*[T](): ChannelValue[T] =
+  result = ChannelValue[T](
+    started: true,
+    chan: cast[ChannelRef](
+      allocShared0(sizeof(Channel))
+    )
+  )
 
 proc get*[T](cv: var ChannelValue[T]) =
   if cv.started and not cv.ready:
