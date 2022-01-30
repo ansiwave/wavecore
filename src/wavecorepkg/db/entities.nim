@@ -410,8 +410,10 @@ proc search*(conn: PSqlite3, kind: SearchKind, term: string, offset: int = 0): s
       case kind:
       of Posts:
         """
-          SELECT post_id, ts, content_sig, content_sig_last, public_key, parent, reply_count, score, partition, tags, extra_tags, extra_tags_sig, display_name FROM post
-          WHERE post_id IN (SELECT post_id FROM post_search WHERE attribute MATCH 'content' AND value MATCH ? ORDER BY rank)
+          SELECT post.post_id, ts, content_sig, content_sig_last, public_key, parent, reply_count, score, partition, tags, extra_tags, extra_tags_sig, display_name FROM post
+          INNER JOIN post_search ON post.post_id = post_search.post_id
+          WHERE attribute MATCH 'content'
+          AND value MATCH ?
           AND visibility = 1
           AND parent != ''
           LIMIT $1
@@ -420,7 +422,9 @@ proc search*(conn: PSqlite3, kind: SearchKind, term: string, offset: int = 0): s
       of Users:
         """
           SELECT ts, public_key, tags, display_name FROM post
-          WHERE post_id IN (SELECT post_id FROM post_search WHERE attribute MATCH 'content' AND value MATCH ? ORDER BY rank)
+          INNER JOIN post_search ON post.post_id = post_search.post_id
+          WHERE attribute MATCH 'content'
+          AND value MATCH ?
           AND visibility = 1
           AND parent = ''
           LIMIT $1
@@ -428,8 +432,10 @@ proc search*(conn: PSqlite3, kind: SearchKind, term: string, offset: int = 0): s
         """.format(limit, offset)
       of UserTags:
         """
-          SELECT user_id, ts, public_key, tags, display_name FROM user
-          WHERE user_id IN (SELECT user_id FROM user_search WHERE attribute MATCH 'tags' AND value MATCH ?)
+          SELECT user.user_id, ts, public_key, tags, display_name FROM user
+          INNER JOIN user_search ON user.user_id = user_search.user_id
+          WHERE attribute MATCH 'tags'
+          AND value MATCH ?
           ORDER BY ts DESC
           LIMIT $1
           OFFSET $2
