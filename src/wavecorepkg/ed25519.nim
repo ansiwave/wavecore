@@ -36,7 +36,12 @@ type
 proc initKeyPair*(): KeyPair =
   var seed: Seed
   doAssert 0 == ed25519_create_seed(seed.addr)
-  ed25519_create_keypair(result.public.addr, result.private.addr, seed.addr)
+  var
+    pub: PublicKey
+    priv: PrivateKey
+  ed25519_create_keypair(pub.addr, priv.addr, seed.addr)
+  result.public = pub
+  result.private = priv
 
 proc initKeyPair*(private: PrivateKey): KeyPair =
   result.private = private

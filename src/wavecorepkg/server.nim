@@ -12,6 +12,7 @@ from ./ed25519 import nil
 from ./common import nil
 import tables, sets
 from times import nil
+import threading/channels
 
 type
   ListenActionKind {.pure.} = enum
@@ -38,7 +39,7 @@ type
       extra: bool
     board: string
     key: string
-    error: ptr Channel[string]
+    error: Chan[string]
   BackgroundActionKind {.pure.} = enum
     Stop, CopyOut,
   BackgroundAction = object
@@ -55,21 +56,21 @@ type
     shouldClone: bool
   ThreadData = tuple
     details: ServerDetails
-    readyChan: ptr Channel[bool]
-    listenAction: ptr Channel[ListenAction]
-    stateAction: ptr Channel[StateAction]
-    backgroundAction: ptr Channel[BackgroundAction]
+    readyChan: Chan[bool]
+    listenAction: Chan[ListenAction]
+    stateAction: Chan[StateAction]
+    backgroundAction: Chan[BackgroundAction]
   Server* = object
     details*: ServerDetails
     listenThread: Thread[ThreadData]
-    listenReady: ptr Channel[bool]
-    listenAction: ptr Channel[ListenAction]
+    listenReady: Chan[bool]
+    listenAction: Chan[ListenAction]
     stateThread: Thread[ThreadData]
-    stateAction: ptr Channel[StateAction]
-    stateReady: ptr Channel[bool]
+    stateAction: Chan[StateAction]
+    stateReady: Chan[bool]
     backgroundThread: Thread[ThreadData]
-    backgroundReady: ptr Channel[bool]
-    backgroundAction: ptr Channel[BackgroundAction]
+    backgroundReady: Chan[bool]
+    backgroundAction: Chan[BackgroundAction]
   Request = object
     uri: uri.Uri
     reqMethod: httpcore.HttpMethod
@@ -89,6 +90,7 @@ const
   recvTimeout = 2000
   maxContentLength = 300000
   maxHeaderCount = 100
+  channelSize = 100
 
 proc initServer*(hostname: string, port: int, staticFileDir: string = "", options: Table[string, string] = initTable[string, string]()): Server =
   Server(details: (hostname: hostname, port: port, staticFileDir: staticFileDir, options: options, shouldClone: "rclone" in options))
@@ -224,17 +226,12 @@ proc editTags*(details: ServerDetails, board: string, tags: entities.Tags, tagsS
             offset += entities.limit
           entities.deleteUser(conn, userToPurge)
 
-proc sendAction[T](actionChan: ptr Channel[T], action: T): string =
-  let error = cast[ptr Channel[string]](
-    allocShared0(sizeof(Channel[string]))
-  )
-  error[].open()
+proc sendAction[T](actionChan: Chan[T], action: T): string =
+  let error = newChan[string](channelSize)
   var newAction = action
   newAction.error = error
-  actionChan[].send(newAction)
-  result = error[].recv()
-  error[].close()
-  deallocShared(error)
+  actionChan.send(newAction)
+  error.recv(result)
 
 proc ansiwavePost(data: ThreadData, request: Request, headers: var string, body: var string) =
   if request.body.len == 0:
@@ -423,10 +420,10 @@ proc handle(data: ThreadData, client: Socket) =
 proc loop(data: ThreadData, socket: Socket) =
   var selector = newSelector[int]()
   selector.registerHandle(socket.getFD, {Event.Read}, 0)
-  data.readyChan[].send(true)
+  data.readyChan.send(true)
   while true:
-    let (dataAvailable, action) = data.listenAction[].tryRecv()
-    if dataAvailable:
+    var action: ListenAction
+    if data.listenAction.tryRecv(action):
       case action.kind:
       of ListenActionKind.Stop:
         break
@@ -453,12 +450,13 @@ proc execCmd(command: string, silent: bool = false): tuple[output: string, exitC
     raise newException(Exception, "Command failed: " & command & "\n" & result.output)
 
 proc recvAction(data: ThreadData) {.thread.} =
-  data.readyChan[].send(true)
+  data.readyChan.send(true)
   var
     initializedBoards: HashSet[string]
     keyToLastTs: Table[string, float]
   while true:
-    let action = data.stateAction[].recv()
+    var action: StateAction
+    data.stateAction.recv(action)
     var resp = ""
     if action.board != "":
       # init board if necessary
@@ -541,22 +539,22 @@ proc recvAction(data: ThreadData) {.thread.} =
           let miscResult = execCmd("git -C $1 commit -m \"$2\"".format(bbsGitDir / paths.miscDir, $action.kind & " " & action.key), silent = true)
           if mainResult.exitCode != 0 and miscResult.exitCode != 0:
             raise newException(Exception, mainResult.output & "\n" & miscResult.output)
-          data.backgroundAction[].send(BackgroundAction(kind: BackgroundActionKind.CopyOut, board: action.board))
+          data.backgroundAction.send(BackgroundAction(kind: BackgroundActionKind.CopyOut, board: action.board))
       except Exception as ex:
         stderr.writeLine(ex.msg)
         stderr.writeLine(getStackTrace(ex))
-    action.error[].send(resp)
+    action.error.send(resp)
 
 proc recvBackgroundAction(data: ThreadData) {.thread.} =
-  data.readyChan[].send(true)
+  data.readyChan.send(true)
   var
     lastClone = 0.0
     lastSync = 0.0
     boardsToCopy: HashSet[string]
     boardsToSync: HashSet[string]
   while true:
-    let (dataAvailable, action) = data.backgroundAction[].tryRecv()
-    if dataAvailable:
+    var action: BackgroundAction
+    if data.backgroundAction.tryRecv(action):
       case action.kind:
       of BackgroundActionKind.Stop:
         break
@@ -595,77 +593,41 @@ proc recvBackgroundAction(data: ThreadData) {.thread.} =
       stderr.writeLine(ex.msg)
       stderr.writeLine(getStackTrace(ex))
 
-proc initShared(server: var Server) =
+proc initChans(server: var Server) =
   # listen
-  server.listenReady = cast[ptr Channel[bool]](
-    allocShared0(sizeof(Channel[bool]))
-  )
-  server.listenReady[].open()
-  server.listenAction = cast[ptr Channel[ListenAction]](
-    allocShared0(sizeof(Channel[ListenAction]))
-  )
-  server.listenAction[].open()
+  server.listenReady = newChan[bool](channelSize)
+  server.listenAction = newChan[ListenAction](channelSize)
   # state
-  server.stateReady = cast[ptr Channel[bool]](
-    allocShared0(sizeof(Channel[bool]))
-  )
-  server.stateReady[].open()
-  server.stateAction = cast[ptr Channel[StateAction]](
-    allocShared0(sizeof(Channel[StateAction]))
-  )
-  server.stateAction[].open()
+  server.stateReady = newChan[bool](channelSize)
+  server.stateAction = newChan[StateAction](channelSize)
   # background
   if server.details.shouldClone:
-    server.backgroundReady = cast[ptr Channel[bool]](
-      allocShared0(sizeof(Channel[bool]))
-    )
-    server.backgroundReady[].open()
-    server.backgroundAction = cast[ptr Channel[BackgroundAction]](
-      allocShared0(sizeof(Channel[BackgroundAction]))
-    )
-    server.backgroundAction[].open()
-
-proc deinitShared(server: var Server) =
-  # listen
-  server.listenReady[].close()
-  deallocShared(server.listenReady)
-  server.listenAction[].close()
-  deallocShared(server.listenAction)
-  # state
-  server.stateReady[].close()
-  deallocShared(server.stateReady)
-  server.stateAction[].close()
-  deallocShared(server.stateAction)
-  if server.details.shouldClone:
-    # background
-    server.backgroundReady[].close()
-    deallocShared(server.backgroundReady)
-    server.backgroundAction[].close()
-    deallocShared(server.backgroundAction)
+    server.backgroundReady = newChan[bool](channelSize)
+    server.backgroundAction = newChan[BackgroundAction](channelSize)
 
 proc initThreads(server: var Server) =
+  var res: bool
   createThread(server.listenThread, listen, (server.details, server.listenReady, server.listenAction, server.stateAction, server.backgroundAction))
-  discard server.listenReady[].recv()
+  server.listenReady.recv(res)
   createThread(server.stateThread, recvAction, (server.details, server.stateReady, server.listenAction, server.stateAction, server.backgroundAction))
-  discard server.stateReady[].recv()
+  server.stateReady.recv(res)
   if server.details.shouldClone:
     createThread(server.backgroundThread, recvBackgroundAction, (server.details, server.backgroundReady, server.listenAction, server.stateAction, server.backgroundAction))
-    discard server.backgroundReady[].recv()
+    server.backgroundReady.recv(res)
 
 proc deinitThreads(server: var Server) =
-  server.listenAction[].send(ListenAction(kind: ListenActionKind.Stop))
+  server.listenAction.send(ListenAction(kind: ListenActionKind.Stop))
   server.listenThread.joinThread()
-  server.stateAction[].send(StateAction(kind: StateActionKind.Stop))
+  server.stateAction.send(StateAction(kind: StateActionKind.Stop))
   server.stateThread.joinThread()
   if server.details.shouldClone:
-    server.backgroundAction[].send(BackgroundAction(kind: BackgroundActionKind.Stop))
+    server.backgroundAction.send(BackgroundAction(kind: BackgroundActionKind.Stop))
     server.backgroundThread.joinThread()
 
 proc start*(server: var Server) =
-  initShared(server)
+  initChans(server)
   initThreads(server)
 
 proc stop*(server: var Server) =
   deinitThreads(server)
-  deinitShared(server)
 

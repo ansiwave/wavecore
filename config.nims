@@ -1,3 +1,4 @@
 --threads:on
 --define:staticSqlite
 --define:multiplexSqlite
+--gc:orc

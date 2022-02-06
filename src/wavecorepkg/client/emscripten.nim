@@ -1,4 +1,3 @@
-from urlly import `$`
 from flatty import nil
 from flatty/binny import nil
 from strutils import nil
@@ -17,9 +16,9 @@ type
     dataAvailable: bool
     data: string
     url: string
-  ChannelRef* = ptr Channel
+  ChannelPtr* = ptr Channel
   Request* = object
-    url*: urlly.Url
+    url*: string
     headers*: seq[Header]
     verb*: string
     body*: string
@@ -80,7 +79,7 @@ type
     worker: cint
   ChannelValue*[T] = object
     started*: bool
-    chan*: ChannelRef
+    chan*: ChannelPtr
     value*: Result[T]
     ready*: bool
     readyTime*: float
@@ -108,7 +107,7 @@ proc free(p: pointer) {.importc.}
 
 proc fetch*(request: Request): Response =
   let
-    url = $request.url
+    url = request.url
     reqHeaders = block:
       var o = json.newJObject()
       for header in request.headers:
@@ -170,7 +169,7 @@ proc setHash*(hash: string) =
 proc initChannelValue*[T](): ChannelValue[T] =
   result = ChannelValue[T](
     started: true,
-    chan: cast[ChannelRef](
+    chan: cast[ChannelPtr](
       allocShared0(sizeof(Channel))
     )
   )
@@ -196,11 +195,11 @@ proc sendAction*(client: Client, action: Action, chan: ptr Channel) =
   let data = flatty.toFlatty(WorkerRequest(action: action, channel: cast[int64](chan)))
   emscripten_call_worker(client.worker, "recvAction", data, data.len.cint, callback, nil)
 
-proc sendFetch*(client: Client, request: Request, chan: ChannelRef) =
+proc sendFetch*(client: Client, request: Request, chan: ChannelPtr) =
   if request.verb != "get" or request.headers.len > 0:
     sendAction(client, Action(kind: Fetch, request: request), chan)
   else:
-    chan[].url = $request.url
+    chan[].url = request.url
 
     proc onload(arg: pointer, data: pointer, size: cint) {.cdecl.} =
       var s = newString(size)
@@ -216,24 +215,24 @@ proc sendFetch*(client: Client, request: Request, chan: ChannelRef) =
       chan[].data = flatty.toFlatty(Result[Response](kind: Error, error: ""))
       chan[].dataAvailable = true
 
-    emscripten_async_wget_data($request.url, chan, onload, onerror)
+    emscripten_async_wget_data(request.url, chan, onload, onerror)
 
-proc sendUserQuery*(client: Client, filename: string, publicKey: string, chan: ChannelRef) =
+proc sendUserQuery*(client: Client, filename: string, publicKey: string, chan: ChannelPtr) =
   sendAction(client, Action(kind: QueryUser, dbFilename: filename, publicKey: publicKey), chan)
 
-proc sendPostQuery*(client: Client, filename: string, sig: string, chan: ChannelRef) =
+proc sendPostQuery*(client: Client, filename: string, sig: string, chan: ChannelPtr) =
   sendAction(client, Action(kind: QueryPost, dbFilename: filename, postSig: sig), chan)
 
-proc sendPostChildrenQuery*(client: Client, filename: string, sig: string, sortBy: entities.SortBy, offset: int, chan: ChannelRef) =
+proc sendPostChildrenQuery*(client: Client, filename: string, sig: string, sortBy: entities.SortBy, offset: int, chan: ChannelPtr) =
   sendAction(client, Action(kind: QueryPostChildren, dbFilename: filename, sortBy: sortBy, offset: offset, postParentSig: sig), chan)
 
-proc sendUserPostsQuery*(client: Client, filename: string, publicKey: string, offset: int, chan: ChannelRef) =
+proc sendUserPostsQuery*(client: Client, filename: string, publicKey: string, offset: int, chan: ChannelPtr) =
   sendAction(client, Action(kind: QueryUserPosts, dbFilename: filename, offset: offset, userPostsPublicKey: publicKey), chan)
 
-proc sendUserRepliesQuery*(client: Client, filename: string, publicKey: string, offset: int, chan: ChannelRef) =
+proc sendUserRepliesQuery*(client: Client, filename: string, publicKey: string, offset: int, chan: ChannelPtr) =
   sendAction(client, Action(kind: QueryUserReplies, dbFilename: filename, offset: offset, userRepliesPublicKey: publicKey), chan)
 
-proc sendSearchQuery*(client: Client, filename: string, kind: entities.SearchKind, term: string, offset: int, chan: ChannelRef) =
+proc sendSearchQuery*(client: Client, filename: string, kind: entities.SearchKind, term: string, offset: int, chan: ChannelPtr) =
   sendAction(client, Action(kind: SearchPosts, dbFilename: filename, searchKind: kind, searchTerm: term, offset: offset), chan)
 
 proc recvAction(data: pointer, size: cint) {.exportc.} =
@@ -252,7 +251,7 @@ proc recvAction(data: pointer, size: cint) {.exportc.} =
       var req = fetch(action.request)
       try:
         if req.code == 200:
-          if strutils.endsWith(urlly.path(action.request.url), ".ansiwavez"):
+          if strutils.endsWith(action.request.url, ".ansiwavez"):
             req.body = zippy.uncompress(cast[string](req.body), dataFormat = zippy.dfZlib)
           flatty.toFlatty(Result[Response](kind: Valid, valid: req))
         else:

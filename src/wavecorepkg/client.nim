@@ -1,5 +1,4 @@
 from ./db/entities import nil
-from urlly import nil
 from paths import nil
 
 when defined(emscripten):
@@ -20,7 +19,7 @@ proc initClient*(address: string, postAddress: string = address): Client =
   Client(kind: Online, address: address, postAddress: postAddress)
 
 proc request*(url: string, data: string, verb: string): string =
-  let response: Response = fetch(Request(url: urlly.parseUrl(url), verb: verb, body: data))
+  let response: Response = fetch(Request(url: url, verb: verb, body: data))
   if response.code != 200:
     raise newException(ClientException, "Error code " & $response.code & ": " & response.body)
   return response.body
@@ -36,13 +35,13 @@ proc query*(client: Client, endpoint: string): ChannelValue[Response] =
       paths.initUrl(client.address, endpoint)
     of Offline:
       endpoint
-  let request = Request(url: urlly.parseUrl(url), verb: "get", body: "")
+  let request = Request(url: url, verb: "get", body: "")
   result = initChannelValue[Response]()
   sendFetch(client, request, result.chan)
 
 proc submit*(client: Client, endpoint: string, body: string): ChannelValue[Response] =
   let url = paths.initUrl(client.postAddress, endpoint)
-  let request = Request(url: urlly.parseUrl(url), verb: "post", body: body)
+  let request = Request(url: url, verb: "post", body: body)
   result = initChannelValue[Response]()
   sendFetch(client, request, result.chan)
 
