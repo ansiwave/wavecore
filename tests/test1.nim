@@ -1,7 +1,6 @@
 import unittest
 from strutils import nil
 from sequtils import nil
-import json
 import tables
 
 from ./wavecorepkg/wavescript import nil
