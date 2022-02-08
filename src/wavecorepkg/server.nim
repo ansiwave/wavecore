@@ -513,20 +513,17 @@ proc recvAction(data: ThreadData) {.thread.} =
             if action.key != action.board and action.key in keyToLastTs and ts - keyToLastTs[action.key] < minInterval:
               raise newException(Exception, "Posting too fast! Wait a few seconds.")
             keyToLastTs[action.key] = ts
-          {.cast(gcsafe).}:
-            insertPost(data.details, action.board, action.post)
+          insertPost(data.details, action.board, action.post)
         except Exception as ex:
           resp = ex.msg
       of StateActionKind.EditPost:
         try:
-          {.cast(gcsafe).}:
-            editPost(data.details, action.board, action.content, action.key)
+          editPost(data.details, action.board, action.content, action.key)
         except Exception as ex:
           resp = ex.msg
       of StateActionKind.EditTags:
         try:
-          {.cast(gcsafe).}:
-            editTags(data.details, action.board, action.tags, action.tagsSigLast, action.key, action.extra)
+          editTags(data.details, action.board, action.tags, action.tagsSigLast, action.key, action.extra)
         except Exception as ex:
           resp = ex.msg
     if resp == "" and  action.kind in {StateActionKind.InsertPost, StateActionKind.EditPost, StateActionKind.EditTags}:
