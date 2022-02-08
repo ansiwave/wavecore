@@ -2,6 +2,7 @@ import ./sqlite3
 from strformat import fmt
 from strutils import nil
 from ../paths import nil
+from os import `/`
 
 import ../client
 import bitops
@@ -193,7 +194,7 @@ proc register*() =
 when defined(multiplexSqlite):
   proc wavecore_save_manifest(fileName: cstring, fileSize: int64): cint {.cdecl, exportc.} =
     let name = $fileName
-    if strutils.endsWith(name, "/" & paths.dbFilename): # make sure this is the main db file, not the journal file
+    if strutils.endsWith(name, "" / paths.dbFilename): # make sure this is the main db file, not the journal file
       writeFile(name & ".json", $ %* {"total-size": fileSize, "chunk-size": chunkSize})
     0
 

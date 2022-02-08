@@ -87,8 +87,8 @@ let
   sysopPublicKey = paths.encode(sysopKeys.public)
   bbsDir = "bbstest"
   boardDir = bbsDir / paths.boardsDir / sysopPublicKey
-  dbDirs = paths.db(sysopPublicKey)
-  dbPath = bbsDir / dbDirs
+  dbDirs = paths.db(sysopPublicKey, isUrl = true)
+  dbPath = bbsDir / paths.db(sysopPublicKey)
 os.createDir(bbsDir / paths.boardsDir / sysopPublicKey / paths.ansiwavesDir)
 os.createDir(bbsDir / paths.boardsDir / sysopPublicKey / paths.dbDir)
 os.createDir(bbsDir / paths.boardsDir / sysopPublicKey / paths.miscDir / paths.limboDir / paths.ansiwavesDir)
