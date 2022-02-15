@@ -573,7 +573,7 @@ proc recvBackgroundAction(data: ThreadData) {.thread.} =
       if boardsToCopy.len > 0 and times.epochTime() - lastClone >= 15:
         for board in boardsToCopy:
           let outGitDir = os.absolutePath(paths.cloneDir / paths.boardsDir / board)
-          let output = execCmd("rclone copy $1 $2/$3/$4/ --exclude .git/ --exclude misc/.git/ --verbose --checksum --no-update-modtime".format(outGitDir, data.details.options["rclone"], paths.boardsDir, board)).output
+          let output = execCmd("rclone sync $1 $2/$3/$4/ --exclude .git/ --exclude misc/.git/ --verbose --checksum --no-update-modtime".format(outGitDir, data.details.options["rclone"], paths.boardsDir, board)).output
           discard sendAction(data.stateAction, StateAction(kind: Log, message: "rclone copy output for $1\n$2".format(board, output)))
         boardsToCopy.clear
         lastClone = times.epochTime()
