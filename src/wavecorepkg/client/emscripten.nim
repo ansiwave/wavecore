@@ -261,7 +261,7 @@ proc recvAction(data: pointer, size: cint) {.exportc.} =
     of QueryUser:
       try:
         var s: string
-        db.withOpen(conn, action.dbFilename, true):
+        db.withOpen(conn, action.dbFilename, db.Http):
           let user =
             if entities.existsUser(conn, action.publicKey):
               entities.selectUser(conn, action.publicKey)
@@ -274,7 +274,7 @@ proc recvAction(data: pointer, size: cint) {.exportc.} =
     of QueryPost:
       try:
         var s: string
-        db.withOpen(conn, action.dbFilename, true):
+        db.withOpen(conn, action.dbFilename, db.Http):
           let post = entities.selectPost(conn, action.postSig)
           s = flatty.toFlatty(Result[entities.Post](kind: Valid, valid: post))
         s
@@ -283,7 +283,7 @@ proc recvAction(data: pointer, size: cint) {.exportc.} =
     of QueryPostChildren:
       try:
         var s: string
-        db.withOpen(conn, action.dbFilename, true):
+        db.withOpen(conn, action.dbFilename, db.Http):
           let posts = entities.selectPostChildren(conn, action.postParentSig, action.sortBy, action.offset)
           s = flatty.toFlatty(Result[seq[entities.Post]](kind: Valid, valid: posts))
         s
@@ -292,7 +292,7 @@ proc recvAction(data: pointer, size: cint) {.exportc.} =
     of QueryUserPosts:
       try:
         var s: string
-        db.withOpen(conn, action.dbFilename, true):
+        db.withOpen(conn, action.dbFilename, db.Http):
           let posts = entities.selectUserPosts(conn, action.userPostsPublicKey, action.offset)
           s = flatty.toFlatty(Result[seq[entities.Post]](kind: Valid, valid: posts))
         s
@@ -301,7 +301,7 @@ proc recvAction(data: pointer, size: cint) {.exportc.} =
     of QueryUserReplies:
       try:
         var s: string
-        db.withOpen(conn, action.dbFilename, true):
+        db.withOpen(conn, action.dbFilename, db.Http):
           let posts = entities.selectUserReplies(conn, action.userRepliesPublicKey, action.offset)
           s = flatty.toFlatty(Result[seq[entities.Post]](kind: Valid, valid: posts))
         s
@@ -310,7 +310,7 @@ proc recvAction(data: pointer, size: cint) {.exportc.} =
     of SearchPosts:
       try:
         var s: string
-        db.withOpen(conn, action.dbFilename, true):
+        db.withOpen(conn, action.dbFilename, db.Http):
           let posts = entities.search(conn, action.searchKind, action.searchTerm, action.offset)
           s = flatty.toFlatty(Result[seq[entities.Post]](kind: Valid, valid: posts))
         s

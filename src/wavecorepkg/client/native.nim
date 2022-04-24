@@ -185,13 +185,13 @@ proc recvAction(client: Client) {.thread.} =
         action.response.send(Result[Response](kind: Error, error: ex.msg))
     of QueryUser:
       try:
-        let (path, useHttp) =
+        let (path, mode) =
           case client.kind:
           of Online:
-            (action.dbFilename, true)
+            (action.dbFilename, db.Http)
           of Offline:
-            (client.path / trimPath(action.dbFilename), false)
-        db.withOpen(conn, path, useHttp):
+            (client.path / trimPath(action.dbFilename), db.Read)
+        db.withOpen(conn, path, mode):
           if entities.existsUser(conn, action.publicKey):
             action.userResponse.send(Result[entities.User](kind: Valid, valid: entities.selectUser(conn, action.publicKey)))
           else:
@@ -200,61 +200,61 @@ proc recvAction(client: Client) {.thread.} =
         action.userResponse.send(Result[entities.User](kind: Error, error: ex.msg))
     of QueryPost:
       try:
-        let (path, useHttp) =
+        let (path, mode) =
           case client.kind:
           of Online:
-            (action.dbFilename, true)
+            (action.dbFilename, db.Http)
           of Offline:
-            (client.path / trimPath(action.dbFilename), false)
-        db.withOpen(conn, path, useHttp):
+            (client.path / trimPath(action.dbFilename), db.Read)
+        db.withOpen(conn, path, mode):
           action.postResponse.send(Result[entities.Post](kind: Valid, valid: entities.selectPost(conn, action.postSig)))
       except Exception as ex:
         action.postResponse.send(Result[entities.Post](kind: Error, error: ex.msg))
     of QueryPostChildren:
       try:
-        let (path, useHttp) =
+        let (path, mode) =
           case client.kind:
           of Online:
-            (action.dbFilename, true)
+            (action.dbFilename, db.Http)
           of Offline:
-            (client.path / trimPath(action.dbFilename), false)
-        db.withOpen(conn, path, useHttp):
+            (client.path / trimPath(action.dbFilename), db.Read)
+        db.withOpen(conn, path, mode):
           action.postChildrenResponse.send(Result[seq[entities.Post]](kind: Valid, valid: entities.selectPostChildren(conn, action.postParentSig, action.sortBy, action.offset)))
       except Exception as ex:
         action.postChildrenResponse.send(Result[seq[entities.Post]](kind: Error, error: ex.msg))
     of QueryUserPosts:
       try:
-        let (path, useHttp) =
+        let (path, mode) =
           case client.kind:
           of Online:
-            (action.dbFilename, true)
+            (action.dbFilename, db.Http)
           of Offline:
-            (client.path / trimPath(action.dbFilename), false)
-        db.withOpen(conn, path, useHttp):
+            (client.path / trimPath(action.dbFilename), db.Read)
+        db.withOpen(conn, path, mode):
           action.userPostsResponse.send(Result[seq[entities.Post]](kind: Valid, valid: entities.selectUserPosts(conn, action.userPostsPublicKey, action.offset)))
       except Exception as ex:
         action.userPostsResponse.send(Result[seq[entities.Post]](kind: Error, error: ex.msg))
     of QueryUserReplies:
       try:
-        let (path, useHttp) =
+        let (path, mode) =
           case client.kind:
           of Online:
-            (action.dbFilename, true)
+            (action.dbFilename, db.Http)
           of Offline:
-            (client.path / trimPath(action.dbFilename), false)
-        db.withOpen(conn, path, useHttp):
+            (client.path / trimPath(action.dbFilename), db.Read)
+        db.withOpen(conn, path, mode):
           action.userRepliesResponse.send(Result[seq[entities.Post]](kind: Valid, valid: entities.selectUserReplies(conn, action.userRepliesPublicKey, action.offset)))
       except Exception as ex:
         action.userRepliesResponse.send(Result[seq[entities.Post]](kind: Error, error: ex.msg))
     of SearchPosts:
       try:
-        let (path, useHttp) =
+        let (path, mode) =
           case client.kind:
           of Online:
-            (action.dbFilename, true)
+            (action.dbFilename, db.Http)
           of Offline:
-            (client.path / trimPath(action.dbFilename), false)
-        db.withOpen(conn, path, useHttp):
+            (client.path / trimPath(action.dbFilename), db.Read)
+        db.withOpen(conn, path, mode):
           action.searchResponse.send(Result[seq[entities.Post]](kind: Valid, valid: entities.search(conn, action.searchKind, action.searchTerm, action.offset)))
       except Exception as ex:
         action.searchResponse.send(Result[seq[entities.Post]](kind: Error, error: ex.msg))

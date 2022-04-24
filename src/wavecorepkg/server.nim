@@ -99,7 +99,7 @@ proc initServer*(hostname: string, port: int, staticFileDir: string = "", option
 proc insertPost*(details: ServerDetails, board: string, entity: entities.Post) =
   var limbo = false
   # try inserting it into the main db
-  db.withOpen(conn, details.staticFileDir / paths.db(board), false):
+  db.withOpen(conn, details.staticFileDir / paths.db(board), db.ReadWrite):
     db.withTransaction(conn):
       if not entities.existsUser(conn, entity.public_key):
         # if the user is the sysop, insert it
@@ -113,7 +113,7 @@ proc insertPost*(details: ServerDetails, board: string, entity: entities.Post) =
         writeFile(details.staticFileDir / paths.ansiwavez(board, sig), entity.content.value.compressed)
   # insert into limbo
   if limbo:
-    db.withOpen(conn, details.staticFileDir / paths.db(board, limbo = true), false):
+    db.withOpen(conn, details.staticFileDir / paths.db(board, limbo = true), db.ReadWrite):
       db.withTransaction(conn):
         if not entities.existsUser(conn, entity.public_key):
           entities.insertUser(conn, entities.User(public_key: entity.public_key, tags: entities.Tags(value: "modlimbo")))
@@ -123,7 +123,7 @@ proc insertPost*(details: ServerDetails, board: string, entity: entities.Post) =
 proc editPost*(details: ServerDetails, board: string, content: entities.Content, key: string) =
   var limbo = false
   # try inserting it into the main db
-  db.withOpen(conn, details.staticFileDir / paths.db(board), false):
+  db.withOpen(conn, details.staticFileDir / paths.db(board), db.ReadWrite):
     db.withTransaction(conn):
       if not entities.existsUser(conn, key):
         # if the user is the sysop, insert it
@@ -137,7 +137,7 @@ proc editPost*(details: ServerDetails, board: string, content: entities.Content,
         writeFile(details.staticFileDir / paths.ansiwavez(board, sig), content.value.compressed)
   # insert into limbo
   if limbo:
-    db.withOpen(conn, details.staticFileDir / paths.db(board, limbo = true), false):
+    db.withOpen(conn, details.staticFileDir / paths.db(board, limbo = true), db.ReadWrite):
       db.withTransaction(conn):
         if not entities.existsUser(conn, key):
           entities.insertUser(conn, entities.User(public_key: key, tags: entities.Tags(value: "modlimbo")))
@@ -148,7 +148,7 @@ proc editTags*(details: ServerDetails, board: string, tags: entities.Tags, tagsS
   var exitEarly = false
   # if we're editing a user in limbo
   if not extra:
-    db.withOpen(conn, details.staticFileDir / paths.db(board, limbo = true), false):
+    db.withOpen(conn, details.staticFileDir / paths.db(board, limbo = true), db.ReadWrite):
       db.withTransaction(conn):
         if entities.existsUser(conn, tagsSigLast):
           let
@@ -208,7 +208,7 @@ proc editTags*(details: ServerDetails, board: string, tags: entities.Tags, tagsS
   if exitEarly:
     return
   # insert into main db
-  db.withOpen(conn, details.staticFileDir / paths.db(board), false):
+  db.withOpen(conn, details.staticFileDir / paths.db(board), db.ReadWrite):
     db.withTransaction(conn):
       if extra:
         entities.editExtraTags(conn, tags, tagsSigLast, board, key)
@@ -480,9 +480,9 @@ proc recvAction(data: ThreadData) {.thread.} =
             discard execCmd("git -C $1 commit -m \"Add .gitignore\"".format(bbsGitDir / paths.miscDir))
             echo "Created " & bbsGitDir / paths.miscDir
         if action.board notin initializedBoards:
-          db.withOpen(conn, data.details.staticFileDir / paths.db(action.board), false):
+          db.withOpen(conn, data.details.staticFileDir / paths.db(action.board), db.ReadWrite):
             db.init(conn)
-          db.withOpen(conn, data.details.staticFileDir / paths.db(action.board, limbo = true), false):
+          db.withOpen(conn, data.details.staticFileDir / paths.db(action.board, limbo = true), db.ReadWrite):
             db.init(conn)
           initializedBoards.incl(action.board)
       except Exception as ex:

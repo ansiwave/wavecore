@@ -1,20 +1,8 @@
 import ./sqlite3
-from strformat import fmt
-from strutils import nil
 from ../paths import nil
-from os import `/`
 
 import ../client
-import bitops
 import json
-
-const chunkSize = bitand(262144 + 0xffff, bitnot 0xffff)
-
-when defined(multiplexSqlite):
-  {.passC: "-DSQLITE_MULTIPLEX_CHUNK_SIZE=" & $chunkSize.}
-  {.compile: "sqlite3_multiplex.c".}
-
-  proc sqlite3_multiplex_initialize(zOrigVfsName: cstring, makeDefault: cint): cint {.cdecl, importc.}
 
 type
   sqlite3_vfs* {.bycopy.} = object
@@ -84,34 +72,21 @@ let customMethods = sqlite3_io_methods(
   iVersion: 3,
   xClose: proc (a1: ptr sqlite3_file): cint {.cdecl.} = SQLITE_OK,
   xRead: proc (a1: ptr sqlite3_file; pBuf: pointer; iAmt: cint; iOfst: int64): cint {.cdecl.} =
-    var
-      buf = pBuf
-      amt = iAmt
-      off = iOfst
-    while amt > 0:
-      let i = int(off.int / chunkSize.int)
-      var extra = cint(((off mod chunkSize).int + amt) - chunkSize)
-      if extra < 0: extra = 0
-      amt -= extra;
-      let
-        suffix = if i == 0: "" else : "{i:010}".fmt
-        firstByte = off mod chunkSize
-        lastByte = firstByte + amt - 1
-      var res = fetch(Request(
-        url: paths.readUrl & suffix,
-        verb: "get",
-        headers: @[
-          Header(key: "Range", value: "bytes=" & $firstByte & "-" & $lastByte),
-          Header(key: "Cache-Control", value: "no-cache, no-store"),
-        ]
-      ))
-      if res.code == 206 and res.body.len == amt:
-        copyMem(buf, res.body[0].addr, res.body.len)
-      else:
-        return SQLITE_ERROR
-      buf = cast[pointer](cast[int](buf) + amt)
-      off += amt
-      amt = extra
+    let
+      firstByte = iOfst
+      lastByte = firstByte + iAmt - 1
+    var res = fetch(Request(
+      url: paths.readUrl,
+      verb: "get",
+      headers: @[
+        Header(key: "Range", value: "bytes=" & $firstByte & "-" & $lastByte),
+        Header(key: "Cache-Control", value: "no-cache, no-store"),
+      ]
+    ))
+    if res.code == 206 and res.body.len == iAmt:
+      copyMem(pBuf, res.body[0].addr, res.body.len)
+    else:
+      return SQLITE_ERROR
     SQLITE_OK
   ,
   xWrite: proc (a1: ptr sqlite3_file; a2: pointer; iAmt: cint; iOfst: int64): cint {.cdecl.} = SQLITE_OK,
@@ -187,14 +162,5 @@ let httpVfs = sqlite3_vfs(
 proc sqlite3_vfs_register(vfs: ptr sqlite3_vfs, makeDflt: cint): cint {.cdecl, importc.}
 
 proc register*() =
-  when defined(multiplexSqlite):
-    doAssert SQLITE_OK == sqlite3_multiplex_initialize(nil, 0)
   doAssert SQLITE_OK == sqlite3_vfs_register(httpVfs.unsafeAddr, 0)
-
-when defined(multiplexSqlite):
-  proc wavecore_save_manifest(fileName: cstring, fileSize: int64): cint {.cdecl, exportc.} =
-    let name = $fileName
-    if strutils.endsWith(name, "" / paths.dbFilename): # make sure this is the main db file, not the journal file
-      writeFile(name & ".json", $ %* {"total-size": fileSize, "chunk-size": chunkSize})
-    0
 

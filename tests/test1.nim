@@ -136,7 +136,7 @@ proc initContent(content: tuple[body: string, sig: string], sigLast: string = co
   result.sig_last = sigLast
 
 test "query users":
-  db.withOpen(conn, ":memory:", false):
+  db.withOpen(conn, ":memory:", db.ReadWrite):
     db.init(conn)
     let
       aliceKeys = ed25519.initKeyPair()
@@ -158,7 +158,7 @@ test "query users asynchronously":
     var
       alice, bob: User
     # create test db
-    db.withOpen(conn, dbPath, false):
+    db.withOpen(conn, dbPath, db.ReadWrite):
       db.init(conn)
       let
         aliceKeys = ed25519.initKeyPair()
@@ -187,7 +187,7 @@ test "query users asynchronously":
     client.stop(c)
 
 test "query posts":
-  db.withOpen(conn, ":memory:", false):
+  db.withOpen(conn, ":memory:", db.ReadWrite):
     db.init(conn)
     let
       aliceKeys = ed25519.initKeyPair()
@@ -228,7 +228,7 @@ test "query posts asynchronously":
       alice, bob: User
       p1, p2, p3, p4: Post
     # create test db
-    db.withOpen(conn, dbPath, false):
+    db.withOpen(conn, dbPath, db.ReadWrite):
       db.init(conn)
       let
         aliceKeys = ed25519.initKeyPair()
@@ -286,7 +286,7 @@ test "query posts offline":
       alice, bob: User
       p1, p2, p3, p4: Post
     # create test db
-    db.withOpen(conn, dbPath, false):
+    db.withOpen(conn, dbPath, db.ReadWrite):
       db.init(conn)
       let
         aliceKeys = ed25519.initKeyPair()
@@ -336,7 +336,7 @@ test "query posts offline":
 
 
 test "search posts":
-  db.withOpen(conn, ":memory:", false):
+  db.withOpen(conn, ":memory:", db.ReadWrite):
     db.init(conn)
     let
       aliceKeys = ed25519.initKeyPair()
@@ -363,7 +363,7 @@ test "search posts":
 from ./wavecorepkg/db/db_sqlite import sql
 
 test "score":
-  db.withOpen(conn, ":memory:", false):
+  db.withOpen(conn, ":memory:", db.ReadWrite):
     db.init(conn)
     let
       aliceKeys = ed25519.initKeyPair()
@@ -405,7 +405,7 @@ test "score":
     check 2 == p1.score - p1.partition
 
 test "edit post and user":
-  db.withOpen(conn, ":memory:", false):
+  db.withOpen(conn, ":memory:", db.ReadWrite):
     db.init(conn)
     let
       aliceKeys = ed25519.initKeyPair()
@@ -503,7 +503,7 @@ test "edit post and user":
       entities.editTags(conn, entities.Tags(value: "\n\nmoderator hi", sig: "bob9"), "bob8", sysopPublicKey, bob.public_key)
 
 test "post to blog":
-  db.withOpen(conn, ":memory:", false):
+  db.withOpen(conn, ":memory:", db.ReadWrite):
     db.init(conn)
     let
       aliceKeys = ed25519.initKeyPair()
@@ -523,7 +523,7 @@ test "retrieve sqlite db via http":
   try:
     var alice, bob: User
     # create test db
-    db.withOpen(conn, dbPath, false):
+    db.withOpen(conn, dbPath, db.ReadWrite):
       db.init(conn)
       let
         aliceKeys = ed25519.initKeyPair()
@@ -533,7 +533,7 @@ test "retrieve sqlite db via http":
       entities.insertUser(conn, alice, alice.user_id)
       entities.insertUser(conn, bob, bob.user_id)
     # re-open db, but this time all reads happen over http
-    db.withOpen(conn, dbPath, true):
+    db.withOpen(conn, dbPath, db.Http):
       let
         alice2 = entities.selectUser(conn, alice.public_key)
         bob2 = entities.selectUser(conn, bob.public_key)
@@ -715,7 +715,7 @@ test "limbo":
       check os.fileExists(bbsDir / paths.ansiwavez(sysopPublicKey, postSig1))
       check os.fileExists(bbsDir / paths.ansiwavez(sysopPublicKey, postSig2))
     # make sure the posts brought from limbo are searchable
-    db.withOpen(conn, dbPath, false):
+    db.withOpen(conn, dbPath, db.ReadWrite):
       check entities.search(conn, entities.Users, "hello").len == 1
       check entities.search(conn, entities.Posts, "goodbye").len == 1
     # alice modifies her banner

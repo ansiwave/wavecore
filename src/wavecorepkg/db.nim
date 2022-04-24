@@ -5,6 +5,8 @@ from ./db/db_sqlite import sql
 from bitops import nil
 import tables
 from strutils import format
+from os import nil
+import json
 
 const
   SQLITE_OPEN_READONLY = 1
@@ -13,20 +15,36 @@ const
 
 proc sqlite3_open_v2(filename: cstring, ppDb: var PSqlite3, flags: cint, zVfs: cstring): cint {.cdecl, importc.}
 
-proc open*(filename: string, http: bool = false): PSqlite3 =
+type
+  Mode* = enum
+    Read, ReadWrite, Http,
+
+proc open*(filename: string, mode: Mode): PSqlite3 =
   let
-    flags: cint = if http: SQLITE_OPEN_READONLY else: bitops.bitor(SQLITE_OPEN_READWRITE, SQLITE_OPEN_CREATE)
-    vfs: cstring = if http: "http".cstring else: "multiplex".cstring
+    flags: cint =
+      case mode:
+      of Read, Http:
+        SQLITE_OPEN_READONLY
+      of ReadWrite:
+        bitops.bitor(SQLITE_OPEN_READWRITE, SQLITE_OPEN_CREATE)
+    vfs: cstring =
+      case mode:
+      of Http:
+        "http".cstring
+      of Read, ReadWrite:
+        nil
   if sqlite3_open_v2(filename, result, flags, vfs) != SQLITE_OK:
     db_sqlite.dbError(result)
 
-template withOpen*(conn: untyped, filename: string, http: bool, body: untyped) =
+template withOpen*(conn: untyped, filename: string, mode: Mode, body: untyped) =
   block:
-    let conn = open(filename, http)
+    let conn = open(filename, mode)
     try:
       body
     finally:
       db_sqlite.close(conn)
+      if mode == ReadWrite and os.fileExists(filename):
+        writeFile(filename & ".json", $ %* {"total-size": os.getFileSize(filename)})
 
 template withTransaction*(conn: PSqlite3, body: untyped) =
   db_sqlite.exec(conn, sql"BEGIN TRANSACTION")
@@ -145,17 +163,4 @@ proc init*(conn: PSqlite3) =
 
 proc attach*(conn: PSqlite3, path: string, alias: string) =
   db_sqlite.exec conn, sql("ATTACH DATABASE '$1' AS $2".format(path, alias))
-
-proc shell*(dbPath: string) =
-  echo "Write a query and hit enter:"
-  let query = readLine(stdin)
-  db.withOpen(conn, dbPath, false):
-    db.withTransaction(conn):
-      var stmt: PStmt
-      withStatement(conn, query, stmt):
-        while step(stmt) == SQLITE_ROW:
-          echo ""
-          var cols = sqlite3.column_count(stmt)
-          for col in 0 .. cols-1:
-            echo $sqlite3.column_name(stmt, col), ": ", $sqlite3.column_text(stmt, col)
 
