@@ -90,8 +90,8 @@ const
 
 proc initServer*(hostname: string, port: int, staticFileDir: string = "", options: Table[string, string] = initTable[string, string]()): Server =
   let pushUrls =
-    if "pushurls" in options:
-      strutils.split(options["pushurls"], ",")
+    if "push-urls" in options:
+      strutils.split(options["push-urls"], ",")
     else:
       @[]
   Server(details: (hostname: hostname, port: port, staticFileDir: staticFileDir, options: options, pushUrls: pushUrls))
