@@ -462,23 +462,12 @@ proc recvAction(data: ThreadData) {.thread.} =
     if action.board != "":
       # init board if necessary
       try:
-        let bbsGitDir = os.absolutePath(data.details.staticFileDir / paths.boardsDir / action.board)
-        os.createDir(bbsGitDir / paths.ansiwavesDir)
-        os.createDir(bbsGitDir / paths.dbDir)
-        os.createDir(bbsGitDir / paths.miscDir / paths.limboDir / paths.ansiwavesDir)
-        os.createDir(bbsGitDir / paths.miscDir / paths.limboDir / paths.dbDir)
-        if data.details.pushUrls.len > 0:
-          if not os.dirExists(bbsGitDir / ".git"):
-            writeFile(bbsGitDir / ".gitignore", paths.miscDir & "/")
+        for subdir in [paths.boardsDir, paths.limboDir]:
+          let bbsGitDir = os.absolutePath(data.details.staticFileDir / subdir / action.board)
+          os.createDir(bbsGitDir / paths.ansiwavesDir)
+          os.createDir(bbsGitDir / paths.dbDir)
+          if data.details.pushUrls.len > 0 and not os.dirExists(bbsGitDir / ".git"):
             discard execCmd("git init $1".format(bbsGitDir))
-            discard execCmd("git -C $1 add .gitignore".format(bbsGitDir))
-            discard execCmd("git -C $1 commit -m \"Add .gitignore\"".format(bbsGitDir))
-          if not os.dirExists(bbsGitDir / paths.miscDir / ".git"):
-            writeFile(bbsGitDir / paths.miscDir / ".gitignore", "")
-            discard execCmd("git init $1".format(bbsGitDir / paths.miscDir))
-            discard execCmd("git -C $1 add .gitignore".format(bbsGitDir / paths.miscDir))
-            discard execCmd("git -C $1 commit -m \"Add .gitignore\"".format(bbsGitDir / paths.miscDir))
-            echo "Created " & bbsGitDir / paths.miscDir
         if action.board notin initializedBoards:
           db.withOpen(conn, data.details.staticFileDir / paths.db(action.board), db.ReadWrite):
             db.init(conn)
@@ -518,19 +507,25 @@ proc recvAction(data: ThreadData) {.thread.} =
           resp = ex.msg
     if resp == "" and  action.kind in {StateActionKind.InsertPost, StateActionKind.EditPost, StateActionKind.EditTags}:
       try:
-        let bbsGitDir = os.absolutePath(data.details.staticFileDir / paths.boardsDir / action.board)
+        var errors: seq[string]
+        for subdir in [paths.boardsDir, paths.limboDir]:
+          let bbsGitDir = os.absolutePath(data.details.staticFileDir / subdir / action.board)
+          if data.details.pushUrls.len > 0:
+            discard execCmd("git -C $1 add .".format(bbsGitDir))
+            let res = execCmd("git -C $1 commit -m \"$2\"".format(bbsGitDir, $action.kind & " " & action.key), silent = true)
+            if res.exitCode != 0:
+              errors.add(res.output)
+        # if only one failed, it's probably because there were no changes to commit.
+        # if both failed, something went wrong, so print the errors out.
+        if errors.len == 2:
+          raise newException(Exception, errors[0] & "\n" & errors[1])
         if data.details.pushUrls.len > 0:
-          discard execCmd("git -C $1 add .".format(bbsGitDir))
-          let mainResult = execCmd("git -C $1 commit -m \"$2\"".format(bbsGitDir, $action.kind & " " & action.key), silent = true)
-          discard execCmd("git -C $1 add .".format(bbsGitDir / paths.miscDir))
-          let miscResult = execCmd("git -C $1 commit -m \"$2\"".format(bbsGitDir / paths.miscDir, $action.kind & " " & action.key), silent = true)
-          if mainResult.exitCode != 0 and miscResult.exitCode != 0:
-            raise newException(Exception, mainResult.output & "\n" & miscResult.output)
-          for url in data.details.pushUrls:
-            let mainPushResult = execCmd("git -C $1 push $2".format(bbsGitDir, url), silent = true)
-            if mainPushResult.exitCode != 0:
-              stderr.writeLine(mainPushResult.output)
-            # TODO: push misc repo
+          for subdir in [paths.boardsDir, paths.limboDir]:
+            let bbsGitDir = os.absolutePath(data.details.staticFileDir / subdir / action.board)
+            for url in data.details.pushUrls:
+              let res = execCmd("git -C $1 push $2".format(bbsGitDir, url), silent = true)
+              if res.exitCode != 0:
+                stderr.writeLine(res.output)
       except Exception as ex:
         stderr.writeLine(ex.msg)
         stderr.writeLine(getStackTrace(ex))

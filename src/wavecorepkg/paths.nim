@@ -29,11 +29,10 @@ var readUrl*: string
 const
   staticFileDir* = "bbs"
   boardsDir* = "boards"
+  limboDir* = "limbo"
   ansiwavesDir* = "ansiwavez"
   dbDir* = "db"
   dbFilename* = "board.db"
-  miscDir* = "misc"
-  limboDir* = "limbo"
   defaultBoard* =
     when defined(release):
       "kEKgeSd3-74Uy0bfOOJ9mj0qW3KpMpXBGrrQdUv190E"
@@ -43,24 +42,24 @@ const
 proc db*(board: string, isUrl: bool = false, limbo: bool = false): string =
   if isUrl:
     if limbo:
-      boardsDir & "/" & board & "/" & miscDir & "/" & limboDir & "/" & dbDir & "/" & dbFilename
+      limboDir & "/" & board & "/" & dbDir & "/" & dbFilename
     else:
       boardsDir & "/" & board & "/" & dbDir & "/" & dbFilename
   else:
     if limbo:
-      boardsDir / board / miscDir / limboDir / dbDir / dbFilename
+      limboDir / board / dbDir / dbFilename
     else:
       boardsDir / board / dbDir / dbFilename
 
 proc ansiwavez*(board: string, filename: string, isUrl: bool = false, limbo: bool = false): string =
   if isUrl:
     if limbo:
-      boardsDir & "/" & board & "/" & miscDir & "/" & limboDir & "/" & ansiwavesDir & "/" & filename & ".ansiwavez"
+      limboDir & "/" & board & "/" & ansiwavesDir & "/" & filename & ".ansiwavez"
     else:
       boardsDir & "/" & board & "/" & ansiwavesDir & "/" & filename & ".ansiwavez"
   else:
     if limbo:
-      boardsDir / board / miscDir / limboDir / ansiwavesDir / filename & ".ansiwavez"
+      limboDir / board / ansiwavesDir / filename & ".ansiwavez"
     else:
       boardsDir / board / ansiwavesDir / filename & ".ansiwavez"
 

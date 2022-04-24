@@ -91,8 +91,8 @@ let
   dbPath = bbsDir / paths.db(sysopPublicKey)
 os.createDir(bbsDir / paths.boardsDir / sysopPublicKey / paths.ansiwavesDir)
 os.createDir(bbsDir / paths.boardsDir / sysopPublicKey / paths.dbDir)
-os.createDir(bbsDir / paths.boardsDir / sysopPublicKey / paths.miscDir / paths.limboDir / paths.ansiwavesDir)
-os.createDir(bbsDir / paths.boardsDir / sysopPublicKey / paths.miscDir / paths.limboDir / paths.dbDir)
+os.createDir(bbsDir / paths.limboDir / sysopPublicKey / paths.ansiwavesDir)
+os.createDir(bbsDir / paths.limboDir / sysopPublicKey / paths.dbDir)
 paths.address = "http://localhost:" & $port
 vfs.register()
 
