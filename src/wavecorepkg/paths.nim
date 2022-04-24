@@ -28,7 +28,7 @@ var readUrl*: string
 
 const
   staticFileDir* = "bbs"
-  boardsDir* = "boards"
+  boardDir* = "board"
   limboDir* = "limbo"
   ansiwavesDir* = "ansiwavez"
   dbDir* = "db"
@@ -42,26 +42,26 @@ const
 proc db*(board: string, isUrl: bool = false, limbo: bool = false): string =
   if isUrl:
     if limbo:
-      limboDir & "/" & board & "/" & dbDir & "/" & dbFilename
+      board & "/" & limboDir & "/" & dbDir & "/" & dbFilename
     else:
-      boardsDir & "/" & board & "/" & dbDir & "/" & dbFilename
+      board & "/" & boardDir & "/" & dbDir & "/" & dbFilename
   else:
     if limbo:
-      limboDir / board / dbDir / dbFilename
+      board / limboDir / dbDir / dbFilename
     else:
-      boardsDir / board / dbDir / dbFilename
+      board / boardDir / dbDir / dbFilename
 
 proc ansiwavez*(board: string, filename: string, isUrl: bool = false, limbo: bool = false): string =
   if isUrl:
     if limbo:
-      limboDir & "/" & board & "/" & ansiwavesDir & "/" & filename & ".ansiwavez"
+      board & "/" & limboDir & "/" & ansiwavesDir & "/" & filename & ".ansiwavez"
     else:
-      boardsDir & "/" & board & "/" & ansiwavesDir & "/" & filename & ".ansiwavez"
+      board & "/" & boardDir & "/" & ansiwavesDir & "/" & filename & ".ansiwavez"
   else:
     if limbo:
-      limboDir / board / ansiwavesDir / filename & ".ansiwavez"
+      board / limboDir / ansiwavesDir / filename & ".ansiwavez"
     else:
-      boardsDir / board / ansiwavesDir / filename & ".ansiwavez"
+      board / boardDir / ansiwavesDir / filename & ".ansiwavez"
 
 proc encode*[T](data: T): string =
   result = base64.encode(data, safe = true)

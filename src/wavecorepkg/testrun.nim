@@ -215,7 +215,7 @@ proc main*(port: int) =
   assert board == paths.defaultBoard, "You must set paths.defaultBoard to " & board
   echo "Test run...open this link in the terminal client:"
   echo "http://localhost:" & readPort & "#board:" & board
-  let boardDir = paths.staticFileDir / paths.boardsDir / board
+  let boardDir = paths.staticFileDir / board / paths.boardDir
   if os.dirExists(boardDir):
     return
   os.createDir(boardDir)

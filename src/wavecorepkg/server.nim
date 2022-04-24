@@ -249,7 +249,7 @@ proc ansiwavePost(data: ThreadData, request: Request, headers: var string, body:
   let board = cmds["/board"]
   if board != paths.encode(paths.decode(board)):
     raise newException(BadRequestException, "Invalid value in /board")
-  if not os.dirExists(data.details.staticFileDir / paths.boardsDir / board):
+  if not os.dirExists(data.details.staticFileDir / board / paths.boardDir):
     raise newException(BadRequestException, "Board does not exist")
 
   # check the sig
@@ -462,8 +462,8 @@ proc recvAction(data: ThreadData) {.thread.} =
     if action.board != "":
       # init board if necessary
       try:
-        for subdir in [paths.boardsDir, paths.limboDir]:
-          let bbsGitDir = os.absolutePath(data.details.staticFileDir / subdir / action.board)
+        for subdir in [paths.boardDir, paths.limboDir]:
+          let bbsGitDir = os.absolutePath(data.details.staticFileDir / action.board / subdir)
           os.createDir(bbsGitDir / paths.ansiwavesDir)
           os.createDir(bbsGitDir / paths.dbDir)
           if data.details.pushUrls.len > 0 and not os.dirExists(bbsGitDir / ".git"):
@@ -508,8 +508,8 @@ proc recvAction(data: ThreadData) {.thread.} =
     if resp == "" and  action.kind in {StateActionKind.InsertPost, StateActionKind.EditPost, StateActionKind.EditTags}:
       try:
         var errors: seq[string]
-        for subdir in [paths.boardsDir, paths.limboDir]:
-          let bbsGitDir = os.absolutePath(data.details.staticFileDir / subdir / action.board)
+        for subdir in [paths.boardDir, paths.limboDir]:
+          let bbsGitDir = os.absolutePath(data.details.staticFileDir / action.board / subdir)
           if data.details.pushUrls.len > 0:
             discard execCmd("git -C $1 add .".format(bbsGitDir))
             let res = execCmd("git -C $1 commit -m \"$2\"".format(bbsGitDir, $action.kind & " " & action.key), silent = true)
@@ -520,9 +520,9 @@ proc recvAction(data: ThreadData) {.thread.} =
         if errors.len == 2:
           raise newException(Exception, errors[0] & "\n" & errors[1])
         for url in data.details.pushUrls:
-          for subdir in [paths.boardsDir, paths.limboDir]:
-            let bbsGitDir = os.absolutePath(data.details.staticFileDir / subdir / action.board)
-            let res = execCmd("git -C $1 push $2/$3/$4".format(bbsGitDir, url, subdir, action.board), silent = true)
+          for subdir in [paths.boardDir, paths.limboDir]:
+            let bbsGitDir = os.absolutePath(data.details.staticFileDir / action.board / subdir)
+            let res = execCmd("git -C $1 push $2/$3/$4".format(bbsGitDir, url, action.board, subdir), silent = true)
             if res.exitCode != 0:
               stderr.writeLine("\nAttempted push to " & url & "\n" & res.output)
       except Exception as ex:
