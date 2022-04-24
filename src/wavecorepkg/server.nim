@@ -53,13 +53,12 @@ type
     port: int
     staticFileDir: string
     options: Table[string, string]
-    shouldClone: bool
+    pushUrls: seq[string]
   ThreadData = tuple
     details: ServerDetails
     readyChan: Chan[bool]
     listenAction: Chan[ListenAction]
     stateAction: Chan[StateAction]
-    backgroundAction: Chan[BackgroundAction]
   Server* = object
     details*: ServerDetails
     listenThread: Thread[ThreadData]
@@ -68,9 +67,6 @@ type
     stateThread: Thread[ThreadData]
     stateAction: Chan[StateAction]
     stateReady: Chan[bool]
-    backgroundThread: Thread[ThreadData]
-    backgroundReady: Chan[bool]
-    backgroundAction: Chan[BackgroundAction]
   Request = object
     uri: uri.Uri
     reqMethod: httpcore.HttpMethod
@@ -93,7 +89,12 @@ const
   channelSize = 100
 
 proc initServer*(hostname: string, port: int, staticFileDir: string = "", options: Table[string, string] = initTable[string, string]()): Server =
-  Server(details: (hostname: hostname, port: port, staticFileDir: staticFileDir, options: options, shouldClone: "rclone" in options))
+  let pushUrls =
+    if "pushurls" in options:
+      strutils.split(options["pushurls"], ",")
+    else:
+      @[]
+  Server(details: (hostname: hostname, port: port, staticFileDir: staticFileDir, options: options, pushUrls: pushUrls))
 
 proc insertPost*(details: ServerDetails, board: string, entity: entities.Post) =
   var limbo = false
@@ -466,8 +467,7 @@ proc recvAction(data: ThreadData) {.thread.} =
         os.createDir(bbsGitDir / paths.dbDir)
         os.createDir(bbsGitDir / paths.miscDir / paths.limboDir / paths.ansiwavesDir)
         os.createDir(bbsGitDir / paths.miscDir / paths.limboDir / paths.dbDir)
-        if data.details.shouldClone:
-          let outGitDir = os.absolutePath(paths.cloneDir / paths.boardsDir / action.board)
+        if data.details.pushUrls.len > 0:
           if not os.dirExists(bbsGitDir / ".git"):
             writeFile(bbsGitDir / ".gitignore", paths.miscDir & "/")
             discard execCmd("git init $1".format(bbsGitDir))
@@ -479,16 +479,6 @@ proc recvAction(data: ThreadData) {.thread.} =
             discard execCmd("git -C $1 add .gitignore".format(bbsGitDir / paths.miscDir))
             discard execCmd("git -C $1 commit -m \"Add .gitignore\"".format(bbsGitDir / paths.miscDir))
             echo "Created " & bbsGitDir / paths.miscDir
-          if not os.dirExists(outGitDir):
-            os.createDir(os.parentDir(outGitDir))
-            discard execCmd("git init $1".format(outGitDir))
-            discard execCmd("git -C $1 config --local receive.denyCurrentBranch updateInstead".format(outGitDir))
-            echo "Created " & outGitDir
-          if not os.dirExists(outGitDir / paths.miscDir):
-            os.createDir(outGitDir / paths.miscDir)
-            discard execCmd("git init $1".format(outGitDir / paths.miscDir))
-            discard execCmd("git -C $1 config --local receive.denyCurrentBranch updateInstead".format(outGitDir / paths.miscDir))
-            echo "Created " & outGitDir / paths.miscDir
         if action.board notin initializedBoards:
           db.withOpen(conn, data.details.staticFileDir / paths.db(action.board), false):
             db.init(conn)
@@ -529,66 +519,22 @@ proc recvAction(data: ThreadData) {.thread.} =
     if resp == "" and  action.kind in {StateActionKind.InsertPost, StateActionKind.EditPost, StateActionKind.EditTags}:
       try:
         let bbsGitDir = os.absolutePath(data.details.staticFileDir / paths.boardsDir / action.board)
-        if data.details.shouldClone:
+        if data.details.pushUrls.len > 0:
           discard execCmd("git -C $1 add .".format(bbsGitDir))
           let mainResult = execCmd("git -C $1 commit -m \"$2\"".format(bbsGitDir, $action.kind & " " & action.key), silent = true)
           discard execCmd("git -C $1 add .".format(bbsGitDir / paths.miscDir))
           let miscResult = execCmd("git -C $1 commit -m \"$2\"".format(bbsGitDir / paths.miscDir, $action.kind & " " & action.key), silent = true)
           if mainResult.exitCode != 0 and miscResult.exitCode != 0:
             raise newException(Exception, mainResult.output & "\n" & miscResult.output)
-          data.backgroundAction.send(BackgroundAction(kind: BackgroundActionKind.CopyOut, board: action.board))
+          for url in data.details.pushUrls:
+            let mainPushResult = execCmd("git -C $1 push $2".format(bbsGitDir, url), silent = true)
+            if mainPushResult.exitCode != 0:
+              stderr.writeLine(mainPushResult.output)
+            # TODO: push misc repo
       except Exception as ex:
         stderr.writeLine(ex.msg)
         stderr.writeLine(getStackTrace(ex))
     action.error.send(resp)
-
-proc recvBackgroundAction(data: ThreadData) {.thread.} =
-  data.readyChan.send(true)
-  var
-    lastClone = 0.0
-    lastSync = 0.0
-    boardsToCopy: HashSet[string]
-    boardsToSync: HashSet[string]
-  while true:
-    var action: BackgroundAction
-    if data.backgroundAction.tryRecv(action):
-      case action.kind:
-      of BackgroundActionKind.Stop:
-        break
-      of BackgroundActionKind.CopyOut:
-        try:
-          let
-            bbsGitDir = os.absolutePath(data.details.staticFileDir / paths.boardsDir / action.board)
-            outGitDir = os.absolutePath(paths.cloneDir / paths.boardsDir / action.board)
-          discard execCmd("git -C $1 push $2 master".format(bbsGitDir, outGitDir))
-          discard execCmd("git -C $1 push $2 master".format(bbsGitDir / paths.miscDir, outGitDir / paths.miscDir))
-          boardsToCopy.incl(action.board)
-          boardsToSync.incl(action.board)
-        except Exception as ex:
-          stderr.writeLine(ex.msg)
-          stderr.writeLine(getStackTrace(ex))
-    else:
-      os.sleep(selectTimeout)
-    try:
-      if boardsToCopy.len > 0 and times.epochTime() - lastClone >= 15:
-        for board in boardsToCopy:
-          let outGitDir = os.absolutePath(paths.cloneDir / paths.boardsDir / board)
-          let output = execCmd("rclone sync $1 $2/$3/$4/ --exclude .git/ --exclude misc/.git/ --verbose --checksum --no-update-modtime".format(outGitDir, data.details.options["rclone"], paths.boardsDir, board)).output
-          discard sendAction(data.stateAction, StateAction(kind: Log, message: "rclone copy output for $1\n$2".format(board, output)))
-        boardsToCopy.clear
-        lastClone = times.epochTime()
-      if boardsToSync.len > 0 and times.epochTime() - lastSync >= 60:
-        for board in boardsToSync:
-          let outGitDir = os.absolutePath(paths.cloneDir / paths.boardsDir / board)
-          discard execCmd("git -C $1 gc".format(outGitDir))
-          discard execCmd("git -C $1 update-server-info".format(outGitDir))
-          let output = execCmd("rclone sync $1/.git $2/$3/$4/.git --verbose --checksum --no-update-modtime".format(outGitDir, data.details.options["rclone"], paths.boardsDir, board)).output
-          discard sendAction(data.stateAction, StateAction(kind: Log, message: "rclone sync output for $1\n$2".format(board, output)))
-        boardsToSync.clear
-        lastSync = times.epochTime()
-    except Exception as ex:
-      stderr.writeLine(ex.msg)
-      stderr.writeLine(getStackTrace(ex))
 
 proc initChans(server: var Server) =
   # listen
@@ -597,29 +543,19 @@ proc initChans(server: var Server) =
   # state
   server.stateReady = newChan[bool](channelSize)
   server.stateAction = newChan[StateAction](channelSize)
-  # background
-  if server.details.shouldClone:
-    server.backgroundReady = newChan[bool](channelSize)
-    server.backgroundAction = newChan[BackgroundAction](channelSize)
 
 proc initThreads(server: var Server) =
   var res: bool
-  createThread(server.listenThread, listen, (server.details, server.listenReady, server.listenAction, server.stateAction, server.backgroundAction))
+  createThread(server.listenThread, listen, (server.details, server.listenReady, server.listenAction, server.stateAction))
   server.listenReady.recv(res)
-  createThread(server.stateThread, recvAction, (server.details, server.stateReady, server.listenAction, server.stateAction, server.backgroundAction))
+  createThread(server.stateThread, recvAction, (server.details, server.stateReady, server.listenAction, server.stateAction))
   server.stateReady.recv(res)
-  if server.details.shouldClone:
-    createThread(server.backgroundThread, recvBackgroundAction, (server.details, server.backgroundReady, server.listenAction, server.stateAction, server.backgroundAction))
-    server.backgroundReady.recv(res)
 
 proc deinitThreads(server: var Server) =
   server.listenAction.send(ListenAction(kind: ListenActionKind.Stop))
   server.listenThread.joinThread()
   server.stateAction.send(StateAction(kind: StateActionKind.Stop))
   server.stateThread.joinThread()
-  if server.details.shouldClone:
-    server.backgroundAction.send(BackgroundAction(kind: BackgroundActionKind.Stop))
-    server.backgroundThread.joinThread()
 
 proc start*(server: var Server) =
   initChans(server)

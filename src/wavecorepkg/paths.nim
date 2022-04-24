@@ -28,7 +28,6 @@ var readUrl*: string
 
 const
   staticFileDir* = "bbs"
-  cloneDir* = "out"
   boardsDir* = "boards"
   ansiwavesDir* = "ansiwavez"
   dbDir* = "db"
