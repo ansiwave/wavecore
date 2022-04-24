@@ -519,13 +519,12 @@ proc recvAction(data: ThreadData) {.thread.} =
         # if both failed, something went wrong, so print the errors out.
         if errors.len == 2:
           raise newException(Exception, errors[0] & "\n" & errors[1])
-        if data.details.pushUrls.len > 0:
+        for url in data.details.pushUrls:
           for subdir in [paths.boardsDir, paths.limboDir]:
             let bbsGitDir = os.absolutePath(data.details.staticFileDir / subdir / action.board)
-            for url in data.details.pushUrls:
-              let res = execCmd("git -C $1 push $2".format(bbsGitDir, url), silent = true)
-              if res.exitCode != 0:
-                stderr.writeLine(res.output)
+            let res = execCmd("git -C $1 push $2/$3/$4".format(bbsGitDir, url, subdir, action.board), silent = true)
+            if res.exitCode != 0:
+              stderr.writeLine("\nAttempted push to " & url & "\n" & res.output)
       except Exception as ex:
         stderr.writeLine(ex.msg)
         stderr.writeLine(getStackTrace(ex))
