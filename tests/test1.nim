@@ -89,9 +89,9 @@ let
   boardDir = bbsDir / sysopPublicKey / paths.boardDir
   dbDirs = paths.db(sysopPublicKey, isUrl = true)
   dbPath = bbsDir / paths.db(sysopPublicKey)
-os.createDir(bbsDir / sysopPublicKey / paths.boardDir / paths.ansiwavesDir)
+os.createDir(bbsDir / sysopPublicKey / paths.boardDir / paths.ansiwaveDir)
 os.createDir(bbsDir / sysopPublicKey / paths.boardDir / paths.dbDir)
-os.createDir(bbsDir / sysopPublicKey / paths.limboDir / paths.ansiwavesDir)
+os.createDir(bbsDir / sysopPublicKey / paths.limboDir / paths.ansiwaveDir)
 os.createDir(bbsDir / sysopPublicKey / paths.limboDir / paths.dbDir)
 paths.address = "http://localhost:" & $port
 vfs.register()
@@ -126,12 +126,12 @@ proc initUser(publicKey: string): User =
 
 proc initContent(keys: ed25519.KeyPair, origContent: string): entities.Content =
   let content = "\n\n" & origContent # add two newlines to simulate where headers would've been
-  result.value = initCompressedValue(content)
+  result.value = content
   result.sig = paths.encode(ed25519.sign(keys, content))
   result.sig_last = result.sig
 
 proc initContent(content: tuple[body: string, sig: string], sigLast: string = content.sig): Content =
-  result.value = initCompressedValue(content.body)
+  result.value = content.body
   result.sig = content.sig
   result.sig_last = sigLast
 
@@ -581,14 +581,14 @@ test "submit ansiwaves over http":
       var res = client.submit(c, "ansiwave", body)
       client.get(res, true)
       check res.value.kind == client.Valid
-      check os.fileExists(bbsDir / paths.ansiwavez(sysopPublicKey, sig))
+      check os.fileExists(bbsDir / paths.ansiwave(sysopPublicKey, sig))
     # purge alice from the db
     block:
       let (body, sig) = common.signWithHeaders(sysopKeys, "modban modpurge", alice.public_key, common.Tags, sysopPublicKey)
       var res = client.submit(c, "ansiwave", body)
       client.get(res, true)
       check res.value.kind == client.Valid
-      check not os.fileExists(bbsDir / paths.ansiwavez(sysopPublicKey, postSig))
+      check not os.fileExists(bbsDir / paths.ansiwave(sysopPublicKey, postSig))
     # bob tries to set an invalid user name
     block:
       let (body, sig) = common.signWithHeaders(bobKeys, "Hello\n/name hello world", bob.public_key, common.Edit, sysopPublicKey)
@@ -652,7 +652,7 @@ test "limbo":
       var res = client.submit(c, "ansiwave", body)
       client.get(res, true)
       check res.value.kind == client.Valid
-      check os.fileExists(bbsDir / paths.ansiwavez(sysopPublicKey, sig, limbo = true))
+      check os.fileExists(bbsDir / paths.ansiwave(sysopPublicKey, sig, limbo = true))
     # edit post
     var postSig1Edit = ""
     block:
@@ -677,7 +677,7 @@ test "limbo":
       var res = client.submit(c, "ansiwave", body)
       client.get(res, true)
       check res.value.kind == client.Valid
-      check os.fileExists(bbsDir / paths.ansiwavez(sysopPublicKey, sig, limbo = true))
+      check os.fileExists(bbsDir / paths.ansiwave(sysopPublicKey, sig, limbo = true))
     # bob tries to set a name, but can't because he's still in limbo
     var postSigBob = ""
     block:
@@ -710,10 +710,10 @@ test "limbo":
       var res = client.submit(c, "ansiwave", body)
       client.get(res, true)
       check res.value.kind == client.Valid
-      check not os.fileExists(bbsDir / paths.ansiwavez(sysopPublicKey, postSig1, limbo = true))
-      check not os.fileExists(bbsDir / paths.ansiwavez(sysopPublicKey, postSig2, limbo = true))
-      check os.fileExists(bbsDir / paths.ansiwavez(sysopPublicKey, postSig1))
-      check os.fileExists(bbsDir / paths.ansiwavez(sysopPublicKey, postSig2))
+      check not os.fileExists(bbsDir / paths.ansiwave(sysopPublicKey, postSig1, limbo = true))
+      check not os.fileExists(bbsDir / paths.ansiwave(sysopPublicKey, postSig2, limbo = true))
+      check os.fileExists(bbsDir / paths.ansiwave(sysopPublicKey, postSig1))
+      check os.fileExists(bbsDir / paths.ansiwave(sysopPublicKey, postSig2))
     # make sure the posts brought from limbo are searchable
     db.withOpen(conn, dbPath, db.ReadWrite):
       check entities.search(conn, entities.Users, "hello").len == 1

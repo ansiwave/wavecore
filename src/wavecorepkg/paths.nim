@@ -30,7 +30,7 @@ const
   staticFileDir* = "bbs"
   boardDir* = "board"
   limboDir* = "limbo"
-  ansiwavesDir* = "ansiwavez"
+  ansiwaveDir* = "ansiwave"
   dbDir* = "db"
   dbFilename* = "board.db"
   defaultBoard* =
@@ -51,17 +51,17 @@ proc db*(board: string, isUrl: bool = false, limbo: bool = false): string =
     else:
       board / boardDir / dbDir / dbFilename
 
-proc ansiwavez*(board: string, filename: string, isUrl: bool = false, limbo: bool = false): string =
+proc ansiwave*(board: string, filename: string, isUrl: bool = false, limbo: bool = false): string =
   if isUrl:
     if limbo:
-      board & "/" & limboDir & "/" & ansiwavesDir & "/" & filename & ".ansiwavez"
+      board & "/" & limboDir & "/" & ansiwaveDir & "/" & filename & ".ansiwave"
     else:
-      board & "/" & boardDir & "/" & ansiwavesDir & "/" & filename & ".ansiwavez"
+      board & "/" & boardDir & "/" & ansiwaveDir & "/" & filename & ".ansiwave"
   else:
     if limbo:
-      board / limboDir / ansiwavesDir / filename & ".ansiwavez"
+      board / limboDir / ansiwaveDir / filename & ".ansiwave"
     else:
-      board / boardDir / ansiwavesDir / filename & ".ansiwavez"
+      board / boardDir / ansiwaveDir / filename & ".ansiwave"
 
 proc encode*[T](data: T): string =
   result = base64.encode(data, safe = true)

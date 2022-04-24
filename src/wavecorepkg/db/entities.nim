@@ -1,7 +1,6 @@
 import ./sqlite3
 from ./db_sqlite import sql
 from ../db import nil
-from zippy import nil
 from sequtils import nil
 from strutils import format
 from times import nil
@@ -11,11 +10,8 @@ from ../wavescript import nil
 from ../ansi import nil
 
 type
-  CompressedValue* = object
-    compressed*: seq[uint8]
-    uncompressed*: string
   Content* = object
-    value*: CompressedValue
+    value*: string
     sig*: string
     sig_last*: string
   Tags* = object
@@ -44,14 +40,6 @@ type
     Ts, Score, ReplyCount,
 
 const limit* = 10
-
-proc initCompressedValue*(uncompressed: string): CompressedValue =
-  result.compressed = cast[seq[uint8]](zippy.compress(uncompressed, dataFormat = zippy.dfZlib))
-  result.uncompressed = uncompressed
-
-proc initCompressedValue*(compressed: seq[uint8]): CompressedValue =
-  result.compressed = compressed
-  result.uncompressed = zippy.uncompress(cast[string](compressed), dataFormat = zippy.dfZlib)
 
 proc initPost(stmt: PStmt): Post =
   var cols = sqlite3.column_count(stmt)
@@ -310,7 +298,7 @@ proc insertPost*(conn: PSqlite3, e: Post, id: var int64, dbPrefix: string = "", 
   let userId = sourceUser.user_id
 
   db.withStatement(conn, "INSERT INTO $1post_search (post_id, user_id, attribute, value) VALUES (?, ?, ?, ?)".format(dbPrefix), stmt):
-    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), id, userId, "content", common.stripUnsearchableText(e.content.value.uncompressed))
+    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), id, userId, "content", common.stripUnsearchableText(e.content.value))
     if step(stmt) != SQLITE_DONE:
       db_sqlite.dbError(conn)
   db.withStatement(conn, "INSERT INTO $1post_search (post_id, user_id, attribute, value) VALUES (?, ?, ?, ?)".format(dbPrefix), stmt):
@@ -482,7 +470,7 @@ proc editPost*(conn: PSqlite3, content: Content, key: string, dbPrefix: string =
   # this is a banner, so try parsing their username out of it
   if post.parent == "":
     var name = ""
-    let lines = common.splitAfterHeaders(content.value.uncompressed)
+    let lines = common.splitAfterHeaders(content.value)
     var ctx = wavescript.initContext()
     for line in lines:
       let strippedLine = ansi.stripCodesIfCommand(line)
@@ -524,7 +512,7 @@ proc editPost*(conn: PSqlite3, content: Content, key: string, dbPrefix: string =
       db_sqlite.dbError(conn)
 
   db.withStatement(conn, "UPDATE $1post_search SET value = ? WHERE post_id MATCH ? AND attribute MATCH 'content'".format(dbPrefix), stmt):
-    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), common.stripUnsearchableText(content.value.uncompressed), post.post_id)
+    db_sqlite.bindParams(db_sqlite.SqlPrepared(stmt), common.stripUnsearchableText(content.value), post.post_id)
     if step(stmt) != SQLITE_DONE:
       db_sqlite.dbError(conn)
 

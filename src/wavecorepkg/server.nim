@@ -110,7 +110,7 @@ proc insertPost*(details: ServerDetails, board: string, entity: entities.Post) =
       # if we're not inserting into limbo, insert the post
       if not limbo:
         let sig = entities.insertPost(conn, entity)
-        writeFile(details.staticFileDir / paths.ansiwavez(board, sig), entity.content.value.compressed)
+        writeFile(details.staticFileDir / paths.ansiwave(board, sig), entity.content.value)
   # insert into limbo
   if limbo:
     db.withOpen(conn, details.staticFileDir / paths.db(board, limbo = true), db.ReadWrite):
@@ -118,7 +118,7 @@ proc insertPost*(details: ServerDetails, board: string, entity: entities.Post) =
         if not entities.existsUser(conn, entity.public_key):
           entities.insertUser(conn, entities.User(public_key: entity.public_key, tags: entities.Tags(value: "modlimbo")))
         let sig = entities.insertPost(conn, entity, limbo = true)
-        writeFile(details.staticFileDir / paths.ansiwavez(board, sig, limbo = true), entity.content.value.compressed)
+        writeFile(details.staticFileDir / paths.ansiwave(board, sig, limbo = true), entity.content.value)
 
 proc editPost*(details: ServerDetails, board: string, content: entities.Content, key: string) =
   var limbo = false
@@ -134,7 +134,7 @@ proc editPost*(details: ServerDetails, board: string, content: entities.Content,
       # if we're not inserting into limbo, insert the post
       if not limbo:
         let sig = entities.editPost(conn, content, key)
-        writeFile(details.staticFileDir / paths.ansiwavez(board, sig), content.value.compressed)
+        writeFile(details.staticFileDir / paths.ansiwave(board, sig), content.value)
   # insert into limbo
   if limbo:
     db.withOpen(conn, details.staticFileDir / paths.db(board, limbo = true), db.ReadWrite):
@@ -142,7 +142,7 @@ proc editPost*(details: ServerDetails, board: string, content: entities.Content,
         if not entities.existsUser(conn, key):
           entities.insertUser(conn, entities.User(public_key: key, tags: entities.Tags(value: "modlimbo")))
         let sig = entities.editPost(conn, content, key, limbo = true)
-        writeFile(details.staticFileDir / paths.ansiwavez(board, sig, limbo = true), content.value.compressed)
+        writeFile(details.staticFileDir / paths.ansiwave(board, sig, limbo = true), content.value)
 
 proc editTags*(details: ServerDetails, board: string, tags: entities.Tags, tagsSigLast: string, key: string, extra: bool) =
   var exitEarly = false
@@ -174,12 +174,12 @@ proc editTags*(details: ServerDetails, board: string, tags: entities.Tags, tagsS
                   break
                 for post in posts:
                   let
-                    src = details.staticFileDir / paths.ansiwavez(board, post.content.sig, limbo = true)
+                    src = details.staticFileDir / paths.ansiwave(board, post.content.sig, limbo = true)
                     value =
                       if os.fileExists(src):
-                        entities.initCompressedValue(cast[seq[uint8]](readFile(src)))
+                        readFile(src)
                       else:
-                        entities.CompressedValue()
+                        ""
                   if post.parent == "":
                     discard entities.editPost(conn, entities.Content(sig: post.content.sig_last, sig_last: post.public_key, value: value), post.public_key, dbPrefix = alias & ".")
                   elif post.parent == post.public_key or entities.existsPost(conn, post.parent, dbPrefix = alias & "."):
@@ -188,9 +188,9 @@ proc editTags*(details: ServerDetails, board: string, tags: entities.Tags, tagsS
                     discard entities.insertPost(conn, p, dbPrefix = alias & ".")
                   else:
                     echo "WARNING: Not moving invalid post from limbo: " & post.content.sig
-                    os.removeFile(details.staticFileDir / paths.ansiwavez(board, post.content.sig, limbo = true))
+                    os.removeFile(details.staticFileDir / paths.ansiwave(board, post.content.sig, limbo = true))
                 offset += entities.limit
-              # move ansiwavez files
+              # move ansiwave files
               offset = 0
               while true:
                 let posts = entities.selectAllUserPosts(conn, tagsSigLast, offset)
@@ -198,8 +198,8 @@ proc editTags*(details: ServerDetails, board: string, tags: entities.Tags, tagsS
                   break
                 for post in posts:
                   let
-                    src = details.staticFileDir / paths.ansiwavez(board, post.content.sig, limbo = true)
-                    dest = details.staticFileDir / paths.ansiwavez(board, post.content.sig)
+                    src = details.staticFileDir / paths.ansiwave(board, post.content.sig, limbo = true)
+                    dest = details.staticFileDir / paths.ansiwave(board, post.content.sig)
                   if os.fileExists(src):
                     os.moveFile(src, dest)
                 offset += entities.limit
@@ -223,7 +223,7 @@ proc editTags*(details: ServerDetails, board: string, tags: entities.Tags, tagsS
             if posts.len == 0:
               break
             for post in posts:
-              os.removeFile(details.staticFileDir / paths.ansiwavez(board, post.content.sig))
+              os.removeFile(details.staticFileDir / paths.ansiwave(board, post.content.sig))
             offset += entities.limit
           entities.deleteUser(conn, userToPurge)
 
@@ -276,7 +276,7 @@ proc ansiwavePost(data: ThreadData, request: Request, headers: var string, body:
   of "new":
     let
       post = entities.Post(
-        content: entities.Content(value: entities.initCompressedValue(request.body), sig: sigBase64, sig_last: sigBase64),
+        content: entities.Content(value: request.body, sig: sigBase64, sig_last: sigBase64),
         public_key: keyBase64,
         parent: cmds["/target"],
       )
@@ -285,7 +285,7 @@ proc ansiwavePost(data: ThreadData, request: Request, headers: var string, body:
       raise newException(Exception, error)
   of "edit":
     let
-      content = entities.Content(value: entities.initCompressedValue(request.body), sig: sigBase64, sig_last: cmds["/target"])
+      content = entities.Content(value: request.body, sig: sigBase64, sig_last: cmds["/target"])
       error = sendAction(data.stateAction, StateAction(kind: EditPost, board: board, content: content, key: keyBase64))
     if error != "":
       raise newException(Exception, error)
@@ -464,7 +464,7 @@ proc recvAction(data: ThreadData) {.thread.} =
       try:
         for subdir in [paths.boardDir, paths.limboDir]:
           let bbsGitDir = os.absolutePath(data.details.staticFileDir / action.board / subdir)
-          os.createDir(bbsGitDir / paths.ansiwavesDir)
+          os.createDir(bbsGitDir / paths.ansiwaveDir)
           os.createDir(bbsGitDir / paths.dbDir)
           if data.details.pushUrls.len > 0 and not os.dirExists(bbsGitDir / ".git"):
             discard execCmd("git init $1".format(bbsGitDir))

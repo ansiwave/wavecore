@@ -1,5 +1,4 @@
 import puppy
-from zippy import nil
 from urlly import `$`
 from strutils import nil
 from times import nil
@@ -167,8 +166,6 @@ proc recvAction(client: Client) {.thread.} =
           {.cast(gcsafe).}:
             var res = fetch(request)
           if res.code == 200:
-            if strutils.endsWith(action.request.url, ".ansiwavez"):
-              res.body = zippy.uncompress(cast[string](res.body), dataFormat = zippy.dfZlib)
             action.response.send(Result[Response](kind: Valid, valid: res.fromPuppy))
           else:
             action.response.send(Result[Response](kind: Error, error: res.body))
@@ -178,8 +175,6 @@ proc recvAction(client: Client) {.thread.} =
             raise newException(Exception, "Invalid path")
           let path = client.path / strutils.join(parts[2 ..< parts.len], "/")
           var res = Response(code: 200, body: readFile(path))
-          if strutils.endsWith(request.url.path, ".ansiwavez"):
-            res.body = zippy.uncompress(cast[string](res.body), dataFormat = zippy.dfZlib)
           action.response.send(Result[Response](kind: Valid, valid: res))
       except Exception as ex:
         action.response.send(Result[Response](kind: Error, error: ex.msg))

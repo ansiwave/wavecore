@@ -4,7 +4,6 @@ from strutils import nil
 import json
 import tables
 from base64 import nil
-from zippy import nil
 from times import nil
 
 from ../db import nil
@@ -205,8 +204,6 @@ proc sendFetch*(client: Client, request: Request, chan: ChannelPtr) =
       var s = newString(size)
       copyMem(s[0].addr, data, size)
       let chan = cast[ptr Channel](arg)
-      if strutils.endsWith(chan[].url, ".ansiwavez"):
-        s = zippy.uncompress(cast[string](s), dataFormat = zippy.dfZlib)
       chan[].data = flatty.toFlatty(Result[Response](kind: Valid, valid: Response(code: 200, body: s)))
       chan[].dataAvailable = true
 
@@ -251,8 +248,6 @@ proc recvAction(data: pointer, size: cint) {.exportc.} =
       var req = fetch(action.request)
       try:
         if req.code == 200:
-          if strutils.endsWith(action.request.url, ".ansiwavez"):
-            req.body = zippy.uncompress(cast[string](req.body), dataFormat = zippy.dfZlib)
           flatty.toFlatty(Result[Response](kind: Valid, valid: req))
         else:
           flatty.toFlatty(Result[Response](kind: Error, error: req.body))
