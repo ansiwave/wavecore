@@ -41,12 +41,12 @@ type
     key: string
     error: Chan[string]
   BackgroundActionKind {.pure.} = enum
-    Stop, CopyOut,
+    Stop, Push,
   BackgroundAction = object
     case kind: BackgroundActionKind
     of BackgroundActionKind.Stop:
       discard
-    of BackgroundActionKind.CopyOut:
+    of BackgroundActionKind.Push:
       board: string
   ServerDetails = tuple
     hostname: string
@@ -59,6 +59,7 @@ type
     readyChan: Chan[bool]
     listenAction: Chan[ListenAction]
     stateAction: Chan[StateAction]
+    backgroundAction: Chan[BackgroundAction]
   Server* = object
     details*: ServerDetails
     listenThread: Thread[ThreadData]
@@ -67,6 +68,9 @@ type
     stateThread: Thread[ThreadData]
     stateAction: Chan[StateAction]
     stateReady: Chan[bool]
+    backgroundThread: Thread[ThreadData]
+    backgroundReady: Chan[bool]
+    backgroundAction: Chan[BackgroundAction]
   Request = object
     uri: uri.Uri
     reqMethod: httpcore.HttpMethod
@@ -519,19 +523,31 @@ proc recvAction(data: ThreadData) {.thread.} =
         # if both failed, something went wrong, so print the errors out.
         if errors.len == 2:
           raise newException(Exception, errors[0] & "\n" & errors[1])
-        for url in data.details.pushUrls:
-          for subdir in [paths.boardDir, paths.limboDir]:
-            let bbsGitDir = os.absolutePath(data.details.staticFileDir / paths.boardsDir / action.board / subdir)
-            let cmd = "git -C $1 push $2/$3/$4/$5 master".format(bbsGitDir, url, paths.boardsDir, action.board, subdir)
-            let res = execCmd(cmd, silent = true)
-            if res.exitCode != 0:
-              echo "Failed push:\n$1\n$2".format(cmd, res.output)
-            else:
-              echo "Successful push:\n$1\n$2".format(cmd, res.output)
+        if data.details.pushUrls.len > 0:
+          data.backgroundAction.send(BackgroundAction(kind: BackgroundActionKind.Push, board: action.board))
       except Exception as ex:
         stderr.writeLine(ex.msg)
         stderr.writeLine(getStackTrace(ex))
     action.error.send(resp)
+
+proc recvBackgroundAction(data: ThreadData) {.thread.} =
+  data.readyChan.send(true)
+  while true:
+    var action: BackgroundAction
+    data.backgroundAction.recv(action)
+    case action.kind:
+    of BackgroundActionKind.Stop:
+      break
+    of BackgroundActionKind.Push:
+      for url in data.details.pushUrls:
+        for subdir in [paths.boardDir, paths.limboDir]:
+          let bbsGitDir = os.absolutePath(data.details.staticFileDir / paths.boardsDir / action.board / subdir)
+          let cmd = "git -C $1 push $2/$3/$4/$5 master".format(bbsGitDir, url, paths.boardsDir, action.board, subdir)
+          let res = execCmd(cmd, silent = true)
+          if res.exitCode != 0:
+            discard sendAction(data.stateAction, StateAction(kind: Log, message: "Failed push:\n$1\n$2".format(cmd, res.output)))
+          else:
+            discard sendAction(data.stateAction, StateAction(kind: Log, message: "Successful push:\n$1\n$2".format(cmd, res.output)))
 
 proc initChans(server: var Server) =
   # listen
@@ -540,19 +556,29 @@ proc initChans(server: var Server) =
   # state
   server.stateReady = newChan[bool](channelSize)
   server.stateAction = newChan[StateAction](channelSize)
+  # background
+  if server.details.pushUrls.len > 0:
+    server.backgroundReady = newChan[bool](channelSize)
+    server.backgroundAction = newChan[BackgroundAction](channelSize)
 
 proc initThreads(server: var Server) =
   var res: bool
-  createThread(server.listenThread, listen, (server.details, server.listenReady, server.listenAction, server.stateAction))
+  createThread(server.listenThread, listen, (server.details, server.listenReady, server.listenAction, server.stateAction, server.backgroundAction))
   server.listenReady.recv(res)
-  createThread(server.stateThread, recvAction, (server.details, server.stateReady, server.listenAction, server.stateAction))
+  createThread(server.stateThread, recvAction, (server.details, server.stateReady, server.listenAction, server.stateAction, server.backgroundAction))
   server.stateReady.recv(res)
+  if server.details.pushUrls.len > 0:
+    createThread(server.backgroundThread, recvBackgroundAction, (server.details, server.backgroundReady, server.listenAction, server.stateAction, server.backgroundAction))
+    server.backgroundReady.recv(res)
 
 proc deinitThreads(server: var Server) =
   server.listenAction.send(ListenAction(kind: ListenActionKind.Stop))
   server.listenThread.joinThread()
   server.stateAction.send(StateAction(kind: StateActionKind.Stop))
   server.stateThread.joinThread()
+  if server.details.pushUrls.len > 0:
+    server.backgroundAction.send(BackgroundAction(kind: BackgroundActionKind.Stop))
+    server.backgroundThread.joinThread()
 
 proc start*(server: var Server) =
   initChans(server)
