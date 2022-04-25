@@ -524,7 +524,9 @@ proc recvAction(data: ThreadData) {.thread.} =
             let bbsGitDir = os.absolutePath(data.details.staticFileDir / paths.boardsDir / action.board / subdir)
             let res = execCmd("git -C $1 push $2/$3/$4".format(bbsGitDir, url, action.board, subdir), silent = true)
             if res.exitCode != 0:
-              stderr.writeLine("\nAttempted push to " & url & "\n" & res.output)
+              discard sendAction(data.stateAction, StateAction(kind: Log, message: "Failed push to $1 - $2".format(url, res.output)))
+            else:
+              discard sendAction(data.stateAction, StateAction(kind: Log, message: "Successful push to $1 - $2".format(url, res.output)))
       except Exception as ex:
         stderr.writeLine(ex.msg)
         stderr.writeLine(getStackTrace(ex))
