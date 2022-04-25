@@ -6,6 +6,8 @@ from os import `/`
 from parseopt import nil
 import tables
 from zippy import nil
+from sequtils import nil
+from algorithm import nil
 
 const port = 3000
 
@@ -28,13 +30,26 @@ when isMainModule:
 
   if "upgrade" in options:
     proc upgradeBoard(board: string) =
-      os.createDir(board / "ansiwave")
-      for (kind, path) in os.walkDir(board / "ansiwavez"):
-        let (dir, name, ext) = os.splitFile(path)
-        if kind == os.pcFile and ext == ".ansiwavez":
-          writeFile(board / "ansiwave" / name & ".ansiwave", zippy.uncompress(readFile(path), dataFormat = zippy.dfZlib))
-          os.removeFile(path)
-      os.removeDir(board / "ansiwavez")
+      # convert ansiwavez files to ansiwave
+      if os.dirExists(board / "ansiwavez"):
+        os.createDir(board / "ansiwave")
+        for (kind, path) in os.walkDir(board / "ansiwavez"):
+          let (dir, name, ext) = os.splitFile(path)
+          if kind == os.pcFile and ext == ".ansiwavez":
+            writeFile(board / "ansiwave" / name & ".ansiwave", zippy.uncompress(readFile(path), dataFormat = zippy.dfZlib))
+            os.removeFile(path)
+        os.removeDir(board / "ansiwavez")
+      # concat the db files
+      let dbPath = board / "db" / "board.db"
+      if os.fileExists(dbPath):
+        var dbContent = readFile(dbPath)
+        var files = sequtils.toSeq(os.walkFiles(paths.staticFileDir / "boards" / "kEKgeSd3-74Uy0bfOOJ9mj0qW3KpMpXBGrrQdUv190E" / "board" / "db" / "board.db0*"))
+        algorithm.sort(files)
+        for file in files:
+          dbContent &= readFile(file)
+          os.removeFile(file)
+        writeFile(dbPath, dbContent)
+
     for (kind, board) in os.walkDir(paths.staticFileDir / "boards"):
       if kind == os.pcDir:
         if os.dirExists(board / "ansiwavez"):
