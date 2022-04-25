@@ -2,9 +2,10 @@ from ./wavecorepkg/testrun import nil
 from ./wavecorepkg/server import nil
 from ./wavecorepkg/db/vfs import nil
 from ./wavecorepkg/paths import nil
-from os import nil
+from os import `/`
 from parseopt import nil
 import tables
+from zippy import nil
 
 const port = 3000
 
@@ -21,8 +22,20 @@ when isMainModule:
       options[p.key] = p.val
     of parseopt.cmdArgument:
       continue
+
   if not os.dirExists(paths.staticFileDir):
     quit "Can't find directory: " & paths.staticFileDir
+  for (kind, board) in os.walkDir(paths.staticFileDir / "boards"):
+    echo "Upgrading ", board
+    if kind == os.pcDir and os.dirExists(board / "ansiwavez"):
+      os.createDir(board / "ansiwave")
+      for (kind, path) in os.walkDir(board / "ansiwavez"):
+        let (dir, name, ext) = os.splitFile(path)
+        if kind == os.pcFile and ext == ".ansiwavez":
+          writeFile(board / "ansiwave" / name & ".ansiwave", zippy.uncompress(readFile(path), dataFormat = zippy.dfZlib))
+          os.removeFile(path)
+      os.removeDir(board / "ansiwavez")
+
   vfs.register()
   var s = server.initServer("localhost", port, paths.staticFileDir, options)
   server.start(s)
