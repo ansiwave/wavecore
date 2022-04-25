@@ -36,13 +36,17 @@ when isMainModule:
           os.removeFile(path)
       os.removeDir(board / "ansiwavez")
     for (kind, board) in os.walkDir(paths.staticFileDir / "boards"):
-      echo "Upgrading ", board
       if kind == os.pcDir:
         if os.dirExists(board / "ansiwavez"):
-          upgradeBoard(board)
-        if os.dirExists(board / "misc" / "limbo"):
-          for (kind, board) in os.walkDir(board / "misc" / "limbo"):
-            upgradeBoard(board)
+          echo "Upgrading ", board
+          os.moveDir(board, board / ".." / "temp")
+          os.createDir(board)
+          os.moveDir(board / ".." / "temp", board / "board")
+          upgradeBoard(board / "board")
+        if os.dirExists(board / "board" / "misc" / "limbo"):
+          os.moveDir(board / "board" / "misc" / "limbo", board / "limbo")
+          upgradeBoard(board / "limbo")
+    quit 0
 
   vfs.register()
   var s = server.initServer("localhost", port, paths.staticFileDir, options)
