@@ -15,7 +15,7 @@ else:
   var
     address* =
       when defined(release):
-        "http://bbs.ansiwave.net/bbs.html"
+        "http://bbs.ansiwave.net/bbs/"
       else:
         "http://localhost:3000"
     postAddress* =
@@ -72,12 +72,18 @@ proc encode*[T](data: T): string =
     i -= 1
 
 proc initUrl*(address: string; endpoint: string): string =
-  var url = urlly.parseUrl(address)
-  url.paths = @[]
-  let s = $url
-  if strutils.endsWith(s, "/"):
-    "$1$2".format(s, endpoint)
+  if address == "" or strutils.endsWith(address, "/"):
+    "$1$2".format(address, endpoint)
   else:
-    "$1/$2".format(s, endpoint)
+    # the address doesn't end in a slash, so assume the part at the end of the path
+    # is a file and remove it.
+    var url = urlly.parseUrl(address)
+    if url.paths.len > 0:
+      discard url.paths.pop()
+    let s = $url
+    if strutils.endsWith(s, "/"):
+      "$1$2".format(s, endpoint)
+    else:
+      "$1/$2".format(s, endpoint)
 
 export base64.decode
