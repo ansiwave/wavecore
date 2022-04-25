@@ -522,7 +522,7 @@ proc recvAction(data: ThreadData) {.thread.} =
         for url in data.details.pushUrls:
           for subdir in [paths.boardDir, paths.limboDir]:
             let bbsGitDir = os.absolutePath(data.details.staticFileDir / paths.boardsDir / action.board / subdir)
-            let res = execCmd("git -C $1 push $2/$3/$4".format(bbsGitDir, url, action.board, subdir), silent = true)
+            let res = execCmd("git -C $1 push $2/$3/$4 master".format(bbsGitDir, url, action.board, subdir), silent = true)
             if res.exitCode != 0:
               echo "Failed push to $1 - $2".format(url, res.output)
             else:
