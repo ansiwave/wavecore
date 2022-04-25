@@ -170,10 +170,7 @@ proc recvAction(client: Client) {.thread.} =
           else:
             action.response.send(Result[Response](kind: Error, error: res.body))
         of Offline:
-          let parts = strutils.split($request.url, '/')
-          if parts.len < 3:
-            raise newException(Exception, "Invalid path")
-          let path = client.path / strutils.join(parts[2 ..< parts.len], "/")
+          let path = client.path / trimPath($request.url)
           var res = Response(code: 200, body: readFile(path))
           action.response.send(Result[Response](kind: Valid, valid: res))
       except Exception as ex:
