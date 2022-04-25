@@ -123,9 +123,9 @@ proc sendSearchQuery*(client: Client, filename: string, kind: entities.SearchKin
 
 proc trimPath(path: string): string =
   let parts = strutils.split(path, '/')
-  if parts.len < 3:
+  if parts.len < 4:
     raise newException(Exception, "Invalid path")
-  strutils.join(parts[2 ..< parts.len], "/")
+  strutils.join(parts[3 ..< parts.len], "/")
 
 proc toPuppy(request: Request): puppy.Request =
   new result

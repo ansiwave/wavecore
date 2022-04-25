@@ -86,13 +86,13 @@ let
   sysopKeys = ed25519.initKeyPair()
   sysopPublicKey = paths.encode(sysopKeys.public)
   bbsDir = "bbstest"
-  boardDir = bbsDir / sysopPublicKey / paths.boardDir
+  boardDir = bbsDir / paths.boardsDir / sysopPublicKey / paths.boardDir
   dbDirs = paths.db(sysopPublicKey, isUrl = true)
   dbPath = bbsDir / paths.db(sysopPublicKey)
-os.createDir(bbsDir / sysopPublicKey / paths.boardDir / paths.ansiwaveDir)
-os.createDir(bbsDir / sysopPublicKey / paths.boardDir / paths.dbDir)
-os.createDir(bbsDir / sysopPublicKey / paths.limboDir / paths.ansiwaveDir)
-os.createDir(bbsDir / sysopPublicKey / paths.limboDir / paths.dbDir)
+os.createDir(bbsDir / paths.boardsDir / sysopPublicKey / paths.boardDir / paths.ansiwaveDir)
+os.createDir(bbsDir / paths.boardsDir / sysopPublicKey / paths.boardDir / paths.dbDir)
+os.createDir(bbsDir / paths.boardsDir / sysopPublicKey / paths.limboDir / paths.ansiwaveDir)
+os.createDir(bbsDir / paths.boardsDir / sysopPublicKey / paths.limboDir / paths.dbDir)
 paths.address = "http://localhost:" & $port
 vfs.register()
 
