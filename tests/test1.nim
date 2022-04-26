@@ -730,6 +730,22 @@ test "limbo":
       var res = client.submit(c, "ansiwave", body)
       client.get(res, true)
       check res.value.kind == client.Valid
+    # new post by charlie
+    let
+      charlieKeys = ed25519.initKeyPair()
+      charlie = initUser(paths.encode(charlieKeys.public))
+    block:
+      let (body, sig) = common.signWithHeaders(charlieKeys, "Hi i'm charlie", subboardSig, common.New, sysopPublicKey)
+      var res = client.submit(c, "ansiwave", body)
+      client.get(res, true)
+      check res.value.kind == client.Valid
+      check os.fileExists(bbsDir / paths.ansiwave(sysopPublicKey, sig, limbo = true))
+      # sysop purges charlie
+      block:
+        let (body, sig) = common.signWithHeaders(sysopKeys, "modpurge", charlie.public_key, common.Tags, sysopPublicKey)
+        var res = client.submit(c, "ansiwave", body)
+        client.get(res, true)
+      check not os.fileExists(bbsDir / paths.ansiwave(sysopPublicKey, sig, limbo = true))
   finally:
     os.removeFile(dbPath)
     server.stop(s)

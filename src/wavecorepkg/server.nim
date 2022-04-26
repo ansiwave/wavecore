@@ -168,6 +168,15 @@ proc editTags*(details: ServerDetails, board: string, tags: entities.Tags, tagsS
             if "modpurge" in newTags:
               # we're deleting the user from limbo without bringing them into the main db
               exitEarly = true
+              # delete ansiwave files
+              var offset = 0
+              while true:
+                let posts = entities.selectAllUserPosts(conn, tagsSigLast, offset)
+                if posts.len == 0:
+                  break
+                for post in posts:
+                  os.removeFile(details.staticFileDir / paths.ansiwave(board, post.content.sig, limbo = true))
+                offset += entities.limit
             else:
               entities.insertUser(conn, entities.User(public_key: tagsSigLast, tags: entities.Tags(value: "")), dbPrefix = alias & ".")
               # insert posts into main db
