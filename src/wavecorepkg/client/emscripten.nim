@@ -89,14 +89,6 @@ proc emscripten_call_worker(worker: cint, funcname: cstring, data: cstring, size
 proc emscripten_worker_respond(data: cstring, size: cint) {.importc.}
 proc emscripten_async_wget_data(url: cstring, arg: pointer, onload: pointer, onerror: pointer) {.importc.}
 proc wavecore_fetch(url: cstring, verb: cstring, headers: cstring, body: cstring): cstring {.importc.}
-proc wavecore_browse_file(callback: cstring) {.importc.}
-proc wavecore_start_download(data_uri: cstring, filename: cstring) {.importc.}
-proc wavecore_localstorage_set(key: cstring, val: cstring): bool {.importc.}
-proc wavecore_localstorage_get(key: cstring): cstring {.importc.}
-proc wavecore_localstorage_remove(key: cstring) {.importc.}
-proc wavecore_localstorage_list(): cstring {.importc.}
-proc wavecore_play_audio(src: cstring) {.importc.}
-proc wavecore_stop_audio() {.importc.}
 proc free(p: pointer) {.importc.}
 
 {.compile: "wavecore_emscripten.c".}
@@ -121,35 +113,6 @@ proc fetch*(request: Request): Response =
       hs
   result = Response(body: body, code: code, headers: resHeaders)
   free(res)
-
-proc browseFile*(callback: string) =
-  wavecore_browse_file(callback)
-
-proc startDownload*(dataUri: string, filename: string) =
-  wavecore_start_download(dataUri, filename)
-
-proc localSet*(key: string, val: string): bool =
-  wavecore_localstorage_set(key, val)
-
-proc localGet*(key: string): string =
-  let val = wavecore_localstorage_get(key)
-  result = $val
-  free(val)
-
-proc localRemove*(key: string) =
-  wavecore_localstorage_remove(key)
-
-proc localList*(): seq[string] =
-  let val = wavecore_localstorage_list()
-  for item in parseJson($val):
-    result.add(item.str)
-  free(val)
-
-proc playAudio*(src: string) =
-  wavecore_play_audio(src)
-
-proc stopAudio*() =
-  wavecore_stop_audio()
 
 proc initChannelValue*[T](): ChannelValue[T] =
   result = ChannelValue[T](
