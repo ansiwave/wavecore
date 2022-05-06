@@ -5,7 +5,7 @@ from strutils import nil
 import tables, sets
 from times import nil
 import unicode
-from ./ansi import nil
+from ansiutils/codes import nil
 
 proc parseTags*(tags: string): HashSet[string] =
   result = strutils.split(tags, ' ').toHashSet
@@ -87,7 +87,7 @@ proc stripUnsearchableText*(content: string): string =
     var newLines: seq[string]
     for line in strutils.splitLines(body):
       var
-        chars = ansi.stripCodes(line.toRunes) # remove escape codes
+        chars = codes.stripCodes(line.toRunes) # remove escape codes
         newLine: seq[string]
       # replace ansi block chars with spaces
       for ch in chars:

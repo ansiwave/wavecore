@@ -7,7 +7,7 @@ from times import nil
 from ../common import nil
 import sets
 from ../wavescript import nil
-from ../ansi import nil
+from ansiutils/codes import nil
 
 type
   Content* = object
@@ -473,7 +473,7 @@ proc editPost*(conn: PSqlite3, content: Content, key: string, dbPrefix: string =
     let lines = common.splitAfterHeaders(content.value)
     var ctx = wavescript.initContext()
     for line in lines:
-      let strippedLine = ansi.stripCodesIfCommand(line)
+      let strippedLine = codes.stripCodesIfCommand(line)
       if strutils.startsWith(strippedLine, "/name ") or strippedLine == "/name":
         let res = wavescript.parse(ctx, strippedLine)
         if limbo:
