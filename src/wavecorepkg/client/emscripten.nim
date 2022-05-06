@@ -97,9 +97,6 @@ proc wavecore_localstorage_remove(key: cstring) {.importc.}
 proc wavecore_localstorage_list(): cstring {.importc.}
 proc wavecore_play_audio(src: cstring) {.importc.}
 proc wavecore_stop_audio() {.importc.}
-proc wavecore_open_new_tab(url: cstring) {.importc.}
-proc wavecore_get_hash(): cstring {.importc.}
-proc wavecore_set_hash(hash: cstring) {.importc.}
 proc free(p: pointer) {.importc.}
 
 {.compile: "wavecore_emscripten.c".}
@@ -153,17 +150,6 @@ proc playAudio*(src: string) =
 
 proc stopAudio*() =
   wavecore_stop_audio()
-
-proc openNewTab*(url: string) =
-  wavecore_open_new_tab(url)
-
-proc getHash*(): string =
-  let hash = wavecore_get_hash()
-  result = $hash
-  free(hash)
-
-proc setHash*(hash: string) =
-  wavecore_set_hash(hash)
 
 proc initChannelValue*[T](): ChannelValue[T] =
   result = ChannelValue[T](

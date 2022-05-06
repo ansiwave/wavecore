@@ -125,19 +125,3 @@ EM_JS(void, wavecore_stop_audio, (), {
     console.error(e);
   }
 });
-
-EM_JS(void, wavecore_open_new_tab, (const char* url), {
-  window.open(UTF8ToString(url), "_blank");
-});
-
-EM_JS(char*, wavecore_get_hash, (), {
-  var hash = window.location.hash.slice(1);
-  var lengthBytes = lengthBytesUTF8(hash)+1;
-  var stringOnWasmHeap = _malloc(lengthBytes);
-  stringToUTF8(hash, stringOnWasmHeap, lengthBytes);
-  return stringOnWasmHeap;
-});
-
-EM_JS(void, wavecore_set_hash, (const char* hash), {
-  window.location.hash = UTF8ToString(hash);
-});
