@@ -102,7 +102,7 @@ proc wavecore_get_hash(): cstring {.importc.}
 proc wavecore_set_hash(hash: cstring) {.importc.}
 proc free(p: pointer) {.importc.}
 
-{.compile: "emscripten.c".}
+{.compile: "wavecore_emscripten.c".}
 
 proc fetch*(request: Request): Response =
   let
