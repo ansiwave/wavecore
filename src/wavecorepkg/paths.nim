@@ -8,19 +8,19 @@ when defined(emscripten):
     address* = ""
     postAddress* =
       when defined(release):
-        "http://post.ansiwave.net"
+        "https://post.ansiwave.net"
       else:
         address
 else:
   var
     address* =
       when defined(release):
-        "http://bbs.ansiwave.net/bbs/"
+        "https://bbs.ansiwave.net/bbs/"
       else:
         "http://localhost:3000"
     postAddress* =
       when defined(release):
-        "http://post.ansiwave.net"
+        "https://post.ansiwave.net"
       else:
         address
 
