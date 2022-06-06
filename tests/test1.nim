@@ -533,6 +533,7 @@ test "retrieve sqlite db via http":
       entities.insertUser(conn, alice, alice.user_id)
       entities.insertUser(conn, bob, bob.user_id)
     # re-open db, but this time all reads happen over http
+    paths.readUrl = paths.initUrl(paths.address, dbDirs)
     db.withOpen(conn, dbPath, db.Http):
       let
         alice2 = entities.selectUser(conn, alice.public_key)
