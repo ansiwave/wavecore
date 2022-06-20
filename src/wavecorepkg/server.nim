@@ -262,7 +262,7 @@ proc ansiwavePost(data: ThreadData, request: Request, headers: var string, body:
   let board = cmds["/board"]
   if board != paths.encode(paths.decode(board)):
     raise newException(BadRequestException, "Invalid value in /board")
-  if not os.dirExists(data.details.staticFileDir / paths.boardsDir / board / paths.boardDir):
+  if not os.dirExists(data.details.staticFileDir / paths.boardsDir / board):
     raise newException(BadRequestException, "Board does not exist")
 
   # check the sig
