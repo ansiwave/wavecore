@@ -3,26 +3,21 @@ from base64 import nil
 from strutils import format
 from urlly import `$`
 
-when defined(emscripten):
-  const
-    address* = ""
-    postAddress* =
-      when defined(release):
-        "https://post.ansiwave.net"
-      else:
-        address
-else:
-  var
-    address* =
-      when defined(release):
-        "https://bbs.ansiwave.net/bbs/"
-      else:
-        "http://localhost:3000"
-    postAddress* =
-      when defined(release):
-        "https://post.ansiwave.net"
-      else:
-        address
+const
+  defaultGetAddress* {.strdefine.} = "undefined"
+  defaultPostAddress* {.strdefine.} = "undefined"
+  defaultBoard* {.strdefine.} = "undefined"
+
+when defaultGetAddress == "undefined":
+  {.error: "You must define defaultGetAddress".}
+elif defaultPostAddress == "undefined":
+  {.error: "You must define defaultPostAddress".}
+elif defaultBoard == "undefined":
+  {.error: "You must define defaultBoard".}
+
+var
+  address* = defaultGetAddress
+  postAddress* = defaultPostAddress
 
 var readUrl*: string
 
@@ -34,11 +29,6 @@ const
   ansiwaveDir* = "ansiwave"
   dbDir* = "db"
   dbFilename* = "board.db"
-  defaultBoard* =
-    when defined(release):
-      "kEKgeSd3-74Uy0bfOOJ9mj0qW3KpMpXBGrrQdUv190E"
-    else:
-      "Q8BTY324cY7nl5kce6ctEfk8IRIrtsM8NfKL29B-3UE"
 
 proc db*(board: string, isUrl: bool = false, limbo: bool = false): string =
   if isUrl:
