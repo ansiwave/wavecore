@@ -117,7 +117,7 @@
 
 import sqlite3, macros
 
-import db_common
+import ./db_common
 export db_common
 
 import std/private/since
