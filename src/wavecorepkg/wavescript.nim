@@ -1,7 +1,7 @@
 import unicode, tables, paramidi/constants
 from strutils import format
 import json, sets
-from urlly import nil
+from webby import nil
 from ansiutils/codes import nil
 
 type
@@ -101,7 +101,7 @@ const
       proc (s: string): string =
         var foundUrl = false
         for word in strutils.split(s, " "):
-          if urlly.parseUrl(word).scheme != "":
+          if webby.parseUrl(word).scheme != "":
             foundUrl = true
         if not foundUrl:
           result = "No URL found. Write it like this:   /link hello world https://ansiwave.net"

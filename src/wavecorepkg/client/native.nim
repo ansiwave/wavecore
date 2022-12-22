@@ -1,5 +1,5 @@
 import puppy
-from urlly import `$`
+from webby import `$`
 from strutils import nil
 from times import nil
 from os import `/`
@@ -20,11 +20,11 @@ type
       error*: string
   Request* = object
     url*: string
-    headers*: seq[Header]
+    headers*: webby.HttpHeaders
     verb*: string
     body*: string
   Response* = object
-    headers*: seq[Header]
+    headers*: webby.HttpHeaders
     code*: int
     body*: string
   ActionKind* = enum
@@ -129,7 +129,7 @@ proc trimPath(path: string): string =
 
 proc toPuppy(request: Request): puppy.Request =
   new result
-  result.url = urlly.parseUrl(request.url)
+  result.url = webby.parseUrl(request.url)
   result.headers = request.headers
   result.verb = request.verb
   result.body = request.body

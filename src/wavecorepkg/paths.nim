@@ -1,7 +1,7 @@
 from os import `/`
 from base64 import nil
 from strutils import format
-from urlly import `$`
+from webby import `$`
 
 const
   defaultGetAddress* {.strdefine.} = "undefined"
@@ -67,7 +67,7 @@ proc initUrl*(address: string; endpoint: string): string =
   else:
     # the address doesn't end in a slash, so assume the part at the end of the path
     # is a file and remove it.
-    var url = urlly.parseUrl(address)
+    var url = webby.parseUrl(address)
     if url.paths.len > 0:
       discard url.paths.pop()
     let s = $url
