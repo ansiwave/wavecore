@@ -61,12 +61,13 @@ template withStatement*(conn: PSqlite3, query: string, stmt: PStmt, body: untype
       db_sqlite.dbError(conn)
 
 proc select*[T](conn: PSqlite3, init: proc (stmt: PStmt): T, query: string, args: varargs[string, `$`]): seq[T] =
-  var stmt: PStmt
-  withStatement(conn, query, stmt):
-    for i in 0 ..< args.len:
-      db_sqlite.bindParam(db_sqlite.SqlPrepared(stmt), i+1, args[i])
-    while step(stmt) == SQLITE_ROW:
-      result.add(init(stmt))
+  {.cast(gcsafe).}:
+    var stmt: PStmt
+    withStatement(conn, query, stmt):
+      for i in 0 ..< args.len:
+        db_sqlite.bindParam(db_sqlite.SqlPrepared(stmt), i+1, args[i])
+      while step(stmt) == SQLITE_ROW:
+        result.add(init(stmt))
 
 proc getVersion(stmt: PStmt): int =
   var cols = sqlite3.column_count(stmt)
