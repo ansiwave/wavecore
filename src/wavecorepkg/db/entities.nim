@@ -186,7 +186,7 @@ proc initUser(stmt: PStmt): User =
     let colName = $sqlite3.column_name(stmt, col)
     case colName
     of "user_id":
-      result.user_id = sqlite3.column_int(stmt, col):
+      result.user_id = sqlite3.column_int(stmt, col)
     of "public_key":
       result.public_key = $sqlite3.column_text(stmt, col)
     of "tags":
