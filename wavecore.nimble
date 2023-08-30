@@ -14,7 +14,7 @@ task dev, "Run dev version":
 # Dependencies
 
 requires "nim >= 1.2.6"
-requires "puppy >= 2.0.1"
+requires "puppy >= 2.1.0"
 requires "flatty >= 0.3.4"
 requires "paramidi >= 0.6.0"
 requires "threading >= 0.1.0"
