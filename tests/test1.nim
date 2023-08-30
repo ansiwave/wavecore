@@ -3,7 +3,7 @@ from strutils import nil
 from sequtils import nil
 import tables
 
-from ./wavecorepkg/wavescript import nil
+from wavecorepkg/wavescript import nil
 
 proc parseAnsiwave(lines: seq[string]): seq[wavescript.CommandTree] =
   var scriptContext = waveScript.initContext()
@@ -66,15 +66,15 @@ test "variables":
   let trees = parseAnsiwave(lines)
   check trees.len == 4
 
-from ./wavecorepkg/client import nil
-from ./wavecorepkg/server import nil
-from ./wavecorepkg/ed25519 import nil
-from ./wavecorepkg/paths import nil
-from ./wavecorepkg/common import nil
+from wavecorepkg/client import nil
+from wavecorepkg/server import nil
+from wavecorepkg/ed25519 import nil
+from wavecorepkg/paths import nil
+from wavecorepkg/common import nil
 
-import ./wavecorepkg/db
-import ./wavecorepkg/db/entities
-import ./wavecorepkg/db/vfs
+import wavecorepkg/db
+import wavecorepkg/db/entities
+import wavecorepkg/db/vfs
 from os import `/`
 import sets
 
@@ -360,7 +360,7 @@ test "search posts":
     check entities.search(conn, entities.UserTags, "stuff").len == 0
     check entities.search(conn, entities.UserTags, "moderator").len == 1
 
-from ./wavecorepkg/db/db_sqlite import sql
+from wavecorepkg/db/db_sqlite import sql
 
 test "score":
   db.withOpen(conn, ":memory:", db.ReadWrite):
