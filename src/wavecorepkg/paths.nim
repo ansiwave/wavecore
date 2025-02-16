@@ -68,8 +68,10 @@ proc initUrl*(address: string; endpoint: string): string =
     # the address doesn't end in a slash, so assume the part at the end of the path
     # is a file and remove it.
     var url = webby.parseUrl(address)
-    if url.paths.len > 0:
-      discard url.paths.pop()
+    var paths = webby.paths(url)
+    if paths.len > 0:
+      discard paths.pop()
+    url.path = strutils.join(paths, "/")
     let s = $url
     if strutils.endsWith(s, "/"):
       "$1$2".format(s, endpoint)
